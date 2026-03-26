@@ -327,7 +327,7 @@ export function DentalChart({ initialState, onChange, onToothClick, value, onVal
                   "group relative flex flex-col items-center justify-center",
                   "rounded-3xl px-2.5 py-2",
                   "shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-md transition",
-                  "hover:-translate-y-0.5 hover:bg-white/60",
+                  "cursor-pointer hover:opacity-80 hover:-translate-y-0.5 hover:bg-white/60",
                   toothClasses(status),
                 ].join(" ")}
                 aria-label={`Dent ${id}`}

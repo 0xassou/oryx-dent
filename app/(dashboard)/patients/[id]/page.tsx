@@ -16,6 +16,7 @@ import {
   Mail,
   Phone,
   Plus,
+  Pencil,
   UploadCloud,
   X,
   Loader2,
@@ -226,9 +227,12 @@ interface PatientProfile {
   id: string;
   nom: string;
   age: number;
+  genre: string;
   profession: string;
+  adresse: string;
   telephone: string;
   email: string;
+  dateNaissance: string;
   alerts: string[];
 }
 
@@ -237,27 +241,36 @@ const MOCK_PROFILES: Record<string, PatientProfile> = {
     id: "1",
     nom: "Karim Haddad",
     age: 44,
+    genre: "Homme",
     profession: "Chirurgien-dentiste",
+    adresse: "12 rue Didouche Mourad, Alger",
     telephone: "06 12 34 56 78",
     email: "karim.haddad@email.fr",
+    dateNaissance: "1982-04-14",
     alerts: ["Allergie Pénicilline", "Hypertendu"],
   },
   "2": {
     id: "2",
     nom: "Sarah Benali",
     age: 31,
+    genre: "Femme",
     profession: "Assistante médicale",
+    adresse: "45 avenue Emir Abdelkader, Oran",
     telephone: "06 98 76 54 32",
     email: "sarah.benali@email.fr",
+    dateNaissance: "1995-08-03",
     alerts: ["Allergie Latex"],
   },
   "3": {
     id: "3",
     nom: "Marie Dupont",
     age: 42,
+    genre: "Femme",
     profession: "Cadre administratif",
+    adresse: "8 boulevard Zighout Youcef, Constantine",
     telephone: "07 11 22 33 44",
     email: "marie.dupont@email.fr",
+    dateNaissance: "1984-01-27",
     alerts: ["Diabète de type 2"],
   },
 };
@@ -292,6 +305,28 @@ function parseDateToISO(dateValue: string) {
     2,
     "0"
   )}`;
+}
+
+function computeAgeFromDate(dateValue: string) {
+  if (!dateValue) return 0;
+  const dob = new Date(dateValue);
+  if (Number.isNaN(dob.getTime())) return 0;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age -= 1;
+  return Math.max(0, age);
+}
+
+function formatDateDDMMYYYY(date: Date) {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(date.getFullYear());
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatAmountDA(value: number) {
+  return `${new Intl.NumberFormat("fr-FR").format(value)} DA`;
 }
 
 type PatientTreatmentRow = {
@@ -360,17 +395,27 @@ export default function PatientDetailPage() {
   const params = useParams();
   const id = (params?.id as string) ?? "";
   const [isMounted, setIsMounted] = useState(false);
-
-  const profile: PatientProfile =
-    MOCK_PROFILES[id] ?? {
-      id,
-      nom: `Patient #${id}`,
-      age: 0,
-      profession: "—",
-      telephone: "—",
-      email: "—",
-      alerts: [],
-    };
+  const [isEditPatientModalOpen, setIsEditPatientModalOpen] = useState(false);
+  const [patientProfile, setPatientProfile] = useState<PatientProfile>({
+    id,
+    nom: `Patient #${id}`,
+    age: 0,
+    genre: "—",
+    profession: "—",
+    adresse: "—",
+    telephone: "—",
+    email: "—",
+    dateNaissance: "",
+    alerts: [],
+  });
+  const [editPatientName, setEditPatientName] = useState("");
+  const [editPatientGender, setEditPatientGender] = useState("");
+  const [editPatientProfession, setEditPatientProfession] = useState("");
+  const [editPatientAddress, setEditPatientAddress] = useState("");
+  const [editPatientPhone, setEditPatientPhone] = useState("");
+  const [editPatientEmail, setEditPatientEmail] = useState("");
+  const [editPatientDob, setEditPatientDob] = useState("");
+  const [editPatientAlerts, setEditPatientAlerts] = useState("");
 
   const [tab, setTab] = useState<TabId>("historique");
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
@@ -387,53 +432,8 @@ export default function PatientDetailPage() {
     statut: FinanceStatut;
   };
 
-  const [finances, setFinances] = useState<FinanceLine[]>(() => {
-    const getPrice = (acte: string) => ACTES_PRIX_DEVIS[acte] ?? 200;
-
-    const [t1, t2, t3] = MOCK_ALL_TREATMENTS;
-
-    const l1Total = t1 ? getPrice(t1.acte) : 0;
-    const l2Total = t2 ? getPrice(t2.acte) : 0;
-    const l3Total = t3 ? getPrice(t3.acte) : 0;
-
-    const seeded: FinanceLine[] = [];
-
-    if (t1) {
-      seeded.push({
-        id: uid(),
-        acteName: `Dent ${t1.tooth} - ${t1.acte}`,
-        date: t1.date,
-        montantTotal: l1Total,
-        resteACharge: 0,
-        statut: "Payé",
-      });
-    }
-
-    if (t2) {
-      const reste = Math.max(0, Math.round(l2Total * 0.35));
-      seeded.push({
-        id: uid(),
-        acteName: `Dent ${t2.tooth} - ${t2.acte}`,
-        date: t2.date,
-        montantTotal: l2Total,
-        resteACharge: reste,
-        statut: reste === 0 ? "Payé" : "Partiel",
-      });
-    }
-
-    if (t3) {
-      seeded.push({
-        id: uid(),
-        acteName: `Dent ${t3.tooth} - ${t3.acte}`,
-        date: t3.date,
-        montantTotal: l3Total,
-        resteACharge: l3Total,
-        statut: "Impayé",
-      });
-    }
-
-    return seeded;
-  });
+  const [finances, setFinances] = useState<FinanceLine[]>([]);
+  const [financesHydrated, setFinancesHydrated] = useState(false);
 
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [editingFinance, setEditingFinance] = useState<FinanceLine | null>(
@@ -472,6 +472,37 @@ export default function PatientDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (!id) return;
+    const fallback: PatientProfile = MOCK_PROFILES[id] ?? {
+      id,
+      nom: `Patient #${id}`,
+      age: 0,
+      genre: "—",
+      profession: "—",
+      adresse: "—",
+      telephone: "—",
+      email: "—",
+      dateNaissance: "",
+      alerts: [],
+    };
+    if (typeof window === "undefined") {
+      setPatientProfile(fallback);
+      return;
+    }
+    const raw = localStorage.getItem(`patient_profile_${id}`);
+    if (!raw) {
+      setPatientProfile(fallback);
+      return;
+    }
+    try {
+      const saved = JSON.parse(raw) as Partial<PatientProfile>;
+      setPatientProfile({ ...fallback, ...saved, id });
+    } catch {
+      setPatientProfile(fallback);
+    }
+  }, [id]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !id) return;
     const saved = localStorage.getItem(`patient_acts_${id}`);
     if (saved) {
@@ -482,6 +513,21 @@ export default function PatientDetailPage() {
   }, [id]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !id) return;
+    const savedFinances = localStorage.getItem(`patient_finances_${id}`);
+    if (savedFinances) {
+      try {
+        setFinances(JSON.parse(savedFinances) as FinanceLine[]);
+      } catch {
+        setFinances([]);
+      }
+    } else {
+      setFinances([]);
+    }
+    setFinancesHydrated(true);
+  }, [id]);
+
+  useEffect(() => {
     if (isMounted && allTreatments.length > 0) {
       localStorage.setItem(
         `patient_acts_${id}`,
@@ -489,6 +535,11 @@ export default function PatientDetailPage() {
       );
     }
   }, [allTreatments, isMounted, id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !id || !financesHydrated) return;
+    localStorage.setItem(`patient_finances_${id}`, JSON.stringify(finances));
+  }, [finances, financesHydrated, id]);
 
   useEffect(() => {
     setDentsStatus(buildDentsStatusFromTreatments(allTreatments));
@@ -613,7 +664,40 @@ export default function PatientDetailPage() {
     prevProtocolSearchRef.current = protocolSearchQuery;
   }, [protocolSearchQuery, protocolsByCategory]);
 
-  const initials = getInitials(profile.nom);
+  const initials = getInitials(patientProfile.nom);
+
+  function openEditPatientModal() {
+    setEditPatientName(patientProfile.nom);
+    setEditPatientGender(patientProfile.genre);
+    setEditPatientProfession(patientProfile.profession);
+    setEditPatientAddress(patientProfile.adresse);
+    setEditPatientPhone(patientProfile.telephone);
+    setEditPatientEmail(patientProfile.email);
+    setEditPatientDob(patientProfile.dateNaissance);
+    setEditPatientAlerts(patientProfile.alerts.join(", "));
+    setIsEditPatientModalOpen(true);
+  }
+
+  function handleUpdatePatient() {
+    const nextProfile: PatientProfile = {
+      ...patientProfile,
+      nom: editPatientName.trim() || patientProfile.nom,
+      genre: editPatientGender.trim() || "—",
+      profession: editPatientProfession.trim() || "—",
+      adresse: editPatientAddress.trim() || "—",
+      telephone: editPatientPhone.trim() || "—",
+      email: editPatientEmail.trim() || "—",
+      dateNaissance: editPatientDob,
+      age: editPatientDob ? computeAgeFromDate(editPatientDob) : patientProfile.age,
+      alerts: editPatientAlerts
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    };
+    setPatientProfile(nextProfile);
+    localStorage.setItem(`patient_profile_${id}`, JSON.stringify(nextProfile));
+    setIsEditPatientModalOpen(false);
+  }
 
   const selectedDrawerProtocol =
     drawerProtocolId !== ""
@@ -708,6 +792,34 @@ export default function PatientDetailPage() {
     }
   }
 
+  function handleSaveFinancialDoc(
+    type: "Devis" | "Facture",
+    montant,
+    description: string,
+  ) {
+    if (montant <= 0) return;
+    const docs = JSON.parse(
+      localStorage.getItem("dental_dashboard_docs") || "[]",
+    ) as Array<Record<string, unknown>>;
+    const prefix = type === "Devis" ? "DEV" : "FCT";
+    const generatedId = `${prefix}-2026-${Math.floor(Math.random() * 1000)}`;
+    const now = new Date();
+    const nouveauDoc = {
+      id: generatedId,
+      type,
+      patient: patientProfile.nom,
+      patientId: id,
+      date: formatDateDDMMYYYY(now),
+      statut: type === "Devis" ? "En attente" : "Payé",
+      montant: `${new Intl.NumberFormat("fr-FR").format(montant)} DA`,
+    };
+    localStorage.setItem(
+      "dental_dashboard_docs",
+      JSON.stringify([nouveauDoc, ...docs]),
+    );
+    setToast({ type: "success", message: "Document enregistré avec succès !" });
+  }
+
   return (
     <div className="bg-slate-50 min-h-screen p-6">
       <div className="flex flex-col gap-6">
@@ -735,12 +847,22 @@ export default function PatientDetailPage() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-lg font-semibold text-[color:var(--ds-text)]">
-                      {profile.nom}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-lg font-semibold text-[color:var(--ds-text)]">
+                        {patientProfile.nom}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openEditPatientModal}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-indigo-600"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Modifier
+                      </button>
+                    </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      {profile.age ? `${profile.age} ans` : "Âge inconnu"} ·{" "}
-                      {profile.profession}
+                      {patientProfile.age ? `${patientProfile.age} ans` : "Âge inconnu"} ·{" "}
+                      {patientProfile.profession}
                     </p>
                   </div>
                 </div>
@@ -753,7 +875,7 @@ export default function PatientDetailPage() {
                     </p>
                     <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">
                       <Phone className="h-4 w-4 text-slate-400" aria-hidden />
-                      <span className="truncate">{profile.telephone}</span>
+                      <span className="truncate">{patientProfile.telephone}</span>
                     </div>
                   </div>
 
@@ -763,7 +885,7 @@ export default function PatientDetailPage() {
                     </p>
                     <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">
                       <Mail className="h-4 w-4 text-slate-400" aria-hidden />
-                      <span className="truncate">{profile.email}</span>
+                      <span className="truncate">{patientProfile.email}</span>
                     </div>
                   </div>
                 </div>
@@ -775,10 +897,10 @@ export default function PatientDetailPage() {
                       Alertes Médicales
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {profile.alerts.length === 0 ? (
+                      {patientProfile.alerts.length === 0 ? (
                         <span className="text-xs text-red-600/70">Aucune</span>
                       ) : (
-                        profile.alerts.map((a) => (
+                        patientProfile.alerts.map((a) => (
                           <span
                             key={a}
                             className="inline-flex rounded-lg bg-red-100 px-2.5 py-1 text-[11px] font-semibold text-red-700"
@@ -1154,12 +1276,12 @@ export default function PatientDetailPage() {
 
                 <PrescriptionModal
                   open={isPrescriptionModalOpen}
-                  patientName={profile.nom}
-                  patientAge={profile.age ? `${profile.age} ans` : "—"}
+                  patientName={patientProfile.nom}
+                  patientAge={patientProfile.age ? `${patientProfile.age} ans` : "—"}
                   onClose={() => setIsPrescriptionModalOpen(false)}
                   onGeneratePdf={(items: PrescriptionItem[]) => {
                     console.log("Prescription PDF", {
-                      patient: profile.nom,
+                      patient: patientProfile.nom,
                       items,
                     });
                   }}
@@ -1275,10 +1397,10 @@ export default function PatientDetailPage() {
                                 {row.acteName}
                               </td>
                               <td className="py-3 text-slate-700">
-                                {formatDZD(row.montantTotal)}
+                                {formatAmountDA(row.montantTotal)}
                               </td>
                               <td className="py-3 text-slate-700">
-                                {formatDZD(row.resteACharge)}
+                                {formatAmountDA(row.resteACharge)}
                               </td>
                               <td className="py-3">
                                 <span
@@ -1405,6 +1527,11 @@ export default function PatientDetailPage() {
                               : f
                           )
                         );
+                        handleSaveFinancialDoc(
+                          "Facture",
+                          montantVersé,
+                          line.acteName || "Soins dentaires",
+                        );
 
                         setIsPaymentModalOpen(false);
                         setPaymentLineId("");
@@ -1516,6 +1643,11 @@ export default function PatientDetailPage() {
                         };
 
                         setFinances((prev) => [newLine, ...prev]);
+                        handleSaveFinancialDoc(
+                          "Devis",
+                          montantTotal,
+                          `Dent ${selected.tooth} - ${selected.acte}`,
+                        );
 
                         setIsQuoteModalOpen(false);
                         setQuoteActeTooth("");
@@ -1807,22 +1939,167 @@ export default function PatientDetailPage() {
         </div>
       )}
 
-      {/* ── Tiroir Cockpit — protocole + consommables (override ponctuel) ── */}
-      {selectedTooth !== null && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm"
-            onClick={() => setSelectedTooth(null)}
-          />
+      {isEditPatientModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm">
+          <form
+            className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdatePatient();
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
+                  Modifier les informations du patient
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Mettez a jour les coordonnees et les alertes medicales.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditPatientModalOpen(false)}
+                className="rounded-2xl p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-          <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md transform flex-col bg-white shadow-2xl transition-transform duration-300">
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Nom complet
+                </label>
+                <input
+                  type="text"
+                  value={editPatientName}
+                  onChange={(e) => setEditPatientName(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">
+                  Sexe / Genre
+                </label>
+                <select
+                  value={editPatientGender}
+                  onChange={(e) => setEditPatientGender(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                >
+                  <option value="">Non renseigné</option>
+                  <option value="Homme">Homme</option>
+                  <option value="Femme">Femme</option>
+                  <option value="Autre">Autre</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">
+                  Profession
+                </label>
+                <input
+                  type="text"
+                  value={editPatientProfession}
+                  onChange={(e) => setEditPatientProfession(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Adresse physique
+                </label>
+                <input
+                  type="text"
+                  value={editPatientAddress}
+                  onChange={(e) => setEditPatientAddress(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Telephone</label>
+                <input
+                  type="text"
+                  value={editPatientPhone}
+                  onChange={(e) => setEditPatientPhone(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Email</label>
+                <input
+                  type="email"
+                  value={editPatientEmail}
+                  onChange={(e) => setEditPatientEmail(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Date de naissance
+                </label>
+                <input
+                  type="date"
+                  value={editPatientDob}
+                  onChange={(e) => setEditPatientDob(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">
+                  Alertes Medicales (separees par des virgules)
+                </label>
+                <textarea
+                  rows={3}
+                  value={editPatientAlerts}
+                  onChange={(e) => setEditPatientAlerts(e.target.value)}
+                  className="mt-1.5 w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200/60 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsEditPatientModalOpen(false)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Tiroir Cockpit — protocole + consommables (override ponctuel) ── */}
+      <>
+        <div
+          className={[
+            "fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm transition-opacity duration-300",
+            selectedTooth !== null ? "opacity-100" : "pointer-events-none opacity-0",
+          ].join(" ")}
+          onClick={() => setSelectedTooth(null)}
+        />
+
+        <div
+          className={[
+            "fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 flex flex-col",
+            selectedTooth !== null ? "translate-x-0" : "translate-x-full",
+          ].join(" ")}
+        >
             <div className="flex items-center justify-between border-b border-slate-100 p-6">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
                   Cockpit patient
                 </p>
                 <h2 className="mt-0.5 text-lg font-semibold text-[color:var(--ds-text)]">
-                  Dent {selectedTooth}
+                  Dent {selectedTooth ?? "—"}
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
                   Protocole clinique (réglages) — quantités ajustables pour ce patient
@@ -2009,7 +2286,7 @@ export default function PatientDetailPage() {
             <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-6">
               <button
                 type="button"
-                disabled={validateSoinLoading || !selectedDrawerProtocol}
+                disabled={selectedTooth === null || validateSoinLoading || !selectedDrawerProtocol}
                 onClick={() => void handleValidateClinicalAct()}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] py-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -2031,8 +2308,7 @@ export default function PatientDetailPage() {
               </button>
             </div>
           </div>
-        </>
-      )}
+      </>
 
       {toast ? (
         <div

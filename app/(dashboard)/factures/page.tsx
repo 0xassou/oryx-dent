@@ -1,11 +1,13 @@
 "use client";
 
-import { FileText, MoreVertical, Search, X } from "lucide-react";
+import { FileDown, FileText, MoreVertical, Pencil, Search, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const DOCS_STORAGE_KEY = "dental_dashboard_docs";
 
 type DocumentStatut =
+  | "Payé"
   | "Payée"
   | "En attente"
   | "En retard"
@@ -15,6 +17,7 @@ type DocumentMock = {
   id: string;
   date: string;
   patient: string;
+  patientId?: string;
   type: "Devis" | "Facture";
   montant: string;
   statut: DocumentStatut;
@@ -110,12 +113,12 @@ function StatusBadge({ statut }: { statut: DocumentStatut }) {
   const base =
     "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1";
 
-  if (statut === "Payée") {
+  if (statut === "Payée" || statut === "Payé") {
     return (
       <span
         className={`${base} bg-emerald-50 text-emerald-700 ring-emerald-600/20`}
       >
-        Payée
+        Payé
       </span>
     );
   }
@@ -153,11 +156,17 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export default function FacturesPage() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [documents, setDocuments] = useState<DocumentMock[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("Tous");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingDoc, setEditingDoc] = useState<DocumentMock | null>(null);
+  const [editMontant, setEditMontant] = useState("");
+  const [editStatut, setEditStatut] = useState<DocumentStatut>("En attente");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [newDocType, setNewDocType] = useState<"Devis" | "Facture">("Devis");
   const [newDocPatient, setNewDocPatient] = useState("");
   const [newDocMontant, setNewDocMontant] = useState("");
@@ -176,6 +185,12 @@ export default function FacturesPage() {
     if (!mounted) return;
     localStorage.setItem(DOCS_STORAGE_KEY, JSON.stringify(documents));
   }, [mounted, documents]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeoutId = window.setTimeout(() => setToastMessage(null), 2500);
+    return () => window.clearTimeout(timeoutId);
+  }, [toastMessage]);
 
   function handleGenerateDoc() {
     if (!newDocPatient.trim() || !newDocMontant.trim()) return;
@@ -205,6 +220,38 @@ export default function FacturesPage() {
     setNewDocType("Devis");
     setNewDocPatient("");
     setNewDocMontant("");
+  }
+
+  function handleOpenEdit(doc: DocumentMock) {
+    setEditingDoc(doc);
+    setEditMontant(doc.montant);
+    setEditStatut(doc.statut);
+    setOpenMenuId(null);
+  }
+
+  function handleSaveEditDoc() {
+    if (!editingDoc) return;
+    const montantFormatted = formatMontantWithDA(editMontant);
+    if (!montantFormatted) return;
+    setDocuments((prev) =>
+      prev.map((doc) =>
+        doc.id === editingDoc.id
+          ? {
+              ...doc,
+              montant: montantFormatted,
+              statut: editStatut,
+            }
+          : doc,
+      ),
+    );
+    setEditingDoc(null);
+  }
+
+  function handleDeleteDoc(docId: string) {
+    const ok = window.confirm("Supprimer ce document ?");
+    if (!ok) return;
+    setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+    setOpenMenuId(null);
   }
 
   const filteredDocs = useMemo(() => {
@@ -347,10 +394,22 @@ export default function FacturesPage() {
                     {doc.date}
                   </td>
                   <td className="px-5 py-4 text-sm font-medium text-slate-900">
-                    {doc.patient}
+                    <button
+                      type="button"
+                      onClick={() => doc.patientId && router.push("/patients/" + doc.patientId)}
+                      className="transition-colors hover:text-indigo-600"
+                    >
+                      {doc.patient}
+                    </button>
                   </td>
                   <td className="px-5 py-4 text-sm text-slate-700">
-                    {doc.type}
+                    <button
+                      type="button"
+                      onClick={() => doc.patientId && router.push("/patients/" + doc.patientId)}
+                      className="transition-colors hover:text-indigo-600"
+                    >
+                      {doc.type}
+                    </button>
                   </td>
                   <td className="px-5 py-4 text-right text-sm font-semibold text-slate-900">
                     {doc.montant}
@@ -362,6 +421,13 @@ export default function FacturesPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         type="button"
+                        onClick={() => {
+                          if (doc.patientId) {
+                            router.push("/patients/" + doc.patientId);
+                            return;
+                          }
+                          alert("Aucun patient lié à ce document.");
+                        }}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
                         aria-label="Voir / Imprimer PDF"
                       >
@@ -369,11 +435,45 @@ export default function FacturesPage() {
                       </button>
                       <button
                         type="button"
+                        onClick={() =>
+                          setOpenMenuId((prev) => (prev === doc.id ? null : doc.id))
+                        }
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
                         aria-label="Options"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
+                      {openMenuId === doc.id && (
+                        <div className="absolute right-5 z-30 mt-20 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(doc)}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Modifier
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setToastMessage("Préparation du PDF en cours...");
+                              setOpenMenuId(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                          >
+                            <FileDown className="h-4 w-4" />
+                            Générer PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDoc(doc.id)}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Supprimer
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -500,6 +600,76 @@ export default function FacturesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {editingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Modifier {editingDoc.id}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEditingDoc(null)}
+                className="rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Montant
+                </label>
+                <input
+                  type="text"
+                  value={editMontant}
+                  onChange={(e) => setEditMontant(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Statut
+                </label>
+                <select
+                  value={editStatut}
+                  onChange={(e) => setEditStatut(e.target.value as DocumentStatut)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="Payé">Payé</option>
+                  <option value="En attente">En attente</option>
+                  <option value="En retard">En retard</option>
+                  <option value="Accepté">Accepté</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingDoc(null)}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditDoc}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-[70] rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
+          {toastMessage}
         </div>
       )}
     </div>
