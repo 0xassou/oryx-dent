@@ -17,6 +17,7 @@ import {
   Phone,
   Plus,
   Pencil,
+  Sparkles,
   UploadCloud,
   X,
   Loader2,
@@ -585,6 +586,9 @@ export default function PatientDetailPage() {
       note: "Bilan périapical et revue du plan de soins.",
     },
   ]);
+  const [isAiAssistantModalOpen, setIsAiAssistantModalOpen] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiGeneratedText, setAiGeneratedText] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -818,6 +822,44 @@ export default function PatientDetailPage() {
       JSON.stringify([nouveauDoc, ...docs]),
     );
     setToast({ type: "success", message: "Document enregistré avec succès !" });
+  }
+
+  function openAiAssistantModal() {
+    setIsAiAssistantModalOpen(true);
+    setIsAiGenerating(true);
+    setAiGeneratedText("");
+    window.setTimeout(() => {
+      const latestFinance = finances[0] as
+        | (FinanceLine & { description?: string })
+        | undefined;
+      const motif = latestFinance?.description ?? "Consultation de suivi";
+      const acte = latestFinance?.acteName ?? "Contrôle dentaire";
+      const generated = `Compte-rendu du ${new Date().toLocaleDateString()} :
+Patient(e) ${patientProfile.nom}, ${patientProfile.age} ans.
+Motif : ${motif}.
+Examen clinique : Muqueuses saines, absence d'inflammation notable.
+Acte réalisé : ${acte}.
+Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous de contrôle dans 6 mois.`;
+      setAiGeneratedText(generated);
+      setIsAiGenerating(false);
+    }, 2500);
+  }
+
+  function handleInsertAiSummary() {
+    if (!aiGeneratedText.trim()) return;
+    setTimeline((prev) => [
+      {
+        date: new Date().toISOString(),
+        titre: "Compte-rendu IA",
+        note: aiGeneratedText,
+      },
+      ...prev,
+    ]);
+    setIsAiAssistantModalOpen(false);
+    setToast({
+      type: "success",
+      message: "Le compte-rendu IA a été ajouté au dossier médical.",
+    });
   }
 
   return (
@@ -1100,9 +1142,19 @@ export default function PatientDetailPage() {
           <div className="mt-5">
             {tab === "historique" && (
               <div>
-                <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
-                  Timeline des consultations
-                </h2>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
+                    Timeline des consultations
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={openAiAssistantModal}
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Assistant IA
+                  </button>
+                </div>
                 <div className="mt-4 relative pl-6">
                   <div className="absolute left-2 top-0 bottom-0 w-px bg-slate-200" />
                   <div className="space-y-4">
@@ -1936,6 +1988,70 @@ export default function PatientDetailPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {isAiAssistantModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
+                  ✨ Assistant IA
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Analyse des dernières interventions pour {patientProfile.nom}...
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAiAssistantModalOpen(false)}
+                className="rounded-2xl p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {isAiGenerating ? (
+              <div className="mt-6 space-y-3">
+                <div className="flex items-center gap-3 text-sm text-slate-600">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                  Analyse en cours...
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
+                  <div className="h-2 w-1/2 animate-pulse rounded-full bg-indigo-600" />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6">
+                <textarea
+                  value={aiGeneratedText}
+                  onChange={(e) => setAiGeneratedText(e.target.value)}
+                  rows={9}
+                  className="w-full rounded-2xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-indigo-300 focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+            )}
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200/60 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsAiAssistantModalOpen(false)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isAiGenerating || !aiGeneratedText.trim()}
+                onClick={handleInsertAiSummary}
+                className="rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Insérer dans le dossier
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
