@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "description": "20 protocoles cliniques standards — consommables par défaut pour le lien stock / réglages",
+  "protocols": [
+    {
+      "nom": "Consultation Initiale / Bilan complet",
+      "categorie": "Prévention & Bilan",
+      "consommables_par_defaut": [
+        { "item": "Gants nitrile", "qte": 2 },
+        { "item": "Masque chirurgical", "qte": 1 },
+        { "item": "Gobelet jetable", "qte": 1 },
+        { "item": "Pompe à salive", "qte": 1 },
+        { "item": "Kit d'examen (sonde, miroir, pince)", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Détartrage & Polissage",
+      "categorie": "Prévention & Bilan",
+      "consommables_par_defaut": [
+        { "item": "Pâte à polir", "qte": 1 },
+        { "item": "Cupule / brossette prophylaxie", "qte": 1 },
+        { "item": "Pompe à salive", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Scellement de sillons (Sealants)",
+      "categorie": "Prévention & Bilan",
+      "consommables_par_defaut": [
+        { "item": "Sealant photopolymérisable", "qte": 1 },
+        { "item": "Acide orthophosphorique", "qte": 1 },
+        { "item": "Microbrush", "qte": 2 },
+        { "item": "Digue dentaire", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Application de vernis fluoré",
+      "categorie": "Prévention & Bilan",
+      "consommables_par_defaut": [
+        { "item": "Vernis fluoré", "qte": 1 },
+        { "item": "Microbrush", "qte": 1 },
+        { "item": "Coton pellet / rouleau", "qte": 2 }
+      ]
+    },
+    {
+      "nom": "Restauration Composite 1 face",
+      "categorie": "Soins Conservateurs",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Aiguille", "qte": 1 },
+        { "item": "Microbrush", "qte": 1 },
+        { "item": "Dose Bonding", "qte": 1 },
+        { "item": "Acide orthophosphorique", "qte": 1 },
+        { "item": "Pompe à salive", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Restauration Composite 2 faces ou +",
+      "categorie": "Soins Conservateurs",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Aiguille", "qte": 1 },
+        { "item": "Microbrush", "qte": 2 },
+        { "item": "Dose Bonding", "qte": 1 },
+        { "item": "Acide orthophosphorique", "qte": 1 },
+        { "item": "Matrice sectionnelle", "qte": 1 },
+        { "item": "Coin de bois / cales", "qte": 2 },
+        { "item": "Pompe à salive", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Composite Antérieur / Stratification esthétique",
+      "categorie": "Soins Conservateurs",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Aiguille", "qte": 1 },
+        { "item": "Microbrush", "qte": 3 },
+        { "item": "Dose Bonding", "qte": 1 },
+        { "item": "Acide orthophosphorique", "qte": 1 },
+        { "item": "Fil de rétraction", "qte": 1 },
+        { "item": "Pompe à salive", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Reconstitution au Verre Ionomère (CVI)",
+      "categorie": "Soins Conservateurs",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Aiguille", "qte": 1 },
+        { "item": "Ciment verre ionomère (dose)", "qte": 1 },
+        { "item": "Microbrush", "qte": 1 },
+        { "item": "Pompe à salive", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Coiffage pulpaire (Biodentine ou Hydroxyde de calcium)",
+      "categorie": "Soins Conservateurs",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Digue dentaire", "qte": 1 },
+        { "item": "Biodentine / hydroxyde de calcium (dose)", "qte": 1 },
+        { "item": "Microbrush", "qte": 2 },
+        { "item": "Coton pellet", "qte": 2 }
+      ]
+    },
+    {
+      "nom": "Traitement d'urgence (pansement provisoire)",
+      "categorie": "Soins Conservateurs",
+      "consommables_par_defaut": [
+        { "item": "Pansement provisoire type Cavit", "qte": 1 },
+        { "item": "Boulette de coton", "qte": 2 },
+        { "item": "Microbrush", "qte": 1 },
+        { "item": "Carpule anesthésie", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Biopulpectomie Mono-radiculaire",
+      "categorie": "Endodontie",
+      "consommables_par_defaut": [
+        { "item": "Digue dentaire", "qte": 1 },
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Hypochlorite de sodium", "qte": 1 },
+        { "item": "Cônes papier", "qte": 6 },
+        { "item": "Gutta-percha", "qte": 1 },
+        { "item": "Ciment canalaire", "qte": 1 },
+        { "item": "Aiguille", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Biopulpectomie Pluri-radiculaire",
+      "categorie": "Endodontie",
+      "consommables_par_defaut": [
+        { "item": "Digue dentaire", "qte": 1 },
+        { "item": "Carpule anesthésie", "qte": 2 },
+        { "item": "Hypochlorite de sodium", "qte": 2 },
+        { "item": "Cônes papier", "qte": 12 },
+        { "item": "Gutta-percha", "qte": 3 },
+        { "item": "Ciment canalaire", "qte": 1 },
+        { "item": "Aiguille", "qte": 2 }
+      ]
+    },
+    {
+      "nom": "Empreinte Primaire",
+      "categorie": "Prothèse",
+      "consommables_par_defaut": [
+        { "item": "Poudre alginate", "qte": 1 },
+        { "item": "Porte-empreinte jetable", "qte": 1 },
+        { "item": "Gobelet de mélange", "qte": 1 },
+        { "item": "Spatule", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Empreinte Secondaire Silicone",
+      "categorie": "Prothèse",
+      "consommables_par_defaut": [
+        { "item": "Silicone Putty", "qte": 1 },
+        { "item": "Silicone Light", "qte": 1 },
+        { "item": "Embout mélangeur", "qte": 2 },
+        { "item": "Porte-empreinte", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Préparation pour Couronne & Couronne Provisoire",
+      "categorie": "Prothèse",
+      "consommables_par_defaut": [
+        { "item": "Résine bis-acrylique (couronne provisoire)", "qte": 1 },
+        { "item": "Ciment provisoire", "qte": 1 },
+        { "item": "Microbrush", "qte": 1 },
+        { "item": "Carpule anesthésie", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Scellement définitif",
+      "categorie": "Prothèse",
+      "consommables_par_defaut": [
+        { "item": "Ciment de scellement", "qte": 1 },
+        { "item": "Microbrush", "qte": 2 },
+        { "item": "Coton pellet", "qte": 2 }
+      ]
+    },
+    {
+      "nom": "Extraction Simple",
+      "categorie": "Chirurgie & Implantologie",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 1 },
+        { "item": "Aiguille", "qte": 1 },
+        { "item": "Compresses stériles", "qte": 4 },
+        { "item": "Pompe chirurgicale / aspiration", "qte": 1 }
+      ]
+    },
+    {
+      "nom": "Extraction Chirurgicale",
+      "categorie": "Chirurgie & Implantologie",
+      "consommables_par_defaut": [
+        { "item": "Carpule anesthésie", "qte": 2 },
+        { "item": "Aiguille", "qte": 2 },
+        { "item": "Lame bistouri", "qte": 1 },
+        { "item": "Fil de suture", "qte": 1 },
+        { "item": "Sérum physiologique", "qte": 1 },
+        { "item": "Compresses stériles", "qte": 6 }
+      ]
+    },
+    {
+      "nom": "Pose d'implant - 1er temps",
+      "categorie": "Chirurgie & Implantologie",
+      "consommables_par_defaut": [
+        { "item": "Kit chirurgie stérile", "qte": 1 },
+        { "item": "Champ stérile", "qte": 1 },
+        { "item": "Solution d'irrigation", "qte": 1 },
+        { "item": "Carpule anesthésie", "qte": 2 },
+        { "item": "Compresses stériles", "qte": 4 }
+      ]
+    },
+    {
+      "nom": "Contrôle post-opératoire / Dépose de fils",
+      "categorie": "Chirurgie & Implantologie",
+      "consommables_par_defaut": [
+        { "item": "Ciseaux / pince à fil", "qte": 1 },
+        { "item": "Coton pellet", "qte": 2 },
+        { "item": "Chlorhexidine bain de bouche (dose)", "qte": 1 },
+        { "item": "Gants nitrile", "qte": 1 }
+      ]
+    }
+  ]
+}

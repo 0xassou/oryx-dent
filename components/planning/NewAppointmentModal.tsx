@@ -1,0 +1,251 @@
+"use client";
+
+import { useState } from "react";
+import { X } from "lucide-react";
+
+const DUREES = [15, 30, 45, 60, 90] as const;
+
+const MOTIFS = [
+  { id: "consultation", label: "Consultation" },
+  { id: "détartrage", label: "Détartrage" },
+  { id: "soin", label: "Soin" },
+  { id: "urgence", label: "Urgence", isUrgence: true },
+  { id: "prothèse", label: "Prothèse" },
+] as const;
+
+export interface NewAppointmentPayload {
+  patient: string;
+  date: string;
+  time: string;
+  dureeMinutes: number;
+  motifs: string[];
+  notes: string;
+}
+
+interface NewAppointmentModalProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (payload: NewAppointmentPayload) => void;
+}
+
+const inputBase =
+  "mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+
+export function NewAppointmentModal({
+  open,
+  onClose,
+  onConfirm,
+}: NewAppointmentModalProps) {
+  const [patient, setPatient] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [duree, setDuree] = useState<number>(30);
+  const [selectedMotifs, setSelectedMotifs] = useState<string[]>([]);
+  const [notes, setNotes] = useState("");
+
+  if (!open) return null;
+
+  function toggleMotif(label: string) {
+    setSelectedMotifs((prev) =>
+      prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label],
+    );
+  }
+
+  function handleConfirm() {
+    onConfirm({
+      patient: patient.trim(),
+      date,
+      time,
+      dureeMinutes: duree,
+      motifs: [...selectedMotifs],
+      notes: notes.trim(),
+    });
+    setPatient("");
+    setDate("");
+    setTime("");
+    setDuree(30);
+    setSelectedMotifs([]);
+    setNotes("");
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-rdv-title"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-3xl bg-white/95 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/60 px-6 py-4">
+          <div>
+            <h2
+              id="new-rdv-title"
+              className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]"
+            >
+              Nouveau rendez-vous
+            </h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Patient, date, heure et motif
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="space-y-5">
+            <div>
+              <label
+                htmlFor="new-rdv-patient"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Nom du patient
+              </label>
+              <input
+                id="new-rdv-patient"
+                type="text"
+                value={patient}
+                onChange={(e) => setPatient(e.target.value)}
+                className={inputBase}
+                placeholder="Ex. Marie Dupont"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <div className="min-w-0 flex-1">
+                <label
+                  htmlFor="new-rdv-date"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  Date
+                </label>
+                <input
+                  id="new-rdv-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className={inputBase}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <label
+                  htmlFor="new-rdv-time"
+                  className="block text-sm font-medium text-slate-700"
+                >
+                  Heure
+                </label>
+                <input
+                  id="new-rdv-time"
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className={inputBase}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="new-rdv-duree"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Durée
+              </label>
+              <select
+                id="new-rdv-duree"
+                value={duree}
+                onChange={(e) => setDuree(Number(e.target.value))}
+                className={inputBase}
+              >
+                {DUREES.map((m) => (
+                  <option key={m} value={m}>
+                    {m} min
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">
+                Motif du RDV
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {MOTIFS.map((m) => {
+                  const { id, label } = m;
+                  const isUrgence = "isUrgence" in m && m.isUrgence === true;
+                  const selected = selectedMotifs.includes(label);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => toggleMotif(label)}
+                      className={[
+                        "rounded-xl px-3 py-2 text-xs font-medium transition-all duration-200",
+                        selected
+                          ? isUrgence
+                            ? "bg-red-500 text-white shadow-[0_2px_8px_rgba(239,68,68,0.3)]"
+                            : "bg-[color:var(--ds-primary)] text-white shadow-[0_2px_8px_rgba(8,145,178,0.25)]"
+                          : isUrgence
+                            ? "bg-red-50 text-red-600 hover:bg-red-100"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200/80",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="new-rdv-notes"
+                className="block text-sm font-medium text-slate-700"
+              >
+                Notes <span className="text-slate-400">(optionnel)</span>
+              </label>
+              <textarea
+                id="new-rdv-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className={`${inputBase} min-h-[80px] resize-y`}
+                placeholder="Précisions éventuelles…"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200/60 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
+          >
+            Confirmer le RDV
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
