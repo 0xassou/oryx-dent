@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   CreditCard,
@@ -23,6 +23,7 @@ import {
   Loader2,
   Search,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 import { submitClinicalActAction } from "@/app/actions/clinicalAct";
 import {
@@ -53,6 +54,16 @@ import {
   syncPatientFromProfile,
   touchPatientDerniereVisite,
 } from "@/utils/patientData";
+import {
+  addPatientDocument,
+  ensurePatientDocumentsForPatient,
+  fileToDataUrl,
+  inferDroppedFileKind,
+  listDocumentsForPatient,
+  removePatientDocument,
+  defaultCategoryForDropped,
+  type PatientDocument,
+} from "@/utils/patientDocuments";
 import {
   DentalChart as DentalChartComponent,
   type ToothId,
@@ -446,6 +457,64 @@ function financeStatutFromReste(
   return "En attente";
 }
 
+function PatientDocumentThumbnail({ doc }: { doc: PatientDocument }) {
+  const isCbct =
+    doc.type === "cbct" || doc.nom.toLowerCase().includes("cbct");
+  if (isCbct) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-200">
+        <FileText className="h-10 w-10 text-slate-400" aria-hidden />
+      </div>
+    );
+  }
+  if (doc.type === "pdf") {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-100">
+        {/* icône fichier PDF (asset demandé) */}
+        <img
+          src="/image_1.png"
+          alt=""
+          className="h-16 w-16 object-contain opacity-90"
+        />
+      </div>
+    );
+  }
+  if (doc.type === "image" && doc.url) {
+    return (
+      <img
+        src={doc.url}
+        alt=""
+        className="h-full w-full object-cover"
+      />
+    );
+  }
+  if (doc.type === "image") {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-100">
+        <img
+          src="/image_0.png"
+          alt=""
+          className="h-16 w-16 object-contain opacity-90"
+        />
+      </div>
+    );
+  }
+  if (doc.url) {
+    return (
+      <img
+        src={doc.url}
+        alt=""
+        className="h-full w-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-slate-200">
+      <FileImage className="h-10 w-10 text-slate-400" aria-hidden />
+    </div>
+  );
+}
+
 export default function PatientDetailPage() {
   const params = useParams();
   const id = (params?.id as string) ?? "";
@@ -476,6 +545,19 @@ export default function PatientDetailPage() {
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+
+  const [patientDocuments, setPatientDocuments] = useState<PatientDocument[]>(
+    [],
+  );
+  const [docFilter, setDocFilter] = useState<
+    "tout" | "imagerie" | "documents"
+  >("tout");
+  const [lightboxDocument, setLightboxDocument] =
+    useState<PatientDocument | null>(null);
+  const [radiosDragOver, setRadiosDragOver] = useState(false);
+  const radiosFileInputRef = useRef<HTMLInputElement>(null);
+  const [documentPendingDelete, setDocumentPendingDelete] =
+    useState<PatientDocument | null>(null);
 
   type FinanceLine = {
     id: string;
@@ -683,6 +765,61 @@ export default function PatientDetailPage() {
   const [isAiAssistantModalOpen, setIsAiAssistantModalOpen] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiGeneratedText, setAiGeneratedText] = useState("");
+
+  useEffect(() => {
+    if (!isMounted || !id) return;
+    setPatientDocuments(ensurePatientDocumentsForPatient(id));
+  }, [isMounted, id]);
+
+  useEffect(() => {
+    if (!lightboxDocument) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightboxDocument(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxDocument]);
+
+  const handleRadiosFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length || !id) return;
+      for (const file of Array.from(files)) {
+        try {
+          const kind = inferDroppedFileKind(file);
+          const url = await fileToDataUrl(file);
+          addPatientDocument(id, {
+            type: kind,
+            nom: file.name,
+            date: new Date().toISOString(),
+            url,
+            categorie: defaultCategoryForDropped(kind),
+          });
+        } catch (e) {
+          alert(e instanceof Error ? e.message : "Import impossible.");
+        }
+      }
+      setPatientDocuments(listDocumentsForPatient(id));
+    },
+    [id],
+  );
+
+  const filteredPatientDocuments = useMemo(() => {
+    if (docFilter === "tout") return patientDocuments;
+    if (docFilter === "imagerie") {
+      return patientDocuments.filter((d) => d.categorie === "Imagerie");
+    }
+    return patientDocuments.filter((d) => d.categorie !== "Imagerie");
+  }, [patientDocuments, docFilter]);
+
+  const handleConfirmDeletePatientDocument = useCallback(() => {
+    if (!id || !documentPendingDelete) return;
+    const removedId = documentPendingDelete.id;
+    removePatientDocument(id, removedId);
+    setPatientDocuments(listDocumentsForPatient(id));
+    setDocumentPendingDelete(null);
+    setLightboxDocument((prev) => (prev?.id === removedId ? null : prev));
+    setToast({ type: "success", message: "Document supprimé" });
+  }, [id, documentPendingDelete]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1299,7 +1436,19 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
             )}
 
             {tab === "radios" && (
-              <section className="flex flex-col gap-6">
+              <section className="relative flex flex-col gap-6">
+                <input
+                  ref={radiosFileInputRef}
+                  type="file"
+                  accept="image/*,.pdf,application/pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    handleRadiosFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+
                 {/* En-tête de l'onglet */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
@@ -1316,6 +1465,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                     </button>
                     <button
                       type="button"
+                      onClick={() => radiosFileInputRef.current?.click()}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:opacity-90"
                     >
                       <Plus className="h-4 w-4" />
@@ -1325,19 +1475,51 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                 </div>
 
                 {/* Zone Drag & Drop */}
-                <div className="flex cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-sky-200 bg-sky-50/50 p-8 text-center transition-colors hover:border-sky-300">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ")
+                      radiosFileInputRef.current?.click();
+                  }}
+                  onClick={() => radiosFileInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setRadiosDragOver(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    setRadiosDragOver(false);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setRadiosDragOver(false);
+                    handleRadiosFiles(e.dataTransfer.files);
+                  }}
+                  className={[
+                    "flex cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-8 text-center transition-colors",
+                    radiosDragOver
+                      ? "border-sky-500 bg-sky-100/70"
+                      : "border-sky-200 bg-sky-50/50 hover:border-sky-300",
+                  ].join(" ")}
+                >
                   <UploadCloud className="h-8 w-8 text-sky-500" />
                   <div>
                     <p className="text-sm font-semibold text-slate-700">
                       Glissez la radio panoramique ici ou cliquez pour parcourir
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      ou fichiers PDF (Max 10MB)
+                      ou fichiers PDF (max 10 Mo)
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => console.log("Parcourir radios/documents")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      radiosFileInputRef.current?.click();
+                    }}
                     className="inline-flex items-center justify-center rounded-2xl bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
                   >
                     Parcourir
@@ -1346,100 +1528,95 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
 
                 {/* Galerie des radios */}
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-600">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-600">
                     Derniers examens
                   </h3>
-                  <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                    {/* Carte Radio 1 */}
-                    <div className="flex flex-col gap-2">
-                      <div className="group relative aspect-video overflow-hidden rounded-lg bg-slate-200">
-                        <div className="flex h-full w-full items-center justify-center">
-                          <FileImage className="h-10 w-10 text-slate-400" />
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-900/40 opacity-0 transition-opacity group-hover:opacity-90">
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow transition-colors hover:bg-slate-50"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Voir
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow transition-colors hover:bg-slate-50"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-700">Panoramique de contrôle</p>
-                        <p className="text-xs text-slate-400">
-                          {formatDate("2026-03-12T10:00:00Z")}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Carte Radio 2 */}
-                    <div className="flex flex-col gap-2">
-                      <div className="group relative aspect-video overflow-hidden rounded-lg bg-slate-200">
-                        <div className="flex h-full w-full items-center justify-center">
-                          <FileImage className="h-10 w-10 text-slate-400" />
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-900/40 opacity-0 transition-opacity group-hover:opacity-90">
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow transition-colors hover:bg-slate-50"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Voir
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow transition-colors hover:bg-slate-50"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-700">Scanner 3D</p>
-                        <p className="text-xs text-slate-400">
-                          {formatDate("2026-04-01T10:00:00Z")}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Carte Radio 3 */}
-                    <div className="flex flex-col gap-2">
-                      <div className="group relative aspect-video overflow-hidden rounded-lg bg-slate-200">
-                        <div className="flex h-full w-full items-center justify-center">
-                          <FileText className="h-10 w-10 text-slate-400" />
-                        </div>
-                        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-slate-900/40 opacity-0 transition-opacity group-hover:opacity-90">
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow transition-colors hover:bg-slate-50"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            Voir
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow transition-colors hover:bg-slate-50"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-700">CBCT</p>
-                        <p className="text-xs text-slate-400">
-                          {formatDate("2026-05-02T10:00:00Z")}
-                        </p>
-                      </div>
-                    </div>
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { id: "tout" as const, label: "Tout" },
+                        { id: "imagerie" as const, label: "Imagerie" },
+                        { id: "documents" as const, label: "Documents" },
+                      ] as const
+                    ).map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setDocFilter(f.id)}
+                        className={[
+                          "rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors",
+                          docFilter === f.id
+                            ? "bg-slate-800 text-white"
+                            : "bg-slate-100 text-slate-500 hover:bg-slate-200/80 hover:text-slate-700",
+                        ].join(" ")}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
                   </div>
+                  {filteredPatientDocuments.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 py-10 text-center text-sm text-slate-500">
+                      Aucun document dans cette vue.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+                      {filteredPatientDocuments.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="group/card flex flex-col gap-2"
+                        >
+                          <div className="relative aspect-video w-full">
+                            <button
+                              type="button"
+                              onClick={() => setLightboxDocument(doc)}
+                              className="group/view relative aspect-video w-full overflow-hidden rounded-lg bg-slate-200 text-left outline-none ring-slate-300 transition-shadow focus-visible:ring-2"
+                            >
+                              <PatientDocumentThumbnail doc={doc} />
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-slate-900/40 opacity-0 transition-opacity group-hover/view:pointer-events-auto group-hover/view:opacity-90 group-focus-visible/view:pointer-events-auto group-focus-visible/view:opacity-90">
+                                <span className="pointer-events-auto inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow">
+                                  <Eye className="h-3.5 w-3.5" />
+                                  Voir
+                                </span>
+                                {doc.url ? (
+                                  <a
+                                    href={doc.url}
+                                    download={doc.nom}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="pointer-events-auto inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                  </a>
+                                ) : null}
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setDocumentPendingDelete(doc);
+                              }}
+                              className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-lg bg-white/80 text-red-600 opacity-0 shadow-sm backdrop-blur-sm transition-opacity hover:bg-white focus-visible:opacity-100 group-hover/card:opacity-100"
+                              aria-label="Supprimer ce document"
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={2} />
+                            </button>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium text-slate-700">
+                              {doc.nom}
+                            </p>
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                              {doc.categorie}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {formatDate(doc.date)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <PrescriptionModal
@@ -1454,6 +1631,118 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                     });
                   }}
                 />
+
+                {documentPendingDelete ? (
+                  <div
+                    className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="delete-doc-title"
+                    onClick={() => setDocumentPendingDelete(null)}
+                  >
+                    <div
+                      className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <h2
+                        id="delete-doc-title"
+                        className="text-lg font-semibold text-slate-900"
+                      >
+                        Supprimer ce document ?
+                      </h2>
+                      <p className="mt-2 line-clamp-2 text-sm text-slate-600">
+                        {documentPendingDelete.nom}
+                      </p>
+                      <div className="mt-6 flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDocumentPendingDelete(null)}
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          Annuler
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleConfirmDeletePatientDocument}
+                          className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {lightboxDocument ? (
+                  <div
+                    className="fixed inset-0 z-[100] flex flex-col"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Aperçu document"
+                  >
+                    <button
+                      type="button"
+                      className="absolute inset-0 bg-black/95"
+                      aria-label="Fermer l’aperçu"
+                      onClick={() => setLightboxDocument(null)}
+                    />
+                    <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+                      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/40 px-4 py-3 text-white backdrop-blur-sm">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {lightboxDocument.nom}
+                          </p>
+                          <p className="text-xs text-white/60">
+                            {lightboxDocument.categorie} ·{" "}
+                            {formatDate(lightboxDocument.date)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {lightboxDocument.url ? (
+                            <a
+                              href={lightboxDocument.url}
+                              download={lightboxDocument.nom}
+                              className="rounded-xl bg-white/10 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/20"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Télécharger
+                            </a>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setLightboxDocument(null)}
+                            className="rounded-xl p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                            aria-label="Fermer"
+                          >
+                            <X className="h-6 w-6" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
+                        {!lightboxDocument.url ? (
+                          <p className="rounded-xl bg-white/10 px-6 py-8 text-center text-sm text-white/90">
+                            Aucun fichier associé (aperçu indisponible).
+                          </p>
+                        ) : lightboxDocument.type === "pdf" ||
+                          lightboxDocument.url.startsWith(
+                            "data:application/pdf",
+                          ) ? (
+                          <iframe
+                            title={lightboxDocument.nom}
+                            src={lightboxDocument.url}
+                            className="h-[min(85vh,900px)] w-[min(96vw,720px)] rounded-lg bg-white shadow-xl"
+                          />
+                        ) : (
+                          <img
+                            src={lightboxDocument.url}
+                            alt=""
+                            className="max-h-[85vh] max-w-full object-contain shadow-xl"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </section>
             )}
 
