@@ -42,7 +42,17 @@ import {
   PrescriptionModal,
   type PrescriptionItem,
 } from "@/components/patients/PrescriptionModal";
-import { formatDZD, formatDate } from "@/utils/formatters";
+import { formatDZD, formatDate, formatPhoneNumber } from "@/utils/formatters";
+import {
+  readFacturesFromStorage,
+  writeFacturesToStorage,
+} from "@/utils/factureDocuments";
+import {
+  ensurePatientsHydrated,
+  readPatientsFromStorage,
+  syncPatientFromProfile,
+  touchPatientDerniereVisite,
+} from "@/utils/patientData";
 import {
   DentalChart as DentalChartComponent,
   type ToothId,
@@ -58,9 +68,16 @@ type SterilizationKitRow = {
   numero: number;
 };
 
+type KitStockSlice = {
+  disponible: number;
+  sale: number;
+  enCours: number;
+};
+
 type SterilizationStorage = {
   cycles?: unknown[];
-  kits: SterilizationKitRow[];
+  kits?: SterilizationKitRow[];
+  stockByType?: Record<string, KitStockSlice>;
   nextKitNumero?: number;
 };
 
@@ -87,8 +104,34 @@ function tryMarkSterilizationKitSale(protocolCategory: string):
     const sterData: SterilizationStorage = raw
       ? (JSON.parse(raw) as SterilizationStorage)
       : { cycles: [], kits: [] };
-    if (!Array.isArray(sterData.kits)) sterData.kits = [];
 
+    const stock = sterData.stockByType?.[targetType];
+    if (
+      stock &&
+      typeof stock.disponible === "number" &&
+      stock.disponible > 0
+    ) {
+      if (!sterData.stockByType) sterData.stockByType = {};
+      const st = sterData.stockByType[targetType] ?? {
+        disponible: 0,
+        sale: 0,
+        enCours: 0,
+      };
+      sterData.stockByType[targetType] = {
+        disponible: st.disponible - 1,
+        sale: st.sale + 1,
+        enCours: st.enCours,
+      };
+      if (!sterData.cycles) sterData.cycles = [];
+      localStorage.setItem(STERILIZATION_LS_KEY, JSON.stringify(sterData));
+      return {
+        used: true,
+        typeLabel,
+        numero: Date.now() % 100000,
+      };
+    }
+
+    if (!Array.isArray(sterData.kits)) sterData.kits = [];
     const idx = sterData.kits.findIndex(
       (k) => k.kitType === targetType && k.status === "sterile",
     );
@@ -161,7 +204,7 @@ const ACTES_PAR_CATEGORIE: Record<string, string[]> = {
   Absente: [],
 };
 
-// Mock de prix pour le devis (affichage uniquement)
+// Mock de prix pour la facturation (affichage uniquement)
 const ACTES_PRIX_DEVIS: Record<string, number> = {
   "Composite 1 face": 220,
   "Composite 2 faces": 450,
@@ -392,6 +435,17 @@ const MOCK_ALL_TREATMENTS: PatientTreatmentRow[] = [
   },
 ];
 
+type FinanceStatut = "Payé" | "Partiellement Payé" | "En attente";
+
+function financeStatutFromReste(
+  montantTotal: number,
+  resteACharge: number,
+): FinanceStatut {
+  if (resteACharge <= 0) return "Payé";
+  if (resteACharge < montantTotal) return "Partiellement Payé";
+  return "En attente";
+}
+
 export default function PatientDetailPage() {
   const params = useParams();
   const id = (params?.id as string) ?? "";
@@ -423,7 +477,6 @@ export default function PatientDetailPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
 
-  type FinanceStatut = "Payé" | "Partiel" | "Impayé";
   type FinanceLine = {
     id: string;
     acteName: string;
@@ -473,6 +526,41 @@ export default function PatientDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !id) return;
+    ensurePatientsHydrated();
+    const list = readPatientsFromStorage();
+    if (list.some((p) => p.id === id)) return;
+    const rawProfile = localStorage.getItem(`patient_profile_${id}`);
+    if (rawProfile) {
+      try {
+        const p = JSON.parse(rawProfile) as {
+          nom?: string;
+          telephone?: string;
+        };
+        if (typeof p.nom === "string") {
+          syncPatientFromProfile({
+            id,
+            nomComplet: p.nom,
+            telephone:
+              typeof p.telephone === "string" ? p.telephone : "—",
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    const mock = MOCK_PROFILES[id];
+    if (mock) {
+      syncPatientFromProfile({
+        id,
+        nomComplet: mock.nom,
+        telephone: mock.telephone,
+      });
+    }
+  }, [id]);
+
+  useEffect(() => {
     if (!id) return;
     const fallback: PatientProfile = MOCK_PROFILES[id] ?? {
       id,
@@ -518,7 +606,13 @@ export default function PatientDetailPage() {
     const savedFinances = localStorage.getItem(`patient_finances_${id}`);
     if (savedFinances) {
       try {
-        setFinances(JSON.parse(savedFinances) as FinanceLine[]);
+        const parsed = JSON.parse(savedFinances) as FinanceLine[];
+        setFinances(
+          parsed.map((l) => ({
+            ...l,
+            statut: financeStatutFromReste(l.montantTotal, l.resteACharge),
+          })),
+        );
       } catch {
         setFinances([]);
       }
@@ -700,6 +794,11 @@ export default function PatientDetailPage() {
     };
     setPatientProfile(nextProfile);
     localStorage.setItem(`patient_profile_${id}`, JSON.stringify(nextProfile));
+    syncPatientFromProfile({
+      id,
+      nomComplet: nextProfile.nom,
+      telephone: nextProfile.telephone,
+    });
     setIsEditPatientModalOpen(false);
   }
 
@@ -787,6 +886,7 @@ export default function PatientDetailPage() {
           },
           ...prev,
         ]);
+        touchPatientDerniereVisite(id);
         setSelectedTooth(null);
       } else {
         setToast({ type: "error", message: res.error });
@@ -796,32 +896,46 @@ export default function PatientDetailPage() {
     }
   }
 
-  function handleSaveFinancialDoc(
-    type: "Devis" | "Facture",
-    montant,
-    description: string,
-  ) {
-    if (montant <= 0) return;
-    const docs = JSON.parse(
-      localStorage.getItem("dental_dashboard_docs") || "[]",
-    ) as Array<Record<string, unknown>>;
-    const prefix = type === "Devis" ? "DEV" : "FCT";
-    const generatedId = `${prefix}-2026-${Math.floor(Math.random() * 1000)}`;
-    const now = new Date();
-    const nouveauDoc = {
-      id: generatedId,
-      type,
-      patient: patientProfile.nom,
-      patientId: id,
-      date: formatDateDDMMYYYY(now),
-      statut: type === "Devis" ? "En attente" : "Payé",
-      montant: `${new Intl.NumberFormat("fr-FR").format(montant)} DA`,
-    };
-    localStorage.setItem(
-      "dental_dashboard_docs",
-      JSON.stringify([nouveauDoc, ...docs]),
+  /** Synchronise la liste globale des factures (même clé que la page Factures). */
+  function upsertGlobalFactureFromFinanceLine(line: FinanceLine) {
+    if (typeof window === "undefined") return;
+    const docs = readFacturesFromStorage();
+    const paye = Math.min(
+      Math.max(0, line.montantTotal - line.resteACharge),
+      line.montantTotal,
     );
-    setToast({ type: "success", message: "Document enregistré avec succès !" });
+    const idx = docs.findIndex((d) => d.financeLineId === line.id);
+    const dateStr = formatDateDDMMYYYY(new Date(line.date));
+    if (idx >= 0) {
+      docs[idx] = {
+        ...docs[idx],
+        patient: patientProfile.nom,
+        patientId: id,
+        date: dateStr,
+        montantTotal: line.montantTotal,
+        montantPaye: paye,
+        financeLineId: line.id,
+      };
+    } else {
+      docs.unshift({
+        id: `FCT-2026-${Math.floor(Math.random() * 900 + 100)}`,
+        date: dateStr,
+        patient: patientProfile.nom,
+        patientId: id,
+        montantTotal: line.montantTotal,
+        montantPaye: paye,
+        financeLineId: line.id,
+      });
+    }
+    writeFacturesToStorage(docs);
+  }
+
+  function removeGlobalFactureByFinanceLineId(financeLineId: string) {
+    if (typeof window === "undefined") return;
+    const docs = readFacturesFromStorage().filter(
+      (d) => d.financeLineId !== financeLineId,
+    );
+    writeFacturesToStorage(docs);
   }
 
   function openAiAssistantModal() {
@@ -917,7 +1031,9 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                     </p>
                     <div className="mt-1 flex items-center gap-2 text-sm text-slate-700">
                       <Phone className="h-4 w-4 text-slate-400" aria-hidden />
-                      <span className="truncate">{patientProfile.telephone}</span>
+                      <span className="truncate">
+                        {formatPhoneNumber(patientProfile.telephone)}
+                      </span>
                     </div>
                   </div>
 
@@ -1343,10 +1459,9 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
 
             {tab === "finances" && (
               <div>
-                {/* En-tête (Facturation & Devis) */}
                 <div className="flex justify-between items-start mb-6 gap-4">
                   <h2 className="text-lg font-semibold text-[color:var(--ds-text)]">
-                    Facturation &amp; Devis
+                    Facturation
                   </h2>
 
                   <div className="flex gap-2 flex-wrap justify-end">
@@ -1361,7 +1476,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                       className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
                     >
                       <Plus className="h-4 w-4" />
-                      Nouveau Devis
+                      Nouvelle facture
                     </button>
                     <button
                       type="button"
@@ -1433,9 +1548,9 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                           const badgeClass =
                             row.statut === "Payé"
                               ? "bg-emerald-50 text-emerald-700"
-                              : row.statut === "Partiel"
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-red-50 text-red-700";
+                              : row.statut === "Partiellement Payé"
+                                ? "bg-cyan-50 text-cyan-800"
+                                : "bg-amber-50 text-amber-800";
 
                           return (
                             <tr
@@ -1521,8 +1636,11 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                                           onClick={() => {
                                             setFinances((prev) =>
                                               prev.filter(
-                                                (item) => item.id !== row.id
-                                              )
+                                                (item) => item.id !== row.id,
+                                              ),
+                                            );
+                                            removeGlobalFactureByFinanceLineId(
+                                              row.id,
                                             );
                                             if (paymentLineId === row.id) {
                                               setPaymentLineId("");
@@ -1563,27 +1681,28 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
 
                         const newReste = Math.max(
                           0,
-                          line.resteACharge - montantVersé
+                          line.resteACharge - montantVersé,
                         );
-                        const nextStatut: FinanceLine["statut"] =
-                          newReste === 0 ? "Payé" : "Partiel";
+                        const nextStatut = financeStatutFromReste(
+                          line.montantTotal,
+                          newReste,
+                        );
+                        const updatedLine: FinanceLine = {
+                          ...line,
+                          resteACharge: newReste,
+                          statut: nextStatut,
+                        };
 
                         setFinances((prev) =>
                           prev.map((f) =>
-                            f.id === line.id
-                              ? {
-                                  ...f,
-                                  resteACharge: newReste,
-                                  statut: nextStatut,
-                                }
-                              : f
-                          )
+                            f.id === line.id ? updatedLine : f,
+                          ),
                         );
-                        handleSaveFinancialDoc(
-                          "Facture",
-                          montantVersé,
-                          line.acteName || "Soins dentaires",
-                        );
+                        upsertGlobalFactureFromFinanceLine(updatedLine);
+                        setToast({
+                          type: "success",
+                          message: "Paiement enregistré.",
+                        });
 
                         setIsPaymentModalOpen(false);
                         setPaymentLineId("");
@@ -1691,15 +1810,15 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                           date: `${quoteDate}T12:00:00.000Z`,
                           montantTotal,
                           resteACharge: montantTotal,
-                          statut: "Impayé",
+                          statut: "En attente",
                         };
 
                         setFinances((prev) => [newLine, ...prev]);
-                        handleSaveFinancialDoc(
-                          "Devis",
-                          montantTotal,
-                          `Dent ${selected.tooth} - ${selected.acte}`,
-                        );
+                        upsertGlobalFactureFromFinanceLine(newLine);
+                        setToast({
+                          type: "success",
+                          message: "Facture enregistrée.",
+                        });
 
                         setIsQuoteModalOpen(false);
                         setQuoteActeTooth("");
@@ -1710,10 +1829,10 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                       <div className="flex items-center justify-between border-b border-slate-100 p-6">
                         <div>
                           <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                            Devis
+                            Facture
                           </p>
                           <h3 className="mt-0.5 text-lg font-semibold text-[color:var(--ds-text)]">
-                            Nouveau Devis / Acte
+                            Nouvelle facture / acte
                           </h3>
                         </div>
                         <button
@@ -1820,7 +1939,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                           type="submit"
                           className="rounded-2xl bg-sky-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-sky-700"
                         >
-                          Générer le devis
+                          Enregistrer la facture
                         </button>
                       </div>
                     </form>
@@ -1849,27 +1968,24 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
               if (!editDate) return;
               if (!nouvelActe) return;
 
-              let newStatus: FinanceLine["statut"] = "Impayé";
-              if (nouveauReste === 0) {
-                newStatus = "Payé";
-              } else if (nouveauReste < nouveauTotal) {
-                newStatus = "Partiel";
-              }
+              const newStatus = financeStatutFromReste(
+                nouveauTotal,
+                nouveauReste,
+              );
+
+              const updated: FinanceLine = {
+                ...editingFinance,
+                acteName: nouvelActe,
+                date: nouvelleDate,
+                montantTotal: nouveauTotal,
+                resteACharge: nouveauReste,
+                statut: newStatus,
+              };
 
               setFinances((prev) =>
-                prev.map((f) =>
-                  f.id === editingFinance.id
-                    ? {
-                        ...f,
-                        acteName: nouvelActe,
-                        date: nouvelleDate,
-                        montantTotal: nouveauTotal,
-                        resteACharge: nouveauReste,
-                        statut: newStatus,
-                      }
-                    : f
-                )
+                prev.map((f) => (f.id === editingFinance.id ? updated : f)),
               );
+              upsertGlobalFactureFromFinanceLine(updated);
 
               setEditingFinance(null);
             }}

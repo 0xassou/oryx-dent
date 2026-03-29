@@ -1,6 +1,7 @@
 "use client";
 
 import { Mail, MapPin, Phone } from "lucide-react";
+import { formatPhoneNumber } from "@/utils/formatters";
 
 export interface PatientInfoCardProps {
   telephone?: string;
@@ -31,7 +32,7 @@ export function PatientInfoCard({
       <div className="mt-4 space-y-3">
         <div className="flex items-center gap-3 text-sm text-slate-700">
           <Phone className={iconClass} aria-hidden />
-          <span>{telephone}</span>
+          <span>{formatPhoneNumber(telephone)}</span>
         </div>
         <div className="flex items-center gap-3 text-sm text-slate-700">
           <Mail className={iconClass} aria-hidden />

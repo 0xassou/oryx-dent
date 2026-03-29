@@ -2,96 +2,69 @@
 
 import { FileDown, FileText, MoreVertical, Pencil, Search, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  deriveFactureStatut,
+  formatMontantDANumber,
+  type FactureDocument,
+  type FactureStatut,
+  parseFacturesFromLocalStorage,
+  resteAPayer,
+  writeFacturesToStorage,
+} from "@/utils/factureDocuments";
+import {
+  createPatientQuick,
+  displayPatientName,
+  ensurePatientsHydrated,
+  readPatientsFromStorage,
+  touchPatientDerniereVisite,
+  type DentalPatientRecord,
+} from "@/utils/patientData";
+import { formatPhoneNumber } from "@/utils/formatters";
 
 const DOCS_STORAGE_KEY = "dental_dashboard_docs";
 
-type DocumentStatut =
-  | "Payé"
-  | "Payée"
-  | "En attente"
-  | "En retard"
-  | "Accepté";
-
-type DocumentMock = {
-  id: string;
-  date: string;
-  patient: string;
-  patientId?: string;
-  type: "Devis" | "Facture";
-  montant: string;
-  statut: DocumentStatut;
-};
-
-const DOCUMENTS_MOCK: DocumentMock[] = [
+const FACTURES_MOCK: FactureDocument[] = [
   {
     id: "FCT-2026-042",
     date: "25/03/2026",
     patient: "Mme Dupont",
-    type: "Facture",
-    montant: "45 000 DA",
-    statut: "Payée",
+    patientId: "3",
+    montantTotal: 45_000,
+    montantPaye: 45_000,
   },
   {
-    id: "DEV-2026-089",
+    id: "FCT-2026-089",
     date: "24/03/2026",
     patient: "M. Khelil",
-    type: "Devis",
-    montant: "250 000 DA",
-    statut: "En attente",
+    patientId: "2",
+    montantTotal: 250_000,
+    montantPaye: 80_000,
   },
   {
     id: "FCT-2026-041",
     date: "20/03/2026",
     patient: "Mme Saïd",
-    type: "Facture",
-    montant: "72 000 DA",
-    statut: "En retard",
+    patientId: "3",
+    montantTotal: 72_000,
+    montantPaye: 0,
   },
   {
-    id: "DEV-2026-088",
+    id: "FCT-2026-088",
     date: "15/03/2026",
     patient: "M. Yassine",
-    type: "Devis",
-    montant: "120 000 DA",
-    statut: "Accepté",
+    patientId: "1",
+    montantTotal: 120_000,
+    montantPaye: 120_000,
   },
 ];
 
-const PATIENTS_LIST = [
-  "Mme Dupont",
-  "M. Khelil",
-  "Mme Saïd",
-  "M. Yassine",
-  "Mme Benali",
-  "M. Ahmed",
-] as const;
-
-function parseDocumentsFromStorage(raw: string | null): DocumentMock[] | null {
-  if (raw == null || raw === "") return null;
-  try {
-    const data = JSON.parse(raw) as unknown;
-    if (!Array.isArray(data) || data.length === 0) return null;
-    const out: DocumentMock[] = [];
-    for (const item of data) {
-      if (
-        item &&
-        typeof item === "object" &&
-        typeof (item as DocumentMock).id === "string" &&
-        typeof (item as DocumentMock).date === "string" &&
-        typeof (item as DocumentMock).patient === "string" &&
-        ((item as DocumentMock).type === "Devis" ||
-          (item as DocumentMock).type === "Facture") &&
-        typeof (item as DocumentMock).montant === "string" &&
-        typeof (item as DocumentMock).statut === "string"
-      ) {
-        out.push(item as DocumentMock);
-      }
-    }
-    return out.length ? out : null;
-  } catch {
-    return null;
-  }
+function loadInitialFactures(): FactureDocument[] {
+  if (typeof window === "undefined") return [...FACTURES_MOCK];
+  const parsed = parseFacturesFromLocalStorage(
+    localStorage.getItem(DOCS_STORAGE_KEY),
+  );
+  return parsed.length ? parsed : [...FACTURES_MOCK];
 }
 
 function formatDateDDMMYYYY(d: Date): string {
@@ -101,19 +74,68 @@ function formatDateDDMMYYYY(d: Date): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function formatMontantWithDA(raw: string): string {
-  const digits = raw.replace(/\s/g, "").replace(/[^\d]/g, "");
-  if (!digits) return "";
-  const n = Number.parseInt(digits, 10);
-  if (!Number.isFinite(n)) return "";
-  return `${new Intl.NumberFormat("fr-DZ", { maximumFractionDigits: 0 }).format(n)} DA`;
+function parseDDMMYYYY(s: string): Date | null {
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const d = Number.parseInt(m[1], 10);
+  const mo = Number.parseInt(m[2], 10) - 1;
+  const y = Number.parseInt(m[3], 10);
+  const dt = new Date(y, mo, d);
+  if (
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== mo ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+  return dt;
 }
 
-function StatusBadge({ statut }: { statut: DocumentStatut }) {
+function startOfWeekMonday(ref: Date): Date {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const day = d.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + offset);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfWeekSunday(ref: Date): Date {
+  const start = startOfWeekMonday(ref);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function isDateInCurrentWeek(docDate: Date, ref: Date): boolean {
+  const start = startOfWeekMonday(ref);
+  const end = endOfWeekSunday(ref);
+  return docDate >= start && docDate <= end;
+}
+
+type DateFilterKey = "today" | "week";
+
+function parseMontantInput(raw: string): number {
+  const digits = raw.replace(/\s/g, "").replace(/[^\d]/g, "");
+  if (!digits) return 0;
+  const n = Number.parseInt(digits, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function StatusBadge({ statut }: { statut: FactureStatut }) {
   const base =
     "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1";
 
-  if (statut === "Payée" || statut === "Payé") {
+  if (statut === "Payé") {
     return (
       <span
         className={`${base} bg-emerald-50 text-emerald-700 ring-emerald-600/20`}
@@ -123,68 +145,67 @@ function StatusBadge({ statut }: { statut: DocumentStatut }) {
     );
   }
 
-  if (statut === "En attente") {
+  if (statut === "Partiellement Payé") {
     return (
-      <span className={`${base} bg-amber-50 text-amber-700 ring-amber-600/20`}>
-        En attente
-      </span>
-    );
-  }
-
-  if (statut === "En retard") {
-    return (
-      <span className={`${base} bg-rose-50 text-rose-700 ring-rose-600/20`}>
-        En retard
+      <span className={`${base} bg-cyan-50 text-cyan-800 ring-cyan-600/25`}>
+        Partiellement Payé
       </span>
     );
   }
 
   return (
-    <span className={`${base} bg-sky-50 text-sky-700 ring-sky-600/20`}>
-      Accepté
+    <span className={`${base} bg-amber-50 text-amber-800 ring-amber-600/20`}>
+      En attente
     </span>
   );
 }
 
-type TabKey = "Tous" | "Devis" | "Factures" | "Impayés";
+type TabKey = "Tous" | "Payé" | "Partiellement Payé" | "En attente";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "Tous", label: "Tous" },
-  { key: "Devis", label: "Devis" },
-  { key: "Factures", label: "Factures" },
-  { key: "Impayés", label: "Impayés" },
+  { key: "Payé", label: "Payé" },
+  { key: "Partiellement Payé", label: "Partiellement" },
+  { key: "En attente", label: "En attente" },
 ];
 
 export default function FacturesPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [documents, setDocuments] = useState<DocumentMock[]>([]);
+  const [factures, setFactures] = useState<FactureDocument[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("Tous");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [editingDoc, setEditingDoc] = useState<DocumentMock | null>(null);
-  const [editMontant, setEditMontant] = useState("");
-  const [editStatut, setEditStatut] = useState<DocumentStatut>("En attente");
+  const [editingDoc, setEditingDoc] = useState<FactureDocument | null>(null);
+  const [editMontantTotal, setEditMontantTotal] = useState("");
+  const [editMontantPaye, setEditMontantPaye] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [newDocType, setNewDocType] = useState<"Devis" | "Facture">("Devis");
-  const [newDocPatient, setNewDocPatient] = useState("");
+  const [selectedPatientId, setSelectedPatientId] = useState("");
   const [newDocMontant, setNewDocMontant] = useState("");
+  const [newPatientPrenom, setNewPatientPrenom] = useState("");
+  const [newPatientNom, setNewPatientNom] = useState("");
+  const [newPatientTel, setNewPatientTel] = useState("");
+  const [patientDirectory, setPatientDirectory] = useState<
+    DentalPatientRecord[]
+  >([]);
+  const [dateFilter, setDateFilter] = useState<DateFilterKey>("today");
 
-  useEffect(() => {
-    setMounted(true);
-    const parsed = parseDocumentsFromStorage(
-      typeof window !== "undefined"
-        ? localStorage.getItem(DOCS_STORAGE_KEY)
-        : null,
-    );
-    setDocuments(parsed ?? [...DOCUMENTS_MOCK]);
+  const refreshPatientDirectory = useCallback(() => {
+    ensurePatientsHydrated();
+    setPatientDirectory(readPatientsFromStorage());
   }, []);
 
   useEffect(() => {
+    setMounted(true);
+    setFactures(loadInitialFactures());
+    refreshPatientDirectory();
+  }, [refreshPatientDirectory]);
+
+  useEffect(() => {
     if (!mounted) return;
-    localStorage.setItem(DOCS_STORAGE_KEY, JSON.stringify(documents));
-  }, [mounted, documents]);
+    writeFacturesToStorage(factures);
+  }, [mounted, factures]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -192,54 +213,76 @@ export default function FacturesPage() {
     return () => window.clearTimeout(timeoutId);
   }, [toastMessage]);
 
-  function handleGenerateDoc() {
-    if (!newDocPatient.trim() || !newDocMontant.trim()) return;
+  function handleGenerateFacture() {
+    if (!selectedPatientId || !newDocMontant.trim()) return;
 
-    const id =
-      newDocType === "Devis"
-        ? `DEV-2026-0${Math.floor(Math.random() * 100) + 90}`
-        : `FCT-2026-0${Math.floor(Math.random() * 100) + 50}`;
+    const montantTotal = parseMontantInput(newDocMontant);
+    if (montantTotal <= 0) return;
 
-    const montantFormatted = formatMontantWithDA(newDocMontant);
-    if (!montantFormatted) return;
+    let patientLabel: string;
+    let patientId: string | undefined;
 
-    const statut: DocumentStatut =
-      newDocType === "Devis" ? "En attente" : "En retard";
+    if (selectedPatientId === "__new__") {
+      const pr = newPatientPrenom.trim();
+      const n = newPatientNom.trim();
+      const tel = newPatientTel.trim();
+      if (!pr || !n || !tel) return;
+      const rec = createPatientQuick({
+        prenom: pr,
+        nom: n,
+        telephone: tel,
+      });
+      patientLabel = displayPatientName(rec);
+      patientId = rec.id;
+    } else {
+      const p = patientDirectory.find((x) => x.id === selectedPatientId);
+      if (!p) return;
+      patientLabel = displayPatientName(p);
+      patientId = p.id;
+      touchPatientDerniereVisite(p.id);
+    }
 
-    const newDoc: DocumentMock = {
+    const id = `FCT-2026-${Math.floor(Math.random() * 900 + 100)}`;
+
+    const doc: FactureDocument = {
       id,
       date: formatDateDDMMYYYY(new Date()),
-      patient: newDocPatient.trim(),
-      type: newDocType,
-      montant: montantFormatted,
-      statut,
+      patient: patientLabel,
+      patientId,
+      montantTotal,
+      montantPaye: 0,
     };
 
-    setDocuments((prev) => [newDoc, ...prev]);
+    setFactures((prev) => [doc, ...prev]);
     setIsModalOpen(false);
-    setNewDocType("Devis");
-    setNewDocPatient("");
+    setSelectedPatientId("");
     setNewDocMontant("");
+    setNewPatientPrenom("");
+    setNewPatientNom("");
+    setNewPatientTel("");
   }
 
-  function handleOpenEdit(doc: DocumentMock) {
+  function handleOpenEdit(doc: FactureDocument) {
     setEditingDoc(doc);
-    setEditMontant(doc.montant);
-    setEditStatut(doc.statut);
+    setEditMontantTotal(String(doc.montantTotal));
+    setEditMontantPaye(String(doc.montantPaye));
     setOpenMenuId(null);
   }
 
   function handleSaveEditDoc() {
     if (!editingDoc) return;
-    const montantFormatted = formatMontantWithDA(editMontant);
-    if (!montantFormatted) return;
-    setDocuments((prev) =>
+    const total = parseMontantInput(editMontantTotal);
+    const paye = parseMontantInput(editMontantPaye);
+    if (total <= 0) return;
+    const payeClamped = Math.max(0, Math.min(paye, total));
+
+    setFactures((prev) =>
       prev.map((doc) =>
         doc.id === editingDoc.id
           ? {
               ...doc,
-              montant: montantFormatted,
-              statut: editStatut,
+              montantTotal: total,
+              montantPaye: payeClamped,
             }
           : doc,
       ),
@@ -248,90 +291,124 @@ export default function FacturesPage() {
   }
 
   function handleDeleteDoc(docId: string) {
-    const ok = window.confirm("Supprimer ce document ?");
+    const ok = window.confirm("Supprimer cette facture ?");
     if (!ok) return;
-    setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+    setFactures((prev) => prev.filter((doc) => doc.id !== docId));
     setOpenMenuId(null);
   }
 
-  const filteredDocs = useMemo(() => {
-    const base = documents.filter((doc) => {
+  const canCreateFacture = useMemo(() => {
+    if (!selectedPatientId || !newDocMontant.trim()) return false;
+    if (parseMontantInput(newDocMontant) <= 0) return false;
+    if (selectedPatientId === "__new__") {
+      return (
+        newPatientPrenom.trim().length > 0 &&
+        newPatientNom.trim().length > 0 &&
+        newPatientTel.trim().length > 0
+      );
+    }
+    return true;
+  }, [
+    selectedPatientId,
+    newDocMontant,
+    newPatientPrenom,
+    newPatientNom,
+    newPatientTel,
+  ]);
+
+  const filteredFactures = useMemo(() => {
+    const now = new Date();
+    const base = factures.filter((doc) => {
+      const st = deriveFactureStatut(doc.montantTotal, doc.montantPaye);
       if (activeTab === "Tous") return true;
-      if (activeTab === "Devis") return doc.type === "Devis";
-      if (activeTab === "Factures") return doc.type === "Facture";
-      if (activeTab === "Impayés") return doc.statut === "En retard";
-      return true;
+      return st === activeTab;
+    });
+
+    const byDate = base.filter((doc) => {
+      const parsed = parseDDMMYYYY(doc.date);
+      if (!parsed) return true;
+      if (dateFilter === "today") return isSameCalendarDay(parsed, now);
+      return isDateInCurrentWeek(parsed, now);
     });
 
     const q = search.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(
+    if (!q) return byDate;
+    return byDate.filter(
       (doc) =>
         doc.patient.toLowerCase().includes(q) ||
         doc.id.toLowerCase().includes(q),
     );
-  }, [documents, activeTab, search]);
+  }, [factures, activeTab, search, dateFilter]);
 
   return (
     <div className="min-h-screen space-y-6 bg-slate-50 p-4 sm:p-6">
-      {/* En-tête */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-900">
-            Factures &amp; Devis
-          </h1>
+          <h1 className="text-2xl font-bold text-slate-900">Factures</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Gérez vos encaissements et vos propositions de traitement.
+            Suivi des factures, paiements et reste à payer.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            refreshPatientDirectory();
+            setIsModalOpen(true);
+          }}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-indigo-700"
         >
-          + Créer (Devis/Facture)
+          + Nouvelle facture
         </button>
       </div>
 
-      {/* Mini-KPI */}
-      <div className="mb-2 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">À encaisser</p>
-          <p className="mt-2 text-2xl font-bold text-orange-500">
-            320 000 DA
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Devis en attente</p>
-          <p className="mt-2 text-2xl font-bold text-sky-500">
-            2 400 000 DA
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Encaissé ce mois</p>
-          <p className="mt-2 text-2xl font-bold text-emerald-600">
-            1 850 000 DA
-          </p>
-        </div>
-      </div>
-
-      {/* Gestionnaire de documents */}
       <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un patient ou n° facture..."
-              className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-            />
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher un patient ou n° facture..."
+                className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+            <div
+              className="flex shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-0.5"
+              role="group"
+              aria-label="Filtrer par période"
+            >
+              <button
+                type="button"
+                onClick={() => setDateFilter("today")}
+                className={[
+                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                  dateFilter === "today"
+                    ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900",
+                ].join(" ")}
+              >
+                Aujourd&apos;hui
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateFilter("week")}
+                className={[
+                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                  dateFilter === "week"
+                    ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900",
+                ].join(" ")}
+              >
+                Cette semaine
+              </button>
+            </div>
           </div>
 
-          <div className="flex w-full justify-start sm:w-auto">
-            <div className="flex border-b border-slate-200">
+          <div className="flex w-full justify-start overflow-x-auto sm:w-auto">
+            <div className="flex min-w-max border-b border-slate-200">
               {TABS.map(({ key, label }) => {
                 const active = activeTab === key;
                 return (
@@ -340,7 +417,7 @@ export default function FacturesPage() {
                     type="button"
                     onClick={() => setActiveTab(key)}
                     className={[
-                      "px-4 pb-3 text-sm font-medium transition-colors",
+                      "whitespace-nowrap px-3 pb-3 text-sm font-medium transition-colors sm:px-4",
                       active
                         ? "border-b-2 border-indigo-500 text-indigo-600"
                         : "text-slate-500 hover:text-slate-700",
@@ -355,11 +432,11 @@ export default function FacturesPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full min-w-[720px] border-collapse">
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  N° Document
+                  N° Facture
                 </th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Date
@@ -367,11 +444,14 @@ export default function FacturesPage() {
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Patient
                 </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Type (Devis/Facture)
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Montant total
                 </th>
                 <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Montant
+                  Montant payé
+                </th>
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Reste à payer
                 </th>
                 <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Statut
@@ -382,110 +462,116 @@ export default function FacturesPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredDocs.map((doc) => (
-                <tr
-                  key={doc.id}
-                  className="border-b border-slate-100 transition-colors hover:bg-slate-50"
-                >
-                  <td className="px-5 py-4 font-mono text-sm text-slate-600">
-                    {doc.id}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-slate-700">
-                    {doc.date}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-medium text-slate-900">
-                    <button
-                      type="button"
-                      onClick={() => doc.patientId && router.push("/patients/" + doc.patientId)}
-                      className="transition-colors hover:text-indigo-600"
-                    >
-                      {doc.patient}
-                    </button>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => doc.patientId && router.push("/patients/" + doc.patientId)}
-                      className="transition-colors hover:text-indigo-600"
-                    >
-                      {doc.type}
-                    </button>
-                  </td>
-                  <td className="px-5 py-4 text-right text-sm font-semibold text-slate-900">
-                    {doc.montant}
-                  </td>
-                  <td className="px-5 py-4">
-                    <StatusBadge statut={doc.statut} />
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (doc.patientId) {
-                            router.push("/patients/" + doc.patientId);
-                            return;
-                          }
-                          alert("Aucun patient lié à ce document.");
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
-                        aria-label="Voir / Imprimer PDF"
-                      >
-                        <FileText className="h-4 w-4" />
-                      </button>
+              {filteredFactures.map((doc) => {
+                const st = deriveFactureStatut(doc.montantTotal, doc.montantPaye);
+                const reste = resteAPayer(doc);
+                return (
+                  <tr
+                    key={doc.id}
+                    className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                  >
+                    <td className="px-5 py-4 font-mono text-sm text-slate-600">
+                      {doc.id}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-slate-700">
+                      {doc.date}
+                    </td>
+                    <td className="px-5 py-4 text-sm font-medium text-slate-900">
                       <button
                         type="button"
                         onClick={() =>
-                          setOpenMenuId((prev) => (prev === doc.id ? null : doc.id))
+                          doc.patientId &&
+                          router.push("/patients/" + doc.patientId)
                         }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
-                        aria-label="Options"
+                        className="text-left transition-colors hover:text-indigo-600"
                       >
-                        <MoreVertical className="h-4 w-4" />
+                        {doc.patient}
                       </button>
-                      {openMenuId === doc.id && (
-                        <div className="absolute right-5 z-30 mt-20 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(doc)}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Modifier
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setToastMessage("Préparation du PDF en cours...");
-                              setOpenMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
-                          >
-                            <FileDown className="h-4 w-4" />
-                            Générer PDF
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteDoc(doc.id)}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Supprimer
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-5 py-4 text-right text-sm font-semibold text-slate-900 tabular-nums">
+                      {formatMontantDANumber(doc.montantTotal)}
+                    </td>
+                    <td className="px-5 py-4 text-right text-sm text-slate-700 tabular-nums">
+                      {formatMontantDANumber(doc.montantPaye)}
+                    </td>
+                    <td className="px-5 py-4 text-right text-sm font-semibold text-slate-900 tabular-nums">
+                      {formatMontantDANumber(reste)}
+                    </td>
+                    <td className="px-5 py-4">
+                      <StatusBadge statut={st} />
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="relative flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (doc.patientId) {
+                              router.push("/patients/" + doc.patientId);
+                              return;
+                            }
+                            alert("Aucun patient lié à cette facture.");
+                          }}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                          aria-label="Voir fiche patient"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenMenuId((prev) =>
+                              prev === doc.id ? null : doc.id,
+                            )
+                          }
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                          aria-label="Options"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                        {openMenuId === doc.id && (
+                          <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(doc)}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Modifier
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setToastMessage("Préparation du PDF en cours...");
+                                setOpenMenuId(null);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                            >
+                              <FileDown className="h-4 w-4" />
+                              Générer PDF
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDoc(doc.id)}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Supprimer
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
 
-              {filteredDocs.length === 0 ? (
+              {filteredFactures.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-5 py-10 text-center text-sm text-slate-500"
                   >
-                    Aucun document ne correspond à votre recherche.
+                    Aucune facture ne correspond à votre recherche.
                   </td>
                 </tr>
               ) : null}
@@ -499,15 +585,15 @@ export default function FacturesPage() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="modal-nouveau-doc"
+            aria-labelledby="modal-nouvelle-facture"
             className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <h2
-                id="modal-nouveau-doc"
+                id="modal-nouvelle-facture"
                 className="text-lg font-semibold text-slate-900"
               >
-                Nouveau Document
+                Nouvelle facture
               </h2>
               <button
                 type="button"
@@ -522,57 +608,93 @@ export default function FacturesPage() {
             <div className="mt-6 space-y-4">
               <div>
                 <label
-                  htmlFor="doc-type"
-                  className="mb-1 block text-sm font-medium text-slate-700"
-                >
-                  Type
-                </label>
-                <select
-                  id="doc-type"
-                  value={newDocType}
-                  onChange={(e) =>
-                    setNewDocType(e.target.value as "Devis" | "Facture")
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                >
-                  <option value="Devis">Devis</option>
-                  <option value="Facture">Facture</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="doc-patient"
+                  htmlFor="fact-patient"
                   className="mb-1 block text-sm font-medium text-slate-700"
                 >
                   Patient
                 </label>
                 <select
-                  id="doc-patient"
-                  value={newDocPatient}
-                  onChange={(e) => setNewDocPatient(e.target.value)}
+                  id="fact-patient"
+                  value={selectedPatientId}
+                  onChange={(e) => setSelectedPatientId(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 >
                   <option value="" disabled>
                     Sélectionner un patient…
                   </option>
-                  {PATIENTS_LIST.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
+                  {patientDirectory.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {displayPatientName(p)} — {formatPhoneNumber(p.telephone)}
                     </option>
                   ))}
+                  <option value="__new__">+ Nouveau patient…</option>
                 </select>
               </div>
 
+              {selectedPatientId === "__new__" && (
+                <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  <p className="text-xs font-medium text-slate-600">
+                    Nouveau patient (sera ajouté à la liste globale)
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="fact-np-prenom"
+                        className="mb-1 block text-xs font-medium text-slate-600"
+                      >
+                        Prénom
+                      </label>
+                      <input
+                        id="fact-np-prenom"
+                        type="text"
+                        value={newPatientPrenom}
+                        onChange={(e) => setNewPatientPrenom(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="fact-np-nom"
+                        className="mb-1 block text-xs font-medium text-slate-600"
+                      >
+                        Nom
+                      </label>
+                      <input
+                        id="fact-np-nom"
+                        type="text"
+                        value={newPatientNom}
+                        onChange={(e) => setNewPatientNom(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="fact-np-tel"
+                      className="mb-1 block text-xs font-medium text-slate-600"
+                    >
+                      Téléphone
+                    </label>
+                    <input
+                      id="fact-np-tel"
+                      type="tel"
+                      value={newPatientTel}
+                      onChange={(e) => setNewPatientTel(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label
-                  htmlFor="doc-montant"
+                  htmlFor="fact-montant"
                   className="mb-1 block text-sm font-medium text-slate-700"
                 >
-                  Montant (DA)
+                  Montant total (DA)
                 </label>
                 <input
-                  id="doc-montant"
+                  id="fact-montant"
                   type="text"
                   inputMode="decimal"
                   value={newDocMontant}
@@ -580,6 +702,9 @@ export default function FacturesPage() {
                   placeholder="Ex : 45 000"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 />
+                <p className="mt-1 text-xs text-slate-500">
+                  Statut initial : En attente (aucun paiement enregistré).
+                </p>
               </div>
             </div>
 
@@ -593,10 +718,11 @@ export default function FacturesPage() {
               </button>
               <button
                 type="button"
-                onClick={handleGenerateDoc}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                onClick={handleGenerateFacture}
+                disabled={!canCreateFacture}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Générer
+                Créer la facture
               </button>
             </div>
           </div>
@@ -622,29 +748,29 @@ export default function FacturesPage() {
             <div className="mt-4 space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Montant
+                  Montant total (DA)
                 </label>
                 <input
                   type="text"
-                  value={editMontant}
-                  onChange={(e) => setEditMontant(e.target.value)}
+                  value={editMontantTotal}
+                  onChange={(e) => setEditMontantTotal(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Statut
+                  Montant payé (DA)
                 </label>
-                <select
-                  value={editStatut}
-                  onChange={(e) => setEditStatut(e.target.value as DocumentStatut)}
+                <input
+                  type="text"
+                  value={editMontantPaye}
+                  onChange={(e) => setEditMontantPaye(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                >
-                  <option value="Payé">Payé</option>
-                  <option value="En attente">En attente</option>
-                  <option value="En retard">En retard</option>
-                  <option value="Accepté">Accepté</option>
-                </select>
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Le statut est recalculé automatiquement (Payé / Partiellement
+                  Payé / En attente).
+                </p>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">

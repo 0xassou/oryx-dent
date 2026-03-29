@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Lock,
 } from "lucide-react";
 
 const SIDEBAR_TRANSITION = { type: "spring" as const, stiffness: 320, damping: 34 };
@@ -20,15 +21,20 @@ const SIDEBAR_TRANSITION = { type: "spring" as const, stiffness: 320, damping: 3
 export const SIDEBAR_WIDTH = { collapsed: 64, expanded: 240 };
 
 const NAV_ITEMS = [
-  { href: "/", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/patients", label: "Patients", icon: Users },
-  { href: "/planning", label: "Planning", icon: Calendar },
-  { href: "/factures", label: "Factures", icon: FileText },
-  { href: "/statistiques", label: "Statistiques", icon: BarChart3 },
-  { href: "/stocks", label: "Stocks", icon: Package },
-  { href: "/sterilisation", label: "Stérilisation", icon: ShieldCheck },
-  { href: "/laboratoire", label: "Laboratoire", icon: Truck },
-  { href: "/parametres", label: "Paramètres", icon: Settings },
+  { href: "/", label: "Tableau de bord", icon: LayoutDashboard, locked: false },
+  { href: "/patients", label: "Patients", icon: Users, locked: false },
+  { href: "/planning", label: "Planning", icon: Calendar, locked: false },
+  { href: "/factures", label: "Factures", icon: FileText, locked: false },
+  {
+    href: "/statistiques",
+    label: "Statistiques",
+    icon: BarChart3,
+    locked: true,
+  },
+  { href: "/stocks", label: "Stocks", icon: Package, locked: false },
+  { href: "/sterilisation", label: "Stérilisation", icon: ShieldCheck, locked: false },
+  { href: "/laboratoire", label: "Laboratoire", icon: Truck, locked: false },
+  { href: "/parametres", label: "Paramètres", icon: Settings, locked: false },
 ] as const;
 
 interface SidebarProps {
@@ -102,19 +108,40 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
       <nav className={collapsed ? "flex flex-col gap-0.5 p-1.5" : "flex flex-col gap-0.5 p-2"}>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
+          const lockTitle = item.locked ? " — zone privée" : "";
           return (
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? `${item.label}${lockTitle}` : undefined}
               className={[
                 "group flex items-center rounded-xl text-sm font-medium",
                 "text-slate-600 transition-colors hover:bg-white/60 hover:text-sky-700",
                 collapsed ? "justify-center px-1.5 py-2.5" : "gap-2 px-2 py-2",
               ].join(" ")}
             >
-              <Icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span className="tracking-wide">{item.label}</span>}
+              <span className="relative inline-flex shrink-0">
+                <Icon className="h-5 w-5" />
+                {item.locked && collapsed ? (
+                  <Lock
+                    className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-amber-600"
+                    strokeWidth={2.5}
+                    aria-hidden
+                  />
+                ) : null}
+              </span>
+              {!collapsed && (
+                <span className="flex min-w-0 flex-1 items-center gap-1.5 tracking-wide">
+                  <span className="truncate">{item.label}</span>
+                  {item.locked ? (
+                    <Lock
+                      className="h-3.5 w-3.5 shrink-0 text-amber-600/90"
+                      strokeWidth={2.25}
+                      aria-hidden
+                    />
+                  ) : null}
+                </span>
+              )}
             </Link>
           );
         })}

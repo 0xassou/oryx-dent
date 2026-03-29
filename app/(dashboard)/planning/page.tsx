@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -13,27 +14,19 @@ import {
   NewAppointmentModal,
   type NewAppointmentPayload,
 } from "@/components/planning/NewAppointmentModal";
+import {
+  type AppointmentRdv as Rdv,
+  ensureAppointmentsSeeded,
+  formatDateKeyLocal,
+  isValidDateKeyString,
+  writeAppointmentsToStorage,
+} from "@/utils/appointmentData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface Rdv {
-  id: string;
-  /** YYYY-MM-DD (local) — jour du créneau */
-  dateKey: string;
-  start: string;
-  durationMinutes: number;
-  patient: string;
-  soin: string;
-  urgence?: boolean;
-}
 
 type ViewMode = "calendar" | "tree";
 
 // ─── Helpers date ─────────────────────────────────────────────────────────────
-
-function formatDateInput(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 function formatDateLong(d: Date): string {
   return d.toLocaleDateString("fr-FR", {
@@ -91,20 +84,28 @@ function mkDateKey(offsetDays: number): string {
 }
 
 const INITIAL_APPOINTMENTS: Rdv[] = [
-  { id: "1", dateKey: mkDateKey(-2), start: "08:30", durationMinutes: 30,  patient: "Marie Dupont",    soin: "Détartrage"    },
-  { id: "2", dateKey: mkDateKey(-2), start: "10:00", durationMinutes: 45,  patient: "Jean Martin",     soin: "Extraction",   urgence: true },
-  { id: "3", dateKey: mkDateKey(-1), start: "11:30", durationMinutes: 60,  patient: "Isabelle Roux",   soin: "Couronne"      },
-  { id: "4", dateKey: mkDateKey(0), start: "14:00", durationMinutes: 90,  patient: "Sophie Bernard",  soin: "Blanchiment"   },
-  { id: "5", dateKey: mkDateKey(0), start: "09:00", durationMinutes: 30,  patient: "Pierre Leroy",    soin: "Détartrage"    },
-  { id: "6", dateKey: mkDateKey(1), start: "14:30", durationMinutes: 45,  patient: "Lucas Garnier",   soin: "Consultation"  },
-  { id: "7", dateKey: mkDateKey(2), start: "10:30", durationMinutes: 60,  patient: "Claire Moreau",   soin: "Implant",      urgence: true },
-  { id: "8", dateKey: mkDateKey(3), start: "09:30", durationMinutes: 30,  patient: "Thomas Petit",    soin: "Blanchiment"   },
-  { id: "9", dateKey: mkDateKey(4), start: "11:00", durationMinutes: 45,  patient: "Marie Dupont",    soin: "Contrôle"      },
+  { id: "1", dateKey: mkDateKey(-2), start: "08:30", durationMinutes: 30, patient: "Marie Dupont", soin: "Détartrage", rdvType: "planned" },
+  { id: "2", dateKey: mkDateKey(-2), start: "10:00", durationMinutes: 45, patient: "Jean Martin", soin: "Extraction", urgence: true, rdvType: "planned" },
+  { id: "3", dateKey: mkDateKey(-1), start: "11:30", durationMinutes: 60, patient: "Isabelle Roux", soin: "Couronne", rdvType: "planned" },
+  { id: "4", dateKey: mkDateKey(0), start: "14:00", durationMinutes: 90, patient: "Sophie Bernard", soin: "Blanchiment", rdvType: "planned" },
+  { id: "5", dateKey: mkDateKey(0), start: "09:00", durationMinutes: 30, patient: "Pierre Leroy", soin: "Détartrage", rdvType: "planned" },
+  { id: "6", dateKey: mkDateKey(1), start: "14:30", durationMinutes: 45, patient: "Lucas Garnier", soin: "Consultation", rdvType: "planned" },
+  { id: "7", dateKey: mkDateKey(2), start: "10:30", durationMinutes: 60, patient: "Claire Moreau", soin: "Implant", urgence: true, rdvType: "planned" },
+  { id: "8", dateKey: mkDateKey(3), start: "09:30", durationMinutes: 30, patient: "Thomas Petit", soin: "Blanchiment", rdvType: "planned" },
+  { id: "9", dateKey: mkDateKey(4), start: "11:00", durationMinutes: 45, patient: "Marie Dupont", soin: "Contrôle", rdvType: "planned" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function rdvColor(rdv: Rdv) {
+  if (rdv.rdvType === "direct") {
+    return {
+      bg: "bg-violet-50",
+      text: "text-violet-700",
+      dot: "bg-violet-500",
+      border: "border-violet-200/70",
+    };
+  }
   return rdv.urgence
     ? { bg: "bg-red-50", text: "text-red-600", dot: "bg-red-400", border: "border-red-200/60" }
     : { bg: "bg-[color:var(--ds-primary-soft)]/60", text: "text-[color:var(--ds-primary)]", dot: "bg-cyan-400", border: "border-cyan-200/40" };
@@ -215,10 +216,17 @@ function Branch({
                 </div>
 
                 <div className="mt-1 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold tracking-tight text-[color:var(--ds-text)]">
-                      {rdv.patient}
-                    </p>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-semibold tracking-tight text-[color:var(--ds-text)]">
+                        {rdv.patient}
+                      </p>
+                      {rdv.rdvType === "direct" && (
+                        <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">
+                          Direct
+                        </span>
+                      )}
+                    </div>
                     <p className={`mt-0.5 text-[11px] font-medium ${c.text}`}>
                       {rdv.soin}
                     </p>
@@ -437,14 +445,22 @@ function CalendarView({
                     }}
                     className={[
                       "absolute left-1.5 right-1.5 z-20 overflow-hidden rounded-lg border-l-4 p-1.5 shadow-sm",
-                      rdv.urgence
-                        ? "border-red-500 bg-red-50 text-red-600"
-                        : "border-sky-500 bg-sky-50 text-sky-900",
+                      rdv.rdvType === "direct"
+                        ? "border-violet-500 bg-violet-50 text-violet-900"
+                        : rdv.urgence
+                          ? "border-red-500 bg-red-50 text-red-600"
+                          : "border-sky-500 bg-sky-50 text-sky-900",
                       "cursor-grab select-none active:cursor-grabbing",
                     ].join(" ")}
                   >
                     <p className="text-xs font-semibold leading-tight">
-                      {rdv.patient} — {rdv.soin}
+                      {rdv.patient}
+                      {rdv.rdvType === "direct" ? (
+                        <span className="ml-1 rounded bg-violet-200/80 px-1 text-[9px] font-bold uppercase text-violet-900">
+                          Direct
+                        </span>
+                      ) : null}{" "}
+                      — {rdv.soin}
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-600/80">
                       {rdv.start}
@@ -518,18 +534,27 @@ function formatSlidingRange(centerDate: Date): string {
 }
 
 export default function PlanningPage() {
+  const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<ViewMode>("calendar");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [treeViewDate, setTreeViewDate] = useState<Date>(() => new Date());
   const [isNewRdvModalOpen, setIsNewRdvModalOpen] = useState(false);
-  const [appointments, setAppointments] = useState<Rdv[]>(() => [
-    ...INITIAL_APPOINTMENTS,
-  ]);
+  const [appointments, setAppointments] = useState<Rdv[]>(INITIAL_APPOINTMENTS);
   const setWindowCenter = setCurrentDate;
   const [scrollAnchorIso, setScrollAnchorIso] = useState<string | null>(null);
   const handleScrollAnchorConsumed = useCallback(() => {
     setScrollAnchorIso(null);
   }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    setAppointments(ensureAppointmentsSeeded(INITIAL_APPOINTMENTS));
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    writeAppointmentsToStorage(appointments);
+  }, [mounted, appointments]);
 
   const slidingColumns = buildSlidingDayColumns(currentDate);
 
@@ -604,7 +629,7 @@ export default function PlanningPage() {
               </span>
               <input
                 type="date"
-                value={formatDateInput(view === "tree" ? treeViewDate : currentDate)}
+                value={formatDateKey(view === "tree" ? treeViewDate : currentDate)}
                 onChange={(e) => {
                   const v = e.target.value;
                   if (v) {
@@ -690,11 +715,17 @@ export default function PlanningPage() {
         onClose={() => setIsNewRdvModalOpen(false)}
         onConfirm={(payload: NewAppointmentPayload) => {
           const p = payload;
+          const rawDate = p.date?.trim() ?? "";
+          const dateKeyFinal =
+            rawDate && isValidDateKeyString(rawDate)
+              ? rawDate
+              : formatDateKeyLocal(new Date());
+
           const timeNorm =
             p.time.length >= 5 ? p.time.slice(0, 5) : p.time;
           const newRdv: Rdv = {
             id: `rdv-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-            dateKey: p.date,
+            dateKey: dateKeyFinal,
             start: timeNorm,
             durationMinutes: Number(p.dureeMinutes) || 30,
             patient: p.patient,
@@ -702,11 +733,17 @@ export default function PlanningPage() {
             urgence: p.motifs.some((m) =>
               m.toLowerCase().includes("urgence")
             ),
+            rdvType: "planned",
           };
           setAppointments((prev) => [...prev, newRdv]);
-          const [y, m, d] = p.date.split("-").map(Number);
-          setWindowCenter(new Date(y, m - 1, d));
-          setScrollAnchorIso(p.date);
+          const [y, m, d] = dateKeyFinal.split("-").map(Number);
+          const center = new Date(y, m - 1, d);
+          if (dateKeyFinal && !isNaN(center.getTime())) {
+            setWindowCenter(center);
+          } else {
+            setWindowCenter(new Date());
+          }
+          setScrollAnchorIso(dateKeyFinal);
         }}
       />
 

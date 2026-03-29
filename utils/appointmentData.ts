@@ -1,0 +1,174 @@
+/**
+ * Rendez-vous partagés (Planning ↔ Dashboard).
+ * Clé localStorage : dental_appointments_data
+ */
+
+export const DENTAL_APPOINTMENTS_STORAGE_KEY = "dental_appointments_data";
+
+export type AppointmentRdv = {
+  id: string;
+  /** YYYY-MM-DD local */
+  dateKey: string;
+  start: string;
+  durationMinutes: number;
+  patient: string;
+  soin: string;
+  urgence?: boolean;
+  /** RDV créé depuis le planning vs entrée directe dashboard */
+  rdvType?: "planned" | "direct";
+  patientId?: string;
+};
+
+/** Date locale au format YYYY-MM-DD (pour inputs et stockage). */
+export function formatDateKeyLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function isValidDateKeyString(s: string | undefined | null): boolean {
+  if (s == null || typeof s !== "string") return false;
+  const t = s.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false;
+  const d = new Date(`${t}T12:00:00`);
+  return !isNaN(d.getTime());
+}
+
+/**
+ * Heure actuelle arrondie à la dizaine de minutes supérieure (plafonnée à 23:50).
+ * Pour les urgences : heure de début par défaut.
+ */
+export function roundStartTimeToNextTenMinutes(d: Date = new Date()): string {
+  let minutes = d.getHours() * 60 + d.getMinutes();
+  if (d.getSeconds() > 0 || d.getMilliseconds() > 0) {
+    minutes += 1;
+  }
+  let rounded = Math.ceil(minutes / 10) * 10;
+  if (rounded >= 24 * 60) {
+    rounded = 23 * 60 + 50;
+  }
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function parseRdv(raw: unknown): AppointmentRdv | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const dateKeyRaw =
+    typeof o.dateKey === "string" ? o.dateKey.trim() : "";
+  if (
+    typeof o.id !== "string" ||
+    !dateKeyRaw ||
+    !isValidDateKeyString(dateKeyRaw) ||
+    typeof o.start !== "string" ||
+    typeof o.patient !== "string" ||
+    typeof o.soin !== "string"
+  ) {
+    return null;
+  }
+  const duration =
+    typeof o.durationMinutes === "number"
+      ? o.durationMinutes
+      : Number(o.durationMinutes) || 30;
+  return {
+    id: o.id,
+    dateKey: dateKeyRaw,
+    start: o.start.length >= 5 ? o.start.slice(0, 5) : o.start,
+    durationMinutes: duration,
+    patient: o.patient,
+    soin: o.soin,
+    urgence: o.urgence === true,
+    rdvType:
+      o.rdvType === "direct"
+        ? "direct"
+        : o.rdvType === "planned"
+          ? "planned"
+          : undefined,
+    patientId: typeof o.patientId === "string" ? o.patientId : undefined,
+  };
+}
+
+export function readAppointmentsFromStorage(): AppointmentRdv[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(DENTAL_APPOINTMENTS_STORAGE_KEY);
+    if (raw == null || raw === "") return [];
+    const data = JSON.parse(raw) as unknown;
+    if (!Array.isArray(data)) return [];
+    const out: AppointmentRdv[] = [];
+    for (const item of data) {
+      const r = parseRdv(item);
+      if (r) out.push(r);
+    }
+    if (out.length !== data.length) {
+      try {
+        writeAppointmentsToStorage(out);
+      } catch {
+        /* quota / accès refusé */
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function writeAppointmentsToStorage(items: AppointmentRdv[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(
+    DENTAL_APPOINTMENTS_STORAGE_KEY,
+    JSON.stringify(items),
+  );
+}
+
+/** Si le stockage est vide, initialise avec la graine (ex. démo planning). */
+export function ensureAppointmentsSeeded(seed: AppointmentRdv[]): AppointmentRdv[] {
+  if (typeof window === "undefined") return seed;
+  const cur = readAppointmentsFromStorage();
+  if (cur.length > 0) return cur;
+  writeAppointmentsToStorage(seed);
+  return seed;
+}
+
+/** Heure locale HH:mm */
+export function formatTimeHHmmLocal(d: Date): string {
+  return d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * Ajoute un créneau « entrée directe » à l’agenda (aujourd’hui, heure actuelle).
+ */
+export function appendDirectEntryAppointment(args: {
+  patientName: string;
+  patientId?: string | null;
+  visitKind: "consultation" | "urgence";
+  at?: Date;
+}): AppointmentRdv {
+  const d = args.at ?? new Date();
+  const dateKey = formatDateKeyLocal(d);
+  const start = formatTimeHHmmLocal(d);
+  const rdv: AppointmentRdv = {
+    id: `direct-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    dateKey,
+    start,
+    durationMinutes: 30,
+    patient: args.patientName.trim(),
+    soin:
+      args.visitKind === "urgence"
+        ? "Urgence (entrée directe)"
+        : "Consultation (entrée directe)",
+    urgence: args.visitKind === "urgence",
+    rdvType: "direct",
+    ...(args.patientId ? { patientId: args.patientId } : {}),
+  };
+  const list = readAppointmentsFromStorage();
+  list.push(rdv);
+  writeAppointmentsToStorage(list);
+  return rdv;
+}

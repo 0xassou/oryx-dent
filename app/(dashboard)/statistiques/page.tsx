@@ -41,18 +41,21 @@ const KPI_DATA = {
     depenses: "120 000",
     benefice: "330 000",
     impayes: "80 000",
+    croissance: "+5,2 %",
   },
   month: {
     ca: "1 850 000",
     depenses: "650 000",
     benefice: "1 200 000",
     impayes: "320 000",
+    croissance: "+12,4 %",
   },
   year: {
     ca: "18 500 000",
     depenses: "5 200 000",
     benefice: "13 300 000",
     impayes: "1 200 000",
+    croissance: "+8,1 %",
   },
 } as const;
 
@@ -114,30 +117,49 @@ export default function StatistiquesPage() {
     [],
   );
 
+  const croissanceSubtitle =
+    period === "week"
+      ? "vs semaine précédente"
+      : period === "year"
+        ? "vs année précédente"
+        : "vs mois précédent";
+
   const kpis = [
     {
-      label: "CA Encaissé",
+      label: "Chiffre d'affaires",
       value: `${currentKPI.ca} DA`,
-      subtitle: "+ vs mois précédent",
+      subtitle: `${periodLabel} · encaissements agrégés`,
       tone: "text-emerald-600",
       bg: "bg-emerald-50 border-emerald-100",
       icon: undefined,
+      key: "ca" as const,
     },
     {
-      label: "Dépenses (Charges)",
+      label: "Croissance du CA",
+      value: currentKPI.croissance,
+      subtitle: croissanceSubtitle,
+      tone: "text-teal-600",
+      bg: "bg-teal-50 border-teal-100",
+      icon: TrendingUp,
+      key: "croissance" as const,
+    },
+    {
+      label: "Dépenses (charges)",
       value: `${currentKPI.depenses} DA`,
       subtitle: "Charges & frais",
       tone: "text-rose-600",
       bg: "bg-rose-50 border-rose-100",
       icon: undefined,
+      key: "depenses" as const,
     },
     {
-      label: "Bénéfice Net",
+      label: "Bénéfice net",
       value: `${currentKPI.benefice} DA`,
-      subtitle: "Après dépenses",
+      subtitle: "Après déduction des charges",
       tone: "text-indigo-600",
       bg: "bg-indigo-50 border-indigo-100",
-      icon: TrendingUp,
+      icon: undefined,
+      key: "benefice" as const,
     },
     {
       label: "Reste à recouvrer",
@@ -146,6 +168,7 @@ export default function StatistiquesPage() {
       tone: "text-orange-600",
       bg: "bg-orange-50 border-orange-100",
       icon: undefined,
+      key: "impayes" as const,
     },
   ] as const;
 
@@ -423,20 +446,34 @@ export default function StatistiquesPage() {
 
   return (
     <div className="min-h-screen space-y-6 bg-slate-50 p-4 sm:p-6">
+      <div
+        className="flex flex-col gap-2 rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50 via-amber-50/80 to-amber-50/40 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:gap-4"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-lg leading-none" aria-hidden>
+            🔒
+          </span>
+          <p className="text-sm font-semibold text-amber-950">
+            Espace Administrateur — Accès restreint
+          </p>
+        </div>
+        <p className="text-xs leading-relaxed text-amber-900/85 sm:border-l sm:border-amber-200/80 sm:pl-4">
+          Agrégats financiers, marges et tendances : réservés au dentiste et à
+          la direction. Ne pas diffuser en salle d&apos;attente.
+        </p>
+      </div>
+
       {/* En-tête */}
       <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
-                Statistiques &amp; Finances
-              </h1>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                Privé - Accès Praticien
-              </span>
-            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
+              Statistiques &amp; Finances
+            </h1>
             <p className="mt-1 text-sm text-slate-600">
-              Pilotage financier premium de la clinique
+              Pilotage stratégique : CA, croissance, bénéfices et trésorerie.
             </p>
           </div>
 
@@ -461,14 +498,14 @@ export default function StatistiquesPage() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {kpis.map((kpi) => (
           (() => {
-            const isImpayes = kpi.label === "Reste à recouvrer";
+            const isImpayes = kpi.key === "impayes";
             const isActive = isImpayes && activeDetail === "impayes";
             return (
           <div
-            key={kpi.label}
+            key={kpi.key}
             role={isImpayes ? "button" : undefined}
             tabIndex={isImpayes ? 0 : undefined}
             onClick={

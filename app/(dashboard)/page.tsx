@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   ArrowRight,
   Calendar,
@@ -9,9 +15,11 @@ import {
   FlaskConical,
   PackageSearch,
   Plus,
+  Search,
   ShieldCheck,
   Sparkles,
   UserPlus,
+  X,
 } from "lucide-react";
 import {
   Cell,
@@ -21,6 +29,16 @@ import {
   Tooltip,
 } from "recharts";
 import { loadDentalStock, type StockLine } from "@/utils/stockLogic";
+import {
+  createPatientQuick,
+  displayPatientName,
+  ensurePatientsHydrated,
+  readPatientsFromStorage,
+} from "@/utils/patientData";
+import {
+  appendDirectEntryAppointment,
+  readAppointmentsFromStorage,
+} from "@/utils/appointmentData";
 
 const STER_KEY = "dental_sterilization_data";
 
@@ -38,7 +56,10 @@ type KitRow = {
   numero: number;
 };
 
-type SterData = { kits?: KitRow[] };
+type SterData = {
+  kits?: KitRow[];
+  stockByType?: Record<string, { disponible?: number }>;
+};
 
 function readSterData(): SterData {
   if (typeof window === "undefined") return {};
@@ -51,12 +72,27 @@ function readSterData(): SterData {
   }
 }
 
+function countSterileKitsReady(ster: SterData): number {
+  if (ster.stockByType && typeof ster.stockByType === "object") {
+    let s = 0;
+    for (const id of ["examen", "chirurgie", "endo"] as const) {
+      const v = ster.stockByType[id]?.disponible;
+      if (typeof v === "number") s += Math.max(0, v);
+    }
+    return s;
+  }
+  const kits = ster.kits ?? [];
+  return kits.filter((k) => k.status === "sterile").length;
+}
+
 function isStockCritical(s: StockLine): boolean {
   if (s.quantiteMax <= 0) return s.quantite <= 0;
   return (s.quantite / s.quantiteMax) * 100 < 50;
 }
 
 type FluxStatus = "Terminé" | "En attente" | "Au fauteuil" | "À venir";
+
+type VisitKind = "consultation" | "urgence";
 
 type FluxRow = {
   id: string;
@@ -65,7 +101,118 @@ type FluxRow = {
   act: string;
   status: FluxStatus;
   attenteMin?: number;
+  visitKind?: VisitKind;
+  /** Lien vers `AppointmentRdv.id` (planning / entrée directe). */
+  appointmentId?: string;
 };
+
+const FLUX_STORAGE_KEY = "dental_dashboard_flux_daily";
+
+function getLocalDateISO(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatTimeHHmm(d: Date) {
+  return d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function parsePersistedFlux(raw: string | null): FluxRow[] | null {
+  if (raw == null || raw === "") return null;
+  try {
+    const data = JSON.parse(raw) as unknown;
+    if (!data || typeof data !== "object") return null;
+    const rec = data as { dateISO?: unknown; rows?: unknown };
+    if (typeof rec.dateISO !== "string" || !Array.isArray(rec.rows)) return null;
+    if (rec.dateISO !== getLocalDateISO()) return null;
+    const out: FluxRow[] = [];
+    for (const item of rec.rows) {
+      if (
+        item &&
+        typeof item === "object" &&
+        typeof (item as FluxRow).id === "string" &&
+        typeof (item as FluxRow).time === "string" &&
+        typeof (item as FluxRow).patient === "string" &&
+        typeof (item as FluxRow).act === "string" &&
+        typeof (item as FluxRow).status === "string"
+      ) {
+        const r = item as FluxRow;
+        const visitKind =
+          r.visitKind === "consultation" || r.visitKind === "urgence"
+            ? r.visitKind
+            : undefined;
+        out.push({
+          ...r,
+          attenteMin:
+            typeof r.attenteMin === "number" ? r.attenteMin : undefined,
+          visitKind,
+          appointmentId:
+            typeof r.appointmentId === "string" ? r.appointmentId : undefined,
+        });
+      }
+    }
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function minutesFromHHmm(t: string): number {
+  const [h, m] = t.split(":").map((x) => Number(x));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
+  return h * 60 + m;
+}
+
+function mergePlannedAppointmentsIntoFlux(rows: FluxRow[]): FluxRow[] {
+  const today = getLocalDateISO();
+  const apps = readAppointmentsFromStorage();
+  const planned = apps.filter(
+    (a) => a.dateKey === today && a.rdvType !== "direct",
+  );
+  const existingIds = new Set(
+    rows.map((r) => r.appointmentId).filter(Boolean) as string[],
+  );
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const additions: FluxRow[] = [];
+  for (const a of planned) {
+    if (existingIds.has(a.id)) continue;
+    const slotMin = minutesFromHHmm(a.start);
+    const status: FluxStatus =
+      nowMin < slotMin ? "À venir" : "En attente";
+    additions.push({
+      id: `appt-${a.id}`,
+      time: a.start,
+      patient: a.patient,
+      act: a.soin,
+      status,
+      attenteMin: status === "En attente" ? 0 : undefined,
+      visitKind: a.urgence ? "urgence" : "consultation",
+      appointmentId: a.id,
+    });
+  }
+  if (additions.length === 0) return sortFluxRowsByTime(rows);
+  return sortFluxRowsByTime([...rows, ...additions]);
+}
+
+function sortFluxRowsByTime(rows: FluxRow[]): FluxRow[] {
+  return [...rows].sort((a, b) =>
+    minutesFromHHmm(a.time) - minutesFromHHmm(b.time),
+  );
+}
+
+function loadFluxRowsForToday(): FluxRow[] {
+  if (typeof window === "undefined") return FLUX_INITIAL;
+  const parsed = parsePersistedFlux(localStorage.getItem(FLUX_STORAGE_KEY));
+  const base = parsed ?? FLUX_INITIAL;
+  return mergePlannedAppointmentsIntoFlux(base);
+}
 
 const FLUX_INITIAL: FluxRow[] = [
   {
@@ -314,30 +461,430 @@ function ActesDoughnutChart() {
   );
 }
 
+type DirectEntryMode = "existing" | "quick";
+
+type DirectEntryPayload =
+  | {
+      mode: "existing";
+      visitKind: VisitKind;
+      patientId: string;
+      patientLabel: string;
+    }
+  | {
+      mode: "quick";
+      visitKind: VisitKind;
+      prenom: string;
+      nom: string;
+      telephone: string;
+      medicalNote?: string;
+    };
+
+function DirectEntryModal({
+  open,
+  onClose,
+  onAdd,
+  candidates,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (payload: DirectEntryPayload) => void;
+  candidates: { id: string; nom: string }[];
+}) {
+  const [mode, setMode] = useState<DirectEntryMode>("existing");
+  const [search, setSearch] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [nom, setNom] = useState("");
+  const [prenom, setPrenom] = useState("");
+  const [telephone, setTelephone] = useState("");
+  const [medicalNote, setMedicalNote] = useState("");
+  const [visitKind, setVisitKind] = useState<VisitKind | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setMode("existing");
+    setSearch("");
+    setSelectedId(null);
+    setNom("");
+    setPrenom("");
+    setTelephone("");
+    setMedicalNote("");
+    setVisitKind(null);
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return candidates;
+    return candidates.filter((p) => p.nom.toLowerCase().includes(q));
+  }, [search, candidates]);
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (visitKind == null) return;
+    if (mode === "existing") {
+      const p = candidates.find((x) => x.id === selectedId);
+      if (!p) return;
+      onAdd({
+        mode: "existing",
+        visitKind,
+        patientId: p.id,
+        patientLabel: p.nom,
+      });
+      onClose();
+      return;
+    }
+    const n = nom.trim();
+    const pr = prenom.trim();
+    const tel = telephone.trim();
+    if (!n || !pr || !tel) return;
+    const note = medicalNote.trim();
+    onAdd({
+      mode: "quick",
+      visitKind,
+      prenom: pr,
+      nom: n,
+      telephone: tel,
+      ...(note ? { medicalNote: note } : {}),
+    });
+    onClose();
+  }
+
+  const canSubmit =
+    visitKind != null &&
+    (mode === "existing"
+      ? selectedId != null
+      : nom.trim().length > 0 &&
+        prenom.trim().length > 0 &&
+        telephone.trim().length > 0);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="direct-entry-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-label="Fermer"
+      />
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2
+              id="direct-entry-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              Entrée directe
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Ajout au flux du jour et au planning (créneau marqué « Direct »,
+              heure actuelle).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-5 flex gap-2 rounded-xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setMode("existing")}
+            className={[
+              "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              mode === "existing"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900",
+            ].join(" ")}
+          >
+            Patient existant
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("quick")}
+            className={[
+              "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              mode === "quick"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900",
+            ].join(" ")}
+          >
+            Nouveau patient rapide
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <div>
+            <p className="text-xs font-medium text-slate-600">
+              Type de visite <span className="text-red-500">*</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setVisitKind("consultation")}
+                className={[
+                  "flex-1 min-w-[140px] rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-colors",
+                  visitKind === "consultation"
+                    ? "border-sky-500 bg-sky-50 text-sky-900 ring-2 ring-sky-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50/50",
+                ].join(" ")}
+              >
+                Consultation <span aria-hidden>🔵</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisitKind("urgence")}
+                className={[
+                  "flex-1 min-w-[140px] rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-colors",
+                  visitKind === "urgence"
+                    ? "border-red-500 bg-red-50 text-red-900 ring-2 ring-red-200"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50/50",
+                ].join(" ")}
+              >
+                Urgence <span aria-hidden>🔴</span>
+              </button>
+            </div>
+          </div>
+
+          {mode === "existing" ? (
+            <>
+              <div>
+                <label
+                  htmlFor="direct-entry-search"
+                  className="text-xs font-medium text-slate-600"
+                >
+                  Rechercher un patient
+                </label>
+                <div className="relative mt-1.5">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="direct-entry-search"
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Nom, prénom…"
+                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-slate-200 focus:border-sky-300 focus:ring-2"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+              <ul className="max-h-44 overflow-y-auto rounded-xl border border-slate-100">
+                {filtered.length === 0 ? (
+                  <li className="px-4 py-6 text-center text-sm text-slate-500">
+                    Aucun patient ne correspond.
+                  </li>
+                ) : (
+                  filtered.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(p.id)}
+                        className={[
+                          "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors",
+                          selectedId === p.id
+                            ? "bg-sky-50 font-medium text-sky-900"
+                            : "text-slate-800 hover:bg-slate-50",
+                        ].join(" ")}
+                      >
+                        {p.nom}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="quick-nom"
+                  className="text-xs font-medium text-slate-600"
+                >
+                  Nom
+                </label>
+                <input
+                  id="quick-nom"
+                  type="text"
+                  value={nom}
+                  onChange={(e) => setNom(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  autoComplete="family-name"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="quick-prenom"
+                  className="text-xs font-medium text-slate-600"
+                >
+                  Prénom
+                </label>
+                <input
+                  id="quick-prenom"
+                  type="text"
+                  value={prenom}
+                  onChange={(e) => setPrenom(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  autoComplete="given-name"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="quick-tel"
+                  className="text-xs font-medium text-slate-600"
+                >
+                  Téléphone
+                </label>
+                <input
+                  id="quick-tel"
+                  type="tel"
+                  value={telephone}
+                  onChange={(e) => setTelephone(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  autoComplete="tel"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="quick-med-note"
+                  className="text-xs font-medium text-slate-600"
+                >
+                  Note médicale (optionnel)
+                </label>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  Allergies, antécédents…
+                </p>
+                <textarea
+                  id="quick-med-note"
+                  value={medicalNote}
+                  onChange={(e) => setMedicalNote(e.target.value)}
+                  rows={2}
+                  placeholder="Ex. allergie pénicilline"
+                  className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Ajouter au flux
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [sterileTotal, setSterileTotal] = useState(0);
   const [stockCriticalCount, setStockCriticalCount] = useState(0);
   const [fluxRows, setFluxRows] = useState<FluxRow[]>(FLUX_INITIAL);
+  const [directEntryOpen, setDirectEntryOpen] = useState(false);
   const [tasks, setTasks] = useState<DashboardTask[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
+  const [fluxPatientCandidates, setFluxPatientCandidates] = useState<
+    { id: string; nom: string }[]
+  >([]);
+
+  const refreshFluxPatientCandidates = useCallback(() => {
+    ensurePatientsHydrated();
+    setFluxPatientCandidates(
+      readPatientsFromStorage().map((p) => ({
+        id: p.id,
+        nom: displayPatientName(p),
+      })),
+    );
+  }, []);
 
   useEffect(() => {
     setMounted(true);
+    setFluxRows(loadFluxRowsForToday());
     setTasks(loadDashboardTasks());
     const ster = readSterData();
-    const kits = ster.kits ?? [];
-    setSterileTotal(
-      kits.filter((k) => k.status === "sterile").length,
-    );
+    setSterileTotal(countSterileKitsReady(ster));
     const stock = loadDentalStock();
     setStockCriticalCount(stock.filter(isStockCritical).length);
-  }, []);
+    refreshFluxPatientCandidates();
+  }, [refreshFluxPatientCandidates]);
 
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
   }, [mounted, tasks]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(
+        FLUX_STORAGE_KEY,
+        JSON.stringify({
+          dateISO: getLocalDateISO(),
+          rows: fluxRows,
+        }),
+      );
+    } catch {
+      /* ignore quota */
+    }
+  }, [mounted, fluxRows]);
+
+  function addDirectEntryToFlux(payload: DirectEntryPayload) {
+    let patientLabel: string;
+    let patientId: string | undefined;
+    if (payload.mode === "quick") {
+      const rec = createPatientQuick({
+        prenom: payload.prenom,
+        nom: payload.nom,
+        telephone: payload.telephone,
+        medicalNote: payload.medicalNote,
+      });
+      patientLabel = displayPatientName(rec);
+      patientId = rec.id;
+      refreshFluxPatientCandidates();
+    } else {
+      patientLabel = payload.patientLabel;
+      patientId = payload.patientId;
+    }
+    const rdv = appendDirectEntryAppointment({
+      patientName: patientLabel,
+      patientId: patientId ?? null,
+      visitKind: payload.visitKind,
+    });
+    const row: FluxRow = {
+      id: `flux-${rdv.id}`,
+      time: rdv.start,
+      patient: patientLabel,
+      act: rdv.soin,
+      status: "En attente",
+      attenteMin: 0,
+      visitKind: payload.visitKind,
+      appointmentId: rdv.id,
+    };
+    setFluxRows((prev) =>
+      mergePlannedAppointmentsIntoFlux([row, ...prev]),
+    );
+  }
 
   function addTask() {
     const trimmed = newTaskText.trim();
@@ -506,9 +1053,22 @@ export default function DashboardPage() {
         <div className="lg:col-span-2">
           <div className="h-full rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
-                Flux de la journée
-              </h2>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
+                  Flux de la journée
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    refreshFluxPatientCandidates();
+                    setDirectEntryOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  + Entrée Directe
+                </button>
+              </div>
               <Link
                 href="/planning"
                 className="text-xs font-medium text-slate-400 transition-colors hover:text-[color:var(--ds-primary)]"
@@ -516,6 +1076,13 @@ export default function DashboardPage() {
                 Planning complet →
               </Link>
             </div>
+
+            <DirectEntryModal
+              open={directEntryOpen}
+              onClose={() => setDirectEntryOpen(false)}
+              onAdd={addDirectEntryToFlux}
+              candidates={fluxPatientCandidates}
+            />
 
             <p className="mb-4 text-xs text-slate-500">
               Rendez-vous actifs — file et fauteuil
@@ -567,7 +1134,24 @@ export default function DashboardPage() {
                           {row.time}
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          {row.patient}
+                          <span className="inline-flex flex-wrap items-center gap-2">
+                            <span>{row.patient}</span>
+                            {row.status === "En attente" &&
+                              row.visitKind != null && (
+                                <span
+                                  className={[
+                                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                    row.visitKind === "urgence"
+                                      ? "bg-red-100 text-red-800 ring-1 ring-red-200/80"
+                                      : "bg-sky-100 text-sky-800 ring-1 ring-sky-200/80",
+                                  ].join(" ")}
+                                >
+                                  {row.visitKind === "urgence"
+                                    ? "Urgence"
+                                    : "Consultation"}
+                                </span>
+                              )}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{row.act}</td>
                         <td className="px-4 py-3">

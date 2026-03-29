@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import {
+  formatDateKeyLocal,
+  isValidDateKeyString,
+  roundStartTimeToNextTenMinutes,
+} from "@/utils/appointmentData";
 
 const DUREES = [15, 30, 45, 60, 90] as const;
 
@@ -37,40 +42,75 @@ export function NewAppointmentModal({
   onConfirm,
 }: NewAppointmentModalProps) {
   const [patient, setPatient] = useState("");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(() => formatDateKeyLocal(new Date()));
   const [time, setTime] = useState("");
   const [duree, setDuree] = useState<number>(30);
   const [selectedMotifs, setSelectedMotifs] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
 
-  if (!open) return null;
-
-  function toggleMotif(label: string) {
-    setSelectedMotifs((prev) =>
-      prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label],
-    );
-  }
-
-  function handleConfirm() {
-    onConfirm({
-      patient: patient.trim(),
-      date,
-      time,
-      dureeMinutes: duree,
-      motifs: [...selectedMotifs],
-      notes: notes.trim(),
-    });
+  useEffect(() => {
+    if (!open) return;
     setPatient("");
-    setDate("");
+    setDate(formatDateKeyLocal(new Date()));
     setTime("");
     setDuree(30);
     setSelectedMotifs([]);
     setNotes("");
+  }, [open]);
+
+  if (!open) return null;
+
+  function toggleMotif(label: string) {
+    setSelectedMotifs((prev) => {
+      const adding = !prev.includes(label);
+      const next = adding
+        ? [...prev, label]
+        : prev.filter((m) => m !== label);
+      if (adding && label === "Urgence") {
+        setTime(roundStartTimeToNextTenMinutes(new Date()));
+      }
+      return next;
+    });
+  }
+
+  function normalizeTimeHHmm(raw: string): string {
+    const t = raw.trim();
+    if (!t) return "";
+    const m = t.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return "";
+    const hh = Math.min(23, Math.max(0, Number(m[1])));
+    const mm = Math.min(59, Math.max(0, Number(m[2])));
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function handleConfirm() {
+    const isUrgence = selectedMotifs.some((m) =>
+      m.toLowerCase().includes("urgence"),
+    );
+    let resolvedDate = date.trim();
+    if (!resolvedDate || !isValidDateKeyString(resolvedDate)) {
+      resolvedDate = formatDateKeyLocal(new Date());
+    }
+    let resolvedTime = normalizeTimeHHmm(time);
+    if (!resolvedTime) {
+      resolvedTime = isUrgence
+        ? roundStartTimeToNextTenMinutes(new Date())
+        : "09:00";
+    }
+    onConfirm({
+      patient: patient.trim(),
+      date: resolvedDate,
+      time: resolvedTime,
+      dureeMinutes: duree,
+      motifs: [...selectedMotifs],
+      notes: notes.trim(),
+    });
     onClose();
   }
 
   return (
     <div
+      lang="fr"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
@@ -130,7 +170,7 @@ export function NewAppointmentModal({
                   htmlFor="new-rdv-date"
                   className="block text-sm font-medium text-slate-700"
                 >
-                  Date
+                  Date <span className="text-slate-400">(YYYY-MM-DD)</span>
                 </label>
                 <input
                   id="new-rdv-date"
@@ -145,7 +185,7 @@ export function NewAppointmentModal({
                   htmlFor="new-rdv-time"
                   className="block text-sm font-medium text-slate-700"
                 >
-                  Heure
+                  Heure <span className="text-slate-400">(24 h)</span>
                 </label>
                 <input
                   id="new-rdv-time"
@@ -153,6 +193,7 @@ export function NewAppointmentModal({
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                   className={inputBase}
+                  step={60}
                 />
               </div>
             </div>
