@@ -6,6 +6,7 @@ import {
   Bar,
   BarChart,
   Cell,
+  Label,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -142,6 +143,57 @@ function formatKpiIntegerDa(n: number): string {
   );
 }
 
+/** Donut « vide » : un seul segment gris clair (360°). */
+const EMPTY_PIE_PLACEHOLDER: { name: string; value: number; color: string }[] =
+  [{ name: "__empty", value: 1, color: "#f1f5f9" }];
+
+function DepensesDonutCenterLabel({ totalDa }: { totalDa: number }) {
+  return (
+    <Label
+      position="center"
+      content={({ viewBox }) => {
+        if (
+          !viewBox ||
+          typeof viewBox !== "object" ||
+          !("cx" in viewBox) ||
+          !("cy" in viewBox)
+        ) {
+          return null;
+        }
+        const { cx, cy } = viewBox as { cx: number; cy: number };
+        return (
+          <g>
+            <text
+              x={cx}
+              y={cy - 6}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#94a3b8"
+              fontSize={11}
+              fontWeight={500}
+              letterSpacing="0.08em"
+            >
+              TOTAL
+            </text>
+            <text
+              x={cx}
+              y={cy + 16}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#0f172a"
+              fontSize={19}
+              fontWeight={700}
+              className="tabular-nums"
+            >
+              {formatDZD(totalDa)}
+            </text>
+          </g>
+        );
+      }}
+    />
+  );
+}
+
 export function FinancesDashboardTab() {
   const [mounted, setMounted] = useState(false);
   const [period, setPeriod] = useState<PeriodKey>("month");
@@ -180,8 +232,8 @@ export function FinancesDashboardTab() {
     const imp = factures.reduce((s, f) => s + resteAPayer(f), 0);
     const byCat = sumExpensesByCategory(list);
     const slices = [
-      { name: "Stock", value: byCat.Stock, color: "#0ea5e9" },
-      { name: "Labo", value: byCat.Labo, color: "#a855f7" },
+      { name: "Stock", value: byCat.Stock, color: "#06b6d4" },
+      { name: "Labo", value: byCat.Labo, color: "#6366f1" },
       { name: "Frais", value: byCat.Frais, color: "#f43f5e" },
     ].filter((x) => x.value > 0);
     return {
@@ -225,6 +277,7 @@ export function FinancesDashboardTab() {
         : "vs mois précédent";
 
   const totalDepensesPie = pieSlices.reduce((a, s) => a + s.value, 0);
+  const isDepensesPieEmpty = totalDepensesPie <= 0;
 
   const kpis = [
     {
@@ -647,29 +700,42 @@ export function FinancesDashboardTab() {
             </p>
           </div>
         </div>
-        {pieSlices.length === 0 ? (
-          <p className="mt-8 text-center text-sm text-slate-500">
-            Aucune dépense enregistrée sur cette période. Ajoutez-en depuis
-            l&apos;onglet Dépenses de Finances.
-          </p>
-        ) : (
-          <div className="mt-6 flex flex-col items-center gap-8 md:flex-row md:justify-center md:gap-12">
-            <div className="h-[220px] w-full max-w-[280px]">
+        <div className="mt-6 space-y-3">
+          <div className="flex flex-row flex-wrap items-center justify-center gap-6">
+            <div className="h-[220px] w-full max-w-[280px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={pieSlices}
+                    data={
+                      isDepensesPieEmpty ? EMPTY_PIE_PLACEHOLDER : pieSlices
+                    }
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    innerRadius={52}
+                    innerRadius={62}
                     outerRadius={84}
-                    paddingAngle={2}
+                    paddingAngle={isDepensesPieEmpty ? 0 : 2}
+                    stroke="none"
+                    animationBegin={120}
+                    animationDuration={950}
+                    // Recharts applique un ressort réel ; les typings n’incluent pas encore "spring".
+                    animationEasing={"spring" as never}
                   >
-                    {pieSlices.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} stroke="none" />
-                    ))}
+                    <DepensesDonutCenterLabel
+                      totalDa={isDepensesPieEmpty ? 0 : totalDepensesPie}
+                    />
+                    {isDepensesPieEmpty ? (
+                      <Cell fill="#f1f5f9" stroke="none" />
+                    ) : (
+                      pieSlices.map((entry) => (
+                        <Cell
+                          key={entry.name}
+                          fill={entry.color}
+                          stroke="none"
+                        />
+                      ))
+                    )}
                   </Pie>
                   <RTooltip
                     content={({ active, payload }) => {
@@ -678,6 +744,7 @@ export function FinancesDashboardTab() {
                         name: string;
                         value: number;
                       };
+                      if (row.name === "__empty") return null;
                       const pct =
                         totalDepensesPie <= 0
                           ? 0
@@ -699,35 +766,52 @@ export function FinancesDashboardTab() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <ul className="w-full max-w-xs space-y-3">
-              {pieSlices.map((s) => {
-                const pct =
-                  totalDepensesPie <= 0
-                    ? 0
-                    : Math.round((s.value / totalDepensesPie) * 100);
-                return (
-                  <li
-                    key={s.name}
-                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: s.color }}
-                      />
-                      <span className="font-medium text-slate-800">
-                        {s.name}
+            {!isDepensesPieEmpty ? (
+              <ul className="w-full min-w-[220px] max-w-sm space-y-3">
+                {pieSlices.map((s) => {
+                  const pct =
+                    totalDepensesPie <= 0
+                      ? 0
+                      : Math.round((s.value / totalDepensesPie) * 100);
+                  return (
+                    <li
+                      key={s.name}
+                      className="flex items-center justify-between gap-4 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white shadow-sm"
+                          style={{ backgroundColor: s.color }}
+                          aria-hidden
+                        />
+                        <span className="font-medium text-slate-800">
+                          {s.name}
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 tabular-nums text-slate-600">
-                      {pct}% · {formatDZD(s.value)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+                      <span className="flex shrink-0 items-baseline justify-end gap-1 text-right">
+                        <span className="text-sm font-semibold tabular-nums text-slate-900">
+                          {formatDZD(s.value)}
+                        </span>
+                        <span className="text-[10px] font-medium tabular-nums text-slate-400">
+                          ({pct}%)
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
           </div>
-        )}
+          <p className="text-center text-[11px] leading-relaxed text-slate-400">
+            Vos dépenses sont stables par rapport au mois dernier
+          </p>
+          {isDepensesPieEmpty ? (
+            <p className="text-center text-sm text-slate-500">
+              Aucune dépense enregistrée sur cette période. Ajoutez-en depuis
+              l&apos;onglet Dépenses de Finances.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {/* Layout principal */}
