@@ -5,6 +5,9 @@
 
 export const DENTAL_APPOINTMENTS_STORAGE_KEY = "dental_appointments_data";
 
+/** Émis après chaque écriture du planning (sync module Laboratoire, etc.). */
+export const APPOINTMENTS_UPDATED_EVENT = "dental-appointments-updated";
+
 export type AppointmentRdv = {
   id: string;
   /** YYYY-MM-DD local */
@@ -19,12 +22,35 @@ export type AppointmentRdv = {
   patientId?: string;
 };
 
-/** Date locale au format YYYY-MM-DD (pour inputs et stockage). */
+/** Date valide pour calculs ; sinon aujourd'hui (évite Invalid Date / crash toISOString). */
+export function safeDate(d: Date | null | undefined): Date {
+  if (d == null || !(d instanceof Date) || Number.isNaN(d.getTime())) {
+    return new Date();
+  }
+  return d;
+}
+
+export function toISOStringSafe(d: Date | null | undefined): string {
+  return safeDate(d).toISOString();
+}
+
+/** Partie date YYYY-MM-DD (UTC) à partir d'une Date potentiellement invalide. */
+export function toISODateOnlySafe(d: Date | null | undefined): string {
+  return toISOStringSafe(d).split("T")[0] ?? "";
+}
+
+/** Date locale au format YYYY-MM-DD (pour inputs type="date" et stockage). */
 export function formatDateKeyLocal(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const x = safeDate(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/** Valeur initiale sûre pour les champs date : jamais vide à l’affichage. */
+export function todayDateInputValue(): string {
+  return formatDateKeyLocal(new Date());
 }
 
 export function isValidDateKeyString(s: string | undefined | null): boolean {
@@ -40,8 +66,9 @@ export function isValidDateKeyString(s: string | undefined | null): boolean {
  * Pour les urgences : heure de début par défaut.
  */
 export function roundStartTimeToNextTenMinutes(d: Date = new Date()): string {
-  let minutes = d.getHours() * 60 + d.getMinutes();
-  if (d.getSeconds() > 0 || d.getMilliseconds() > 0) {
+  const base = safeDate(d);
+  let minutes = base.getHours() * 60 + base.getMinutes();
+  if (base.getSeconds() > 0 || base.getMilliseconds() > 0) {
     minutes += 1;
   }
   let rounded = Math.ceil(minutes / 10) * 10;
@@ -115,12 +142,18 @@ export function readAppointmentsFromStorage(): AppointmentRdv[] {
   }
 }
 
-export function writeAppointmentsToStorage(items: AppointmentRdv[]) {
+export function writeAppointmentsToStorage(
+  items: AppointmentRdv[],
+  options?: { silent?: boolean },
+) {
   if (typeof window === "undefined") return;
   localStorage.setItem(
     DENTAL_APPOINTMENTS_STORAGE_KEY,
     JSON.stringify(items),
   );
+  if (!options?.silent) {
+    window.dispatchEvent(new CustomEvent(APPOINTMENTS_UPDATED_EVENT));
+  }
 }
 
 /** Si le stockage est vide, initialise avec la graine (ex. démo planning). */
@@ -134,7 +167,7 @@ export function ensureAppointmentsSeeded(seed: AppointmentRdv[]): AppointmentRdv
 
 /** Heure locale HH:mm */
 export function formatTimeHHmmLocal(d: Date): string {
-  return d.toLocaleTimeString("fr-FR", {
+  return safeDate(d).toLocaleTimeString("fr-FR", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -150,7 +183,7 @@ export function appendDirectEntryAppointment(args: {
   visitKind: "consultation" | "urgence";
   at?: Date;
 }): AppointmentRdv {
-  const d = args.at ?? new Date();
+  const d = safeDate(args.at ?? undefined);
   const dateKey = formatDateKeyLocal(d);
   const start = formatTimeHHmmLocal(d);
   const rdv: AppointmentRdv = {

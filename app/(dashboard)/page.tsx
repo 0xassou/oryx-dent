@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import {
+  AlertTriangle,
   ArrowRight,
   Calendar,
   Check,
@@ -39,6 +40,13 @@ import {
   appendDirectEntryAppointment,
   readAppointmentsFromStorage,
 } from "@/utils/appointmentData";
+import { StatusBadge } from "@/components/laboratoire/StatusBadge";
+import {
+  LAB_COMMANDES_UPDATED_EVENT,
+  listLogisticsAlerts,
+  readLabCommandesFromStorage,
+  type LaboratoireCommande,
+} from "@/utils/laboratoireCommandes";
 
 const STER_KEY = "dental_sterilization_data";
 
@@ -348,27 +356,6 @@ const RELANCE_PATIENTS = [
     actionLabel: "Relancer" as const,
   },
 ] as const;
-
-const LABO_ROWS = [
-  {
-    patient: "Mme Benali",
-    travail: "Couronne Zircone",
-    detail: "Prévu le 28/03",
-    statut: "En cours",
-  },
-  {
-    patient: "M. Ahmed",
-    travail: "Gouttière",
-    detail: "Reçu",
-    statut: "Prêt",
-  },
-  {
-    patient: "M. Yassine",
-    travail: "Facettes provisoires",
-    detail: "Expédié 20/03",
-    statut: "En cours",
-  },
-];
 
 function PremiumBadge({ className = "" }: { className?: string }) {
   return (
@@ -807,6 +794,12 @@ export default function DashboardPage() {
   const [fluxPatientCandidates, setFluxPatientCandidates] = useState<
     { id: string; nom: string }[]
   >([]);
+  const [labCommandes, setLabCommandes] = useState<LaboratoireCommande[]>([]);
+
+  const logisticsAlerts = useMemo(
+    () => listLogisticsAlerts(labCommandes),
+    [labCommandes],
+  );
 
   const refreshFluxPatientCandidates = useCallback(() => {
     ensurePatientsHydrated();
@@ -828,6 +821,20 @@ export default function DashboardPage() {
     setStockCriticalCount(stock.filter(isStockCritical).length);
     refreshFluxPatientCandidates();
   }, [refreshFluxPatientCandidates]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    function refreshLab() {
+      setLabCommandes(readLabCommandesFromStorage());
+    }
+    refreshLab();
+    window.addEventListener(LAB_COMMANDES_UPDATED_EVENT, refreshLab);
+    window.addEventListener("focus", refreshLab);
+    return () => {
+      window.removeEventListener(LAB_COMMANDES_UPDATED_EVENT, refreshLab);
+      window.removeEventListener("focus", refreshLab);
+    };
+  }, [mounted]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -1046,6 +1053,47 @@ export default function DashboardPage() {
           </p>
         </Link>
       </div>
+
+      {logisticsAlerts.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 to-orange-50/80 p-5 shadow-sm">
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <AlertTriangle className="h-5 w-5" strokeWidth={2.25} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-amber-950">
+                Alertes logistiques
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-amber-900/80">
+                Pose prévue dans les 48 h alors que la prothèse n&apos;est pas
+                encore au statut « Reçu au cabinet ».
+              </p>
+              <ul className="mt-4 space-y-2">
+                {logisticsAlerts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-white/90 px-3 py-2.5 text-sm text-amber-950"
+                  >
+                    <span className="font-medium">
+                      {c.patient}
+                      <span className="font-normal text-amber-800/90">
+                        {" "}
+                        — {c.travail}
+                      </span>
+                    </span>
+                    <Link
+                      href="/laboratoire"
+                      className="shrink-0 text-xs font-semibold text-amber-800 underline-offset-2 hover:underline"
+                    >
+                      Voir le labo →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Layout principal 2/3 + 1/3 ───────────────────────────────── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -1321,44 +1369,46 @@ export default function DashboardPage() {
             <p className="mt-1 text-xs text-slate-500">Travaux externes</p>
 
             <div className="mt-5 flex flex-col gap-3">
-              {LABO_ROWS.map((row, i) => {
-                const statusBadge =
-                  row.statut === "En cours"
-                    ? "bg-amber-50 text-amber-700 ring-1 ring-amber-600/20"
-                    : row.statut === "Prêt" || row.statut === "Reçu"
-                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20"
-                      : "bg-slate-50 text-slate-700 ring-1 ring-slate-600/20";
-                return (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition-colors hover:bg-slate-50/80"
-                  >
-                    <FlaskConical
-                      className="h-4 w-4 shrink-0 text-slate-400"
-                      strokeWidth={1.75}
-                      aria-hidden
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900">
-                        {row.patient}
-                        <span className="text-slate-400"> · </span>
-                        {row.travail}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {row.detail}
-                      </p>
-                    </div>
-                    <span
-                      className={[
-                        "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        statusBadge,
-                      ].join(" ")}
+              {labCommandes.length === 0 ? (
+                <p className="text-xs text-slate-400">
+                  Aucune commande en cours.
+                </p>
+              ) : (
+                labCommandes.slice(0, 3).map((row) => {
+                  const retourD = (() => {
+                    const [y, m, d] = row.retourIso.split("-").map(Number);
+                    const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+                    if (Number.isNaN(dt.getTime())) return "—";
+                    return dt.toLocaleDateString("fr-FR", {
+                      day: "2-digit",
+                      month: "short",
+                    });
+                  })();
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition-colors hover:bg-slate-50/80"
                     >
-                      {row.statut}
-                    </span>
-                  </div>
-                );
-              })}
+                      <FlaskConical
+                        className="h-4 w-4 shrink-0 text-slate-400"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-900">
+                          {row.patient}
+                          <span className="text-slate-400"> · </span>
+                          {row.travail}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Retour prévu {retourD}
+                        </p>
+                      </div>
+                    <StatusBadge statut={row.statut} className="shrink-0" />
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <Link

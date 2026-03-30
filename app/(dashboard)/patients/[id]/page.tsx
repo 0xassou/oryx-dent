@@ -26,6 +26,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { submitClinicalActAction } from "@/app/actions/clinicalAct";
+import { CatalogActCombobox } from "@/components/catalog/CatalogActCombobox";
 import {
   buildProtocolesFromSeed,
   loadProtocolsFromStorage,
@@ -48,6 +49,11 @@ import {
   readFacturesFromStorage,
   writeFacturesToStorage,
 } from "@/utils/factureDocuments";
+import {
+  ensureCatalogSeeded,
+  readCatalogFromStorage,
+  type DentalCatalogAct,
+} from "@/utils/dentalCatalogActs";
 import {
   ensurePatientsHydrated,
   readPatientsFromStorage,
@@ -566,6 +572,8 @@ export default function PatientDetailPage() {
     montantTotal: number;
     resteACharge: number;
     statut: FinanceStatut;
+    /** Référence optionnelle vers `dental_catalog_acts` (traçabilité tarif). */
+    catalogActId?: string;
   };
 
   const [finances, setFinances] = useState<FinanceLine[]>([]);
@@ -580,9 +588,17 @@ export default function PatientDetailPage() {
   const [editActeName, setEditActeName] = useState<string>("");
   const [editMontantTotal, setEditMontantTotal] = useState<string>("");
   const [editResteAPayer, setEditResteAPayer] = useState<string>("");
+  const [editCatalogActId, setEditCatalogActId] = useState<string>("");
+  const [catalogActsForEdit, setCatalogActsForEdit] = useState<
+    DentalCatalogAct[]
+  >([]);
 
-  // Formulaires modals
-  const [quoteActeTooth, setQuoteActeTooth] = useState<number | "">("");
+  // Formulaires modals — facturation liée au catalogue d'actes
+  const [quoteCatalogActId, setQuoteCatalogActId] = useState<string>("");
+  const [quoteCatalogActs, setQuoteCatalogActs] = useState<DentalCatalogAct[]>(
+    [],
+  );
+  const [quoteComboKey, setQuoteComboKey] = useState(0);
   const [quoteMontantTotal, setQuoteMontantTotal] = useState<string>("");
   const [quoteDate, setQuoteDate] = useState<string>(() =>
     new Date().toISOString().slice(0, 10),
@@ -691,8 +707,11 @@ export default function PatientDetailPage() {
         const parsed = JSON.parse(savedFinances) as FinanceLine[];
         setFinances(
           parsed.map((l) => ({
-            ...l,
-            statut: financeStatutFromReste(l.montantTotal, l.resteACharge),
+            ...(l as FinanceLine),
+            statut: financeStatutFromReste(
+              (l as FinanceLine).montantTotal,
+              (l as FinanceLine).resteACharge,
+            ),
           })),
         );
       } catch {
@@ -717,6 +736,20 @@ export default function PatientDetailPage() {
     if (typeof window === "undefined" || !id || !financesHydrated) return;
     localStorage.setItem(`patient_finances_${id}`, JSON.stringify(finances));
   }, [finances, financesHydrated, id]);
+
+  useEffect(() => {
+    if (!isQuoteModalOpen || typeof window === "undefined") return;
+    ensureCatalogSeeded();
+    setQuoteCatalogActs(readCatalogFromStorage());
+    setQuoteComboKey((k) => k + 1);
+  }, [isQuoteModalOpen]);
+
+  useEffect(() => {
+    if (!editingFinance || typeof window === "undefined") return;
+    ensureCatalogSeeded();
+    setCatalogActsForEdit(readCatalogFromStorage());
+    setEditCatalogActId(editingFinance.catalogActId ?? "");
+  }, [editingFinance]);
 
   useEffect(() => {
     setDentsStatus(buildDentsStatusFromTreatments(allTreatments));
@@ -1033,7 +1066,7 @@ export default function PatientDetailPage() {
     }
   }
 
-  /** Synchronise la liste globale des factures (même clé que la page Factures). */
+  /** Synchronise la liste globale des factures (même clé que l'onglet Recettes / Finances). */
   function upsertGlobalFactureFromFinanceLine(line: FinanceLine) {
     if (typeof window === "undefined") return;
     const docs = readFacturesFromStorage();
@@ -1758,7 +1791,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                       type="button"
                       onClick={() => {
                         setIsQuoteModalOpen(true);
-                        setQuoteActeTooth("");
+                        setQuoteCatalogActId("");
                         setQuoteMontantTotal("");
                         setQuoteDate(new Date().toISOString().slice(0, 10));
                       }}
@@ -2082,20 +2115,24 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                       onSubmit={(e) => {
                         e.preventDefault();
 
-                        const selected =
-                          typeof quoteActeTooth === "number"
-                            ? allTreatments.find(
-                                (t) => t.tooth === quoteActeTooth
-                              )
-                            : null;
-
-                        if (!selected) return;
+                        const catalogAct = quoteCatalogActs.find(
+                          (a) => a.id === quoteCatalogActId,
+                        );
+                        if (!catalogAct) {
+                          setToast({
+                            type: "error",
+                            message:
+                              "Choisissez un acte dans le catalogue (Réglages → Actes & tarifs).",
+                          });
+                          return;
+                        }
                         const montantTotal = parseMoney(quoteMontantTotal);
                         if (montantTotal <= 0) return;
 
                         const newLine: FinanceLine = {
                           id: uid(),
-                          acteName: `Dent ${selected.tooth} - ${selected.acte}`,
+                          acteName: catalogAct.nom,
+                          catalogActId: catalogAct.id,
                           date: `${quoteDate}T12:00:00.000Z`,
                           montantTotal,
                           resteACharge: montantTotal,
@@ -2110,7 +2147,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                         });
 
                         setIsQuoteModalOpen(false);
-                        setQuoteActeTooth("");
+                        setQuoteCatalogActId("");
                         setQuoteMontantTotal("");
                         setQuoteDate(new Date().toISOString().slice(0, 10));
                       }}
@@ -2121,14 +2158,17 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                             Facture
                           </p>
                           <h3 className="mt-0.5 text-lg font-semibold text-[color:var(--ds-text)]">
-                            Nouvelle facture / acte
+                            Ajouter un soin / acte
                           </h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Tarif issu du catalogue ; le montant reste ajustable.
+                          </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => {
                             setIsQuoteModalOpen(false);
-                            setQuoteActeTooth("");
+                            setQuoteCatalogActId("");
                             setQuoteMontantTotal("");
                             setQuoteDate(new Date().toISOString().slice(0, 10));
                           }}
@@ -2141,37 +2181,21 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                       <div className="space-y-5 p-0">
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="sm:col-span-2">
-                            <label
-                              className="block text-sm font-medium text-slate-700"
-                              htmlFor="quote-acte"
-                            >
-                              Acte réalisé
-                            </label>
-                            <select
-                              id="quote-acte"
-                              value={
-                                quoteActeTooth === ""
-                                  ? ""
-                                  : String(quoteActeTooth)
-                              }
-                              onChange={(e) =>
-                                setQuoteActeTooth(
-                                  e.target.value === ""
-                                    ? ""
-                                    : Number(e.target.value)
-                                )
-                              }
-                              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-100"
-                            >
-                              <option value="" disabled>
-                                — Choisir un acte —{" "}
-                              </option>
-                              {allTreatments.map((t) => (
-                                <option key={`${t.tooth}-${t.acte}`} value={t.tooth}>
-                                  Dent {t.tooth} - {t.acte}
-                                </option>
-                              ))}
-                            </select>
+                            <CatalogActCombobox
+                              key={quoteComboKey}
+                              id="quote-catalog-act"
+                              label="Acte du catalogue"
+                              acts={quoteCatalogActs}
+                              selectedId={quoteCatalogActId}
+                              onSelect={(a) => {
+                                setQuoteCatalogActId(a.id);
+                                setQuoteMontantTotal(String(a.prix_par_defaut));
+                              }}
+                              onClearSelection={() => {
+                                setQuoteCatalogActId("");
+                                setQuoteMontantTotal("");
+                              }}
+                            />
                           </div>
 
                           <div>
@@ -2179,7 +2203,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                               className="block text-sm font-medium text-slate-700"
                               htmlFor="quote-montant"
                             >
-                              Montant Total (DA)
+                              Montant total (DA)
                             </label>
                             <input
                               id="quote-montant"
@@ -2216,7 +2240,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                           type="button"
                           onClick={() => {
                             setIsQuoteModalOpen(false);
-                            setQuoteActeTooth("");
+                            setQuoteCatalogActId("");
                             setQuoteMontantTotal("");
                             setQuoteDate(new Date().toISOString().slice(0, 10));
                           }}
@@ -2269,6 +2293,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                 montantTotal: nouveauTotal,
                 resteACharge: nouveauReste,
                 statut: newStatus,
+                catalogActId: editCatalogActId || undefined,
               };
 
               setFinances((prev) =>
@@ -2317,30 +2342,34 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                 </div>
 
                 <div className="sm:col-span-2">
+                  <CatalogActCombobox
+                    key={editingFinance.id}
+                    id="edit-catalog-act"
+                    label="Acte du catalogue"
+                    acts={catalogActsForEdit}
+                    selectedId={editCatalogActId}
+                    onSelect={(a) => {
+                      setEditCatalogActId(a.id);
+                      setEditActeName(a.nom);
+                      setEditMontantTotal(String(a.prix_par_defaut));
+                    }}
+                    onClearSelection={() => setEditCatalogActId("")}
+                  />
+                </div>
+                <div className="sm:col-span-2">
                   <label
                     className="block text-sm font-medium text-slate-700"
-                    htmlFor="edit-acte"
+                    htmlFor="edit-acte-libelle"
                   >
-                    Acte réalisé
+                    Libellé sur la facture
                   </label>
-                  <select
-                    id="edit-acte"
+                  <input
+                    id="edit-acte-libelle"
+                    type="text"
                     value={editActeName}
                     onChange={(e) => setEditActeName(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-100"
-                  >
-                    <option value="" disabled>
-                      — Choisir un acte —
-                    </option>
-                    {allTreatments.map((t) => {
-                      const acteName = `Dent ${t.tooth} - ${t.acte}`;
-                      return (
-                        <option key={acteName} value={acteName}>
-                          {acteName}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  />
                 </div>
 
                 <div>

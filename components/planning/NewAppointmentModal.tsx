@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
-  formatDateKeyLocal,
   isValidDateKeyString,
   roundStartTimeToNextTenMinutes,
+  todayDateInputValue,
 } from "@/utils/appointmentData";
 
 const DUREES = [15, 30, 45, 60, 90] as const;
@@ -34,7 +34,9 @@ interface NewAppointmentModalProps {
 }
 
 const inputBase =
-  "mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+  "mt-0 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+
+const fieldStack = "flex flex-col gap-2";
 
 export function NewAppointmentModal({
   open,
@@ -42,8 +44,10 @@ export function NewAppointmentModal({
   onConfirm,
 }: NewAppointmentModalProps) {
   const [patient, setPatient] = useState("");
-  const [date, setDate] = useState(() => formatDateKeyLocal(new Date()));
-  const [time, setTime] = useState("");
+  const [date, setDate] = useState(() => todayDateInputValue());
+  const [time, setTime] = useState(() =>
+    roundStartTimeToNextTenMinutes(new Date()),
+  );
   const [duree, setDuree] = useState<number>(30);
   const [selectedMotifs, setSelectedMotifs] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
@@ -51,8 +55,8 @@ export function NewAppointmentModal({
   useEffect(() => {
     if (!open) return;
     setPatient("");
-    setDate(formatDateKeyLocal(new Date()));
-    setTime("");
+    setDate(todayDateInputValue());
+    setTime(roundStartTimeToNextTenMinutes(new Date()));
     setDuree(30);
     setSelectedMotifs([]);
     setNotes("");
@@ -89,7 +93,7 @@ export function NewAppointmentModal({
     );
     let resolvedDate = date.trim();
     if (!resolvedDate || !isValidDateKeyString(resolvedDate)) {
-      resolvedDate = formatDateKeyLocal(new Date());
+      resolvedDate = todayDateInputValue();
     }
     let resolvedTime = normalizeTimeHHmm(time);
     if (!resolvedTime) {
@@ -145,12 +149,12 @@ export function NewAppointmentModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="space-y-5">
-            <div>
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="space-y-6">
+            <div className={fieldStack}>
               <label
                 htmlFor="new-rdv-patient"
-                className="block text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-slate-700"
               >
                 Nom du patient
               </label>
@@ -164,11 +168,11 @@ export function NewAppointmentModal({
               />
             </div>
 
-            <div className="flex flex-wrap gap-4">
-              <div className="min-w-0 flex-1">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-x-6">
+              <div className={`min-w-0 ${fieldStack}`}>
                 <label
                   htmlFor="new-rdv-date"
-                  className="block text-sm font-medium text-slate-700"
+                  className="text-sm font-medium text-slate-700"
                 >
                   Date <span className="text-slate-400">(YYYY-MM-DD)</span>
                 </label>
@@ -180,10 +184,10 @@ export function NewAppointmentModal({
                   className={inputBase}
                 />
               </div>
-              <div className="min-w-0 flex-1">
+              <div className={`min-w-0 ${fieldStack}`}>
                 <label
                   htmlFor="new-rdv-time"
-                  className="block text-sm font-medium text-slate-700"
+                  className="text-sm font-medium text-slate-700"
                 >
                   Heure <span className="text-slate-400">(24 h)</span>
                 </label>
@@ -198,10 +202,10 @@ export function NewAppointmentModal({
               </div>
             </div>
 
-            <div>
+            <div className={fieldStack}>
               <label
                 htmlFor="new-rdv-duree"
-                className="block text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-slate-700"
               >
                 Durée
               </label>
@@ -219,8 +223,8 @@ export function NewAppointmentModal({
               </select>
             </div>
 
-            <div>
-              <p className="mb-2 text-sm font-medium text-slate-700">
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-medium text-slate-700">
                 Motif du RDV
               </p>
               <div className="flex flex-wrap gap-2">
@@ -251,10 +255,10 @@ export function NewAppointmentModal({
               </div>
             </div>
 
-            <div>
+            <div className={fieldStack}>
               <label
                 htmlFor="new-rdv-notes"
-                className="block text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-slate-700"
               >
                 Notes <span className="text-slate-400">(optionnel)</span>
               </label>

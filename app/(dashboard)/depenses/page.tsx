@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function StatistiquesRedirectPage() {
+export default function DepensesRedirectPage() {
   redirect("/finances");
 }

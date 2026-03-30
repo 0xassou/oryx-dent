@@ -19,6 +19,7 @@ import {
   ensureAppointmentsSeeded,
   formatDateKeyLocal,
   isValidDateKeyString,
+  safeDate,
   writeAppointmentsToStorage,
 } from "@/utils/appointmentData";
 
@@ -37,12 +38,9 @@ function formatDateLong(d: Date): string {
   });
 }
 
-/** Clé locale YYYY-MM-DD (sans UTC). */
+/** Clé locale YYYY-MM-DD (sans UTC), tolère une Date invalide. */
 function formatDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return formatDateKeyLocal(safeDate(d));
 }
 
 const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -58,7 +56,7 @@ type SlidingDayColumn = {
  */
 function buildSlidingDayColumns(centerDate: Date): SlidingDayColumn[] {
   const columns: SlidingDayColumn[] = [];
-  const c = new Date(centerDate);
+  const c = new Date(safeDate(centerDate));
   c.setHours(0, 0, 0, 0);
   for (let i = -7; i <= 6; i++) {
     const d = new Date(c);
@@ -479,9 +477,9 @@ function CalendarView({
 // ─── Vue 2 : Timeline Arbre ───────────────────────────────────────────────────
 
 function TreeView({ rdvs, currentDate }: { rdvs: Rdv[]; currentDate: Date }) {
-  const dayLabel = formatDateLong(currentDate);
+  const dayLabel = formatDateLong(safeDate(currentDate));
   const todayRdvs = rdvs.filter(
-    (r) => r.dateKey === formatDateKey(currentDate)
+    (r) => r.dateKey === formatDateKey(safeDate(currentDate)),
   );
   const matin = todayRdvs.filter((r) => Number(r.start.split(":")[0]) < 12);
   const apresmidi = todayRdvs.filter((r) => Number(r.start.split(":")[0]) >= 12);
@@ -515,11 +513,11 @@ function TreeView({ rdvs, currentDate }: { rdvs: Rdv[]; currentDate: Date }) {
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 function formatSlidingRange(centerDate: Date): string {
-  const cols = buildSlidingDayColumns(centerDate);
+  const cols = buildSlidingDayColumns(safeDate(centerDate));
   const first = cols[0];
   const last = cols[cols.length - 1];
-  const d0 = new Date(`${first.iso}T12:00:00`);
-  const d1 = new Date(`${last.iso}T12:00:00`);
+  const d0 = safeDate(new Date(`${first.iso}T12:00:00`));
+  const d1 = safeDate(new Date(`${last.iso}T12:00:00`));
   const a = d0.toLocaleDateString("fr-FR", {
     weekday: "short",
     day: "numeric",
@@ -634,7 +632,9 @@ export default function PlanningPage() {
                   const v = e.target.value;
                   if (v) {
                     const [y, m, d] = v.split("-").map(Number);
+                    if (!y || !m || !d) return;
                     const nextDate = new Date(y, m - 1, d);
+                    if (Number.isNaN(nextDate.getTime())) return;
                     if (view === "calendar") {
                       setCurrentDate(nextDate);
                       return;

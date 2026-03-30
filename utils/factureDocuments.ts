@@ -120,3 +120,14 @@ export function writeFacturesToStorage(docs: FactureDocument[]) {
 export function resteAPayer(doc: FactureDocument): number {
   return Math.max(0, doc.montantTotal - doc.montantPaye);
 }
+
+/** Parse une date facture au format JJ/MM/AAAA (stockage page Factures). */
+export function parseFactureDateFr(input: string): Date | null {
+  const m = input.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const d = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const y = Number(m[3]);
+  const dt = new Date(y, mo, d);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
