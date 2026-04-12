@@ -9,6 +9,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import AnimatedButton from "@/components/ui/AnimatedButton";
 import { LabWhatsAppButton } from "@/components/laboratoire/LabWhatsAppButton";
 import { PatientCombobox } from "@/components/laboratoire/PatientCombobox";
 import { StatusBadge } from "@/components/laboratoire/StatusBadge";
@@ -50,6 +51,7 @@ import {
   readPatientsFromStorage,
   type DentalPatientRecord,
 } from "@/utils/patientData";
+import { generateLabBonPDF } from "@/utils/generateLabBonPDF";
 
 function uid() {
   return Math.random().toString(16).slice(2);
@@ -111,7 +113,7 @@ function labDatesDiffer(
 }
 
 const inputSubtle =
-  "w-full rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs font-normal text-slate-700 outline-none transition-colors focus:border-slate-200 focus:ring-1 focus:ring-slate-200/60";
+  "w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-xs font-normal text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary-border)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/60";
 
 export default function LaboratoirePage() {
   const [activeTab, setActiveTab] = useState<
@@ -288,23 +290,22 @@ export default function LaboratoirePage() {
           <h1 className="text-2xl font-medium tracking-tight text-[color:var(--ds-text)]">
             Laboratoire & Prothèses
           </h1>
-          <p className="max-w-xl text-sm font-light leading-relaxed text-slate-500">
+          <p className="max-w-xl text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
             Commandes compactes : ouvrez une fiche pour ajuster les dates, les
             liens agenda et le coût.
           </p>
         </div>
 
-        <button
-          type="button"
+        <AnimatedButton
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-2xl bg-[color:var(--ds-primary)] px-5 py-3 text-sm font-medium text-white shadow-[0_4px_20px_rgba(8,145,178,0.22)] transition-opacity hover:opacity-90"
+          className="self-start py-3"
         >
           <Plus className="h-4 w-4" strokeWidth={2} />
           Nouvelle commande labo
-        </button>
+        </AnimatedButton>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-100/90 bg-white/95 p-2 shadow-[0_2px_16px_rgba(15,23,42,0.04)]">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--ds-primary-border)]/90 bg-[var(--ds-surface)]/95 p-2 shadow-[0_2px_16px_rgba(15,23,42,0.04)]">
         {(
           [
             ["all", "Toutes"],
@@ -323,7 +324,7 @@ export default function LaboratoirePage() {
                 ? id === "urgent"
                   ? "bg-red-500/95 font-medium text-white shadow-sm"
                   : "bg-[color:var(--ds-primary)] font-medium text-white shadow-[0_2px_12px_rgba(8,145,178,0.25)]"
-                : "text-slate-500 hover:bg-slate-50/80 hover:text-slate-700",
+                : "text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]/80 hover:text-[var(--ds-text)]",
             ].join(" ")}
           >
             {label}
@@ -333,7 +334,7 @@ export default function LaboratoirePage() {
 
       <div className="relative">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]"
           strokeWidth={2}
           aria-hidden
         />
@@ -344,13 +345,13 @@ export default function LaboratoirePage() {
           placeholder="Rechercher un patient, un acte ou un laboratoire…"
           aria-label="Rechercher dans les commandes laboratoire"
           autoComplete="off"
-          className="w-full rounded-xl border border-gray-200/60 bg-white py-2.5 pl-10 pr-10 text-sm font-normal text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-shadow placeholder:text-slate-400 focus:border-gray-200/80 focus:ring-2 focus:ring-blue-100"
+          className="w-full rounded-xl border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)] py-2.5 pl-10 pr-10 text-sm font-normal text-[var(--ds-text)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-shadow placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary-border)]/80 focus:ring-2 focus:ring-[var(--ds-primary-soft)]"
         />
         {searchTerm ? (
           <button
             type="button"
             onClick={() => setSearchTerm("")}
-            className="absolute right-2 top-1/2 z-[1] flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
+            className="absolute right-2 top-1/2 z-[1] flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text-muted)]"
             aria-label="Effacer la recherche"
           >
             <X className="h-4 w-4" strokeWidth={2} />
@@ -360,15 +361,15 @@ export default function LaboratoirePage() {
 
       <div className="space-y-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm font-medium tracking-tight text-slate-700">
+          <p className="text-sm font-medium tracking-tight text-[var(--ds-text)]">
             {filtered.length === 1 ? (
               <>
-                <span className="tabular-nums text-slate-900">1</span> commande
+                <span className="tabular-nums text-[var(--ds-text)]">1</span> commande
                 trouvée
               </>
             ) : (
               <>
-                <span className="tabular-nums text-slate-900">
+                <span className="tabular-nums text-[var(--ds-text)]">
                   {filtered.length}
                 </span>{" "}
                 commandes trouvées
@@ -378,22 +379,22 @@ export default function LaboratoirePage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200/80 bg-white/60 px-6 py-16 text-center shadow-[0_2px_12px_rgba(15,23,42,0.03)]">
+          <div className="rounded-2xl border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-[0_2px_12px_rgba(15,23,42,0.03)]">
             {searchTerm.trim() && tabFiltered.length > 0 ? (
               <div className="mx-auto max-w-md space-y-3">
                 <div
-                  className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-300"
+                  className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--ds-bg)] text-[var(--ds-text-muted)]/60"
                   aria-hidden
                 >
                   <Search className="h-6 w-6" strokeWidth={1.5} />
                 </div>
-                <p className="text-sm font-light leading-relaxed text-slate-500">
+                <p className="text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
                   Aucun résultat pour &quot;{searchTerm.trim()}&quot; dans le
                   Laboratoire.
                 </p>
               </div>
             ) : (
-              <p className="text-sm font-light text-slate-400">
+              <p className="text-sm font-light text-[var(--ds-text-muted)]">
                 Aucune commande dans ce filtre.
               </p>
             )}
@@ -418,7 +419,7 @@ export default function LaboratoirePage() {
             return (
               <div
                 key={cmd.id}
-                className="overflow-hidden rounded-2xl border border-slate-100/90 bg-white shadow-[0_2px_24px_rgba(15,23,42,0.045)] transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)]"
+                className="overflow-hidden rounded-2xl border border-[var(--ds-primary-border)]/90 bg-[var(--ds-surface)] shadow-[0_2px_24px_rgba(15,23,42,0.045)] transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)]"
               >
                 <div
                   role="button"
@@ -434,11 +435,11 @@ export default function LaboratoirePage() {
                   onClick={() =>
                     setExpandedCommandId((x) => (x === cmd.id ? null : cmd.id))
                   }
-                  className="w-full cursor-pointer p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-slate-200/80"
+                  className="w-full cursor-pointer p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-primary-border)]/80"
                 >
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
-                      <p className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-slate-800">
+                      <p className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-[var(--ds-text)]">
                         {cmd.statut === "POSE" ? (
                           <span
                             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"
@@ -450,30 +451,30 @@ export default function LaboratoirePage() {
                         ) : null}
                         <span>{cmd.patient}</span>
                       </p>
-                      <p className="text-sm font-light leading-relaxed text-slate-500">
+                      <p className="text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
                         {cmd.travail}
                       </p>
-                      <p className="text-sm font-light tracking-wide text-slate-600">
+                      <p className="text-sm font-light tracking-wide text-[var(--ds-text-muted)]">
                         Retour :{" "}
                         <span
                           className={
                             critical && cmd.statut !== "POSE"
                               ? "font-normal text-red-600"
-                              : "font-normal text-slate-700"
+                              : "font-normal text-[var(--ds-text)]"
                           }
                         >
                           {formatDatePretty(cmd.retourIso)}
                         </span>
-                        <span className="text-slate-300"> | </span>
+                        <span className="text-[var(--ds-text-muted)]/60"> | </span>
                         Pose :{" "}
-                        <span className="font-normal text-slate-700">
+                        <span className="font-normal text-[var(--ds-text)]">
                           {cmd.rdvPatientIso
                             ? formatDatePretty(cmd.rdvPatientIso)
                             : "—"}
                         </span>
                       </p>
                       {cmd.teinte && cmd.materiau ? (
-                        <p className="text-xs font-light text-slate-400">
+                        <p className="text-xs font-light text-[var(--ds-text-muted)]">
                           Teinte {cmd.teinte} · {cmd.materiau}
                         </p>
                       ) : null}
@@ -487,7 +488,7 @@ export default function LaboratoirePage() {
 
                     <div className="flex flex-wrap items-center gap-3 lg:flex-col lg:items-end lg:gap-3">
                       <StatusBadge statut={cmd.statut} />
-                      <span className="max-w-[14rem] truncate text-sm font-light text-slate-600">
+                      <span className="max-w-[14rem] truncate text-sm font-light text-[var(--ds-text-muted)]">
                         {cmd.labo}
                       </span>
                       <div className="flex flex-wrap items-center gap-2">
@@ -503,7 +504,7 @@ export default function LaboratoirePage() {
                               x === cmd.id ? null : cmd.id,
                             );
                           }}
-                          className="rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-slate-200 hover:bg-white"
+                          className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-3 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)]"
                         >
                           {expanded ? "Fermer" : "Modifier"}
                         </button>
@@ -514,15 +515,15 @@ export default function LaboratoirePage() {
 
                 {expanded ? (
                   <div
-                    className="border-t border-slate-100/90 bg-slate-50/30 px-6 pb-8 pt-6"
+                    className="border-t border-[var(--ds-primary-border)]/90 bg-[var(--ds-bg)]/30 px-6 pb-8 pt-6"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="mb-6 text-xs font-normal uppercase tracking-wider text-slate-400">
+                    <p className="mb-6 text-xs font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                       Détail & liaison agenda
                     </p>
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                       <div>
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-slate-400">
+                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                           Retour labo
                         </label>
                         <input
@@ -536,7 +537,7 @@ export default function LaboratoirePage() {
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-slate-400">
+                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                           Date de pose
                         </label>
                         <input
@@ -553,7 +554,7 @@ export default function LaboratoirePage() {
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-slate-400">
+                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                           Lien agenda — pose
                         </label>
                         <select
@@ -585,7 +586,7 @@ export default function LaboratoirePage() {
                         </select>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-slate-400">
+                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                           Lien agenda — retour labo
                         </label>
                         <select
@@ -618,9 +619,9 @@ export default function LaboratoirePage() {
                       </div>
                     </div>
 
-                    <div className="mt-8 flex flex-col gap-6 border-t border-slate-100/80 pt-8 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="mt-8 flex flex-col gap-6 border-t border-[var(--ds-primary-border)]/80 pt-8 sm:flex-row sm:items-end sm:justify-between">
                       <div>
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-slate-400">
+                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                           Coût labo (DA)
                         </label>
                         <input
@@ -663,7 +664,7 @@ export default function LaboratoirePage() {
                       </div>
                       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                         <div className="min-w-0 flex-1 sm:min-w-[min(100%,20rem)] sm:flex-none">
-                          <p className="text-[11px] font-normal uppercase tracking-wider text-slate-400">
+                          <p className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
                             Statut
                           </p>
                           <div
@@ -702,7 +703,7 @@ export default function LaboratoirePage() {
                                     "rounded-full px-3.5 py-1.5 text-[11px] font-medium tracking-wide transition-all",
                                     active
                                       ? "bg-slate-900 text-white shadow-[0_2px_8px_rgba(15,23,42,0.12)]"
-                                      : "bg-white text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-200/70 hover:bg-slate-50/90",
+                                      : "bg-[var(--ds-surface)] text-[var(--ds-text-muted)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-[var(--ds-primary-border)]/70 hover:bg-[var(--ds-bg)]/90",
                                   ].join(" ")}
                                 >
                                   {laboratoireStatutLabel(s)}
@@ -713,9 +714,20 @@ export default function LaboratoirePage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => alert("Génération du bon PDF…")}
+                          onClick={() =>
+                            generateLabBonPDF({
+                              patient: cmd.patient,
+                              acte: cmd.travail,
+                              laboratoire: cmd.labo,
+                              dateRetour: formatDatePretty(cmd.retourIso),
+                              notes: [cmd.teinte, cmd.materiau]
+                                .filter(Boolean)
+                                .join(" · ") || undefined,
+                              id: cmd.id,
+                            })
+                          }
                           title="Bon de commande PDF"
-                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-xl border border-slate-100 text-slate-400 transition-colors hover:border-slate-200 hover:bg-white hover:text-[color:var(--ds-primary)] sm:self-center"
+                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-xl border border-[var(--ds-primary-border)] text-[var(--ds-text-muted)] transition-colors hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)] hover:text-[color:var(--ds-primary)] sm:self-center"
                           aria-label="PDF"
                         >
                           <FileText className="h-4 w-4" strokeWidth={1.75} />
@@ -741,7 +753,7 @@ export default function LaboratoirePage() {
           }}
         >
           <div
-            className="max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-slate-100/90 bg-white p-8 shadow-[0_12px_48px_rgba(15,23,42,0.1)]"
+            className="max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-[var(--ds-primary-border)]/90 bg-[var(--ds-surface)] p-8 shadow-[0_12px_48px_rgba(15,23,42,0.1)]"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -749,14 +761,14 @@ export default function LaboratoirePage() {
                 <h3 className="text-lg font-medium tracking-tight text-[color:var(--ds-text)]">
                   Nouvelle commande labo
                 </h3>
-                <p className="text-sm font-light text-slate-500">
+                <p className="text-sm font-light text-[var(--ds-text-muted)]">
                   Patient, laboratoire et liaisons agenda.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-600"
+                className="rounded-xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text-muted)]"
                 aria-label="Fermer"
               >
                 <X className="h-5 w-5" strokeWidth={1.75} />
@@ -822,13 +834,13 @@ export default function LaboratoirePage() {
               />
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Type de travail
                 </label>
                 <select
                   value={travail}
                   onChange={(e) => setTravail(e.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-slate-100 bg-slate-50/30 px-3 py-2.5 text-sm font-normal text-slate-800 outline-none focus:border-slate-200 focus:bg-white focus:ring-1 focus:ring-slate-200/80"
+                  className="mt-2 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/30 px-3 py-2.5 text-sm font-normal text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary-border)] focus:bg-[var(--ds-surface)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
                 >
                   {TRAVAUX.map((t) => (
                     <option key={t} value={t}>
@@ -839,13 +851,13 @@ export default function LaboratoirePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Laboratoire
                 </label>
                 <select
                   value={modalLabId}
                   onChange={(e) => setModalLabId(e.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-slate-100 bg-slate-50/30 px-3 py-2.5 text-sm font-normal text-slate-800 outline-none focus:border-slate-200 focus:bg-white focus:ring-1 focus:ring-slate-200/80"
+                  className="mt-2 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/30 px-3 py-2.5 text-sm font-normal text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary-border)] focus:bg-[var(--ds-surface)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
                 >
                   {labs.map((l) => (
                     <option key={l.id} value={l.id}>
@@ -856,34 +868,34 @@ export default function LaboratoirePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Date RDV patient (pose)
                 </label>
                 <input
                   type="date"
                   value={rdvPatientIso}
                   onChange={(e) => setRdvPatientIso(e.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-slate-100 bg-slate-50/30 px-3 py-2.5 text-sm font-normal outline-none focus:border-slate-200 focus:bg-white focus:ring-1 focus:ring-slate-200/80"
+                  className="mt-2 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/30 px-3 py-2.5 text-sm font-normal outline-none focus:border-[var(--ds-primary-border)] focus:bg-[var(--ds-surface)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Retour labo prévu
                 </label>
                 <input
                   type="date"
                   value={retourIso}
                   onChange={(e) => setRetourIso(e.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-slate-100 bg-slate-50/30 px-3 py-2.5 text-sm font-normal outline-none focus:border-slate-200 focus:bg-white focus:ring-1 focus:ring-slate-200/80"
+                  className="mt-2 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/30 px-3 py-2.5 text-sm font-normal outline-none focus:border-[var(--ds-primary-border)] focus:bg-[var(--ds-surface)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
                 />
-                <p className="mt-2 text-xs font-light text-slate-400">
+                <p className="mt-2 text-xs font-light text-[var(--ds-text-muted)]">
                   Couronne / Bridge : J+7 suggéré automatiquement.
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Lien agenda — pose
                 </label>
                 <select
@@ -896,7 +908,7 @@ export default function LaboratoirePage() {
                     if (a) setRdvPatientIso(a.dateKey);
                   }}
                   disabled={!modalPatientId}
-                  className="mt-2 w-full rounded-2xl border border-slate-100 bg-slate-50/30 px-3 py-2.5 text-sm font-normal outline-none disabled:opacity-50"
+                  className="mt-2 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/30 px-3 py-2.5 text-sm font-normal outline-none disabled:opacity-50"
                 >
                   <option value="">— Aucun —</option>
                   {modalAppts.map((a) => (
@@ -908,7 +920,7 @@ export default function LaboratoirePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Lien agenda — retour labo
                 </label>
                 <select
@@ -921,7 +933,7 @@ export default function LaboratoirePage() {
                     if (a) setRetourIso(a.dateKey);
                   }}
                   disabled={!modalPatientId}
-                  className="mt-2 w-full rounded-2xl border border-slate-100 bg-slate-50/30 px-3 py-2.5 text-sm font-normal outline-none disabled:opacity-50"
+                  className="mt-2 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/30 px-3 py-2.5 text-sm font-normal outline-none disabled:opacity-50"
                 >
                   <option value="">— Aucun —</option>
                   {modalAppts.map((a) => (
@@ -936,7 +948,7 @@ export default function LaboratoirePage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-2xl border border-slate-100 px-5 py-2.5 text-sm font-normal text-slate-500 transition-colors hover:bg-slate-50"
+                  className="rounded-2xl border border-[var(--ds-primary-border)] px-5 py-2.5 text-sm font-normal text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
                 >
                   Annuler
                 </button>

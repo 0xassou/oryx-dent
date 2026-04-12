@@ -60,15 +60,15 @@ const STATUS_LABELS: Record<ToothStatus, string> = {
 function toothClasses(status: ToothStatus) {
   switch (status) {
     case "carie":
-      return "bg-red-500/20 ring-red-300/50 text-red-700";
+      return "bg-[#06b6d4]/20 ring-[#06b6d4]/50 text-[#0891b2]";
     case "couronne":
-      return "bg-blue-500/20 ring-blue-300/50 text-blue-700";
+      return "bg-[#10b981]/20 ring-[#10b981]/50 text-[#059669]";
     case "chirurgie":
-      return "bg-yellow-500/20 ring-yellow-400/60 text-yellow-800";
+      return "bg-[#f97316]/20 ring-[#f97316]/60 text-[#ea580c]";
     case "absente":
-      return "bg-slate-500/15 ring-slate-400/40 text-slate-700";
+      return "bg-[var(--ds-primary-soft)]/40 ring-[var(--ds-primary-border)]/40 text-[var(--ds-text-muted)]";
     default:
-      return "bg-slate-200/60 ring-slate-200/70 text-slate-700";
+      return "bg-[var(--ds-primary-soft)]/30 ring-[var(--ds-primary-border)]/70 text-[var(--ds-text)]";
   }
 }
 
@@ -96,11 +96,11 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
     status === "absente"
       ? `url(#${opalAbsentId})`
       : status === "carie"
-        ? "rgba(239,68,68,0.25)"
+        ? "rgba(6,182,212,0.25)"
         : status === "couronne"
-          ? "rgba(59,130,246,0.25)"
+          ? "rgba(16,185,129,0.25)"
           : status === "chirurgie"
-            ? "rgba(234,179,8,0.25)"
+            ? "rgba(249,115,22,0.25)"
             : "rgba(148,163,184,0.25)";
 
   const type = getToothIconType(id);
@@ -132,7 +132,7 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
       return (
         <svg
           viewBox="0 0 64 64"
-          className="h-8 w-8"
+          className="h-6 w-6 lg:h-8 lg:w-8"
           aria-hidden="true"
           focusable="false"
         >
@@ -151,7 +151,7 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
       return (
         <svg
           viewBox="0 0 64 64"
-          className="h-8 w-8"
+          className="h-6 w-6 lg:h-8 lg:w-8"
           aria-hidden="true"
           focusable="false"
         >
@@ -170,7 +170,7 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
       return (
         <svg
           viewBox="0 0 64 64"
-          className="h-8 w-8"
+          className="h-6 w-6 lg:h-8 lg:w-8"
           aria-hidden="true"
           focusable="false"
         >
@@ -196,7 +196,7 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
       return (
         <svg
           viewBox="0 0 64 64"
-          className="h-8 w-8"
+          className="h-6 w-6 lg:h-8 lg:w-8"
           aria-hidden="true"
           focusable="false"
         >
@@ -228,9 +228,18 @@ export interface DentalChartProps {
   /** Mode contrôlé : état des dents géré par le parent */
   value?: Record<ToothId, ToothStatus>;
   onValueChange?: (state: Record<ToothId, ToothStatus>) => void;
+  /** Dents « à surveiller » — point amber sur l’odonogramme */
+  watchedTeeth?: ReadonlySet<number>;
 }
 
-export function DentalChart({ initialState, onChange, onToothClick, value, onValueChange }: DentalChartProps) {
+export function DentalChart({
+  initialState,
+  onChange,
+  onToothClick,
+  value,
+  onValueChange,
+  watchedTeeth,
+}: DentalChartProps) {
   const initial = useMemo(() => {
     const all: Record<ToothId, ToothStatus> = {
       11: "healthy",
@@ -300,14 +309,18 @@ export function DentalChart({ initialState, onChange, onToothClick, value, onVal
 
   function Row({ teeth }: { teeth: ToothId[] }) {
     return (
-      <div
-        className="flex flex-nowrap items-center justify-center gap-1 md:gap-2 flex-shrink-0 whitespace-nowrap overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
+      <div className="flex flex-nowrap items-center justify-center gap-0.5 lg:gap-1 flex-shrink-0 whitespace-nowrap">
         {teeth.map((id) => {
           const status = activeState[id];
           const isOpen = openTooth === id;
           return (
             <div key={id} className="relative">
+              {watchedTeeth?.has(id) && (
+                <span
+                  className="pointer-events-none absolute right-0.5 top-0.5 z-[5] h-2 w-2 rounded-full bg-amber-400 ring-2 ring-white shadow-sm"
+                  aria-hidden
+                />
+              )}
               <button
                 type="button"
                 onClick={(e) => {
@@ -324,17 +337,17 @@ export function DentalChart({ initialState, onChange, onToothClick, value, onVal
                   setOpenTooth(isOpen ? null : id);
                 }}
                 className={[
-                  "group relative flex flex-col items-center justify-center",
-                  "rounded-3xl px-2.5 py-2",
+                  "group relative flex h-10 w-10 flex-col items-center justify-center lg:h-14 lg:w-14",
+                  "rounded-3xl p-1 lg:p-1.5",
                   "shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-md transition",
-                  "cursor-pointer hover:opacity-80 hover:-translate-y-0.5 hover:bg-white/60",
+                  "cursor-pointer hover:opacity-80 hover:-translate-y-0.5 hover:bg-[var(--ds-surface)]/60",
                   toothClasses(status),
                 ].join(" ")}
                 aria-label={`Dent ${id}`}
                 aria-expanded={isOpen}
               >
                 <ToothIcon id={id} status={status} />
-                <span className="mt-1 text-[11px] font-semibold tracking-wide opacity-80">
+                <span className="mt-0.5 text-[9px] font-semibold tracking-wide opacity-80 lg:mt-1 lg:text-[11px]">
                   {id}
                 </span>
               </button>
@@ -353,7 +366,7 @@ export function DentalChart({ initialState, onChange, onToothClick, value, onVal
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.92, y: -4 }}
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      className="absolute left-1/2 top-full z-50 mt-2 w-36 -translate-x-1/2 overflow-hidden rounded-3xl bg-white p-2 shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
+                      className="absolute left-1/2 top-full z-50 mt-2 w-36 -translate-x-1/2 overflow-hidden rounded-3xl bg-[var(--ds-surface)] p-2 shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
                     >
                       {(["healthy", "carie", "couronne", "chirurgie", "absente"] as const).map(
                         (s) => (
@@ -365,28 +378,28 @@ export function DentalChart({ initialState, onChange, onToothClick, value, onVal
                               "flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-xs font-medium transition-colors",
                               status === s
                                 ? s === "carie"
-                                  ? "bg-red-50 text-red-700"
+                                  ? "bg-[#ecfeff] text-[#0891b2]"
                                   : s === "couronne"
-                                    ? "bg-blue-50 text-blue-700"
+                                    ? "bg-[#f0fdf4] text-[#059669]"
                                     : s === "chirurgie"
-                                      ? "bg-yellow-50 text-yellow-800"
+                                      ? "bg-[#fff7ed] text-[#ea580c]"
                                       : s === "absente"
-                                        ? "bg-slate-100 text-slate-700"
-                                        : "bg-slate-50 text-slate-700"
-                                : "text-slate-700 hover:bg-slate-50",
+                                        ? "bg-[var(--ds-primary-soft)] text-[var(--ds-text)]"
+                                        : "bg-[var(--ds-bg)] text-[var(--ds-text)]"
+                                : "text-[var(--ds-text)] hover:bg-[var(--ds-bg)]",
                             ].join(" ")}
                           >
                             <span
                               className={`h-2 w-2 shrink-0 rounded-full ${
                                 s === "healthy"
-                                  ? "bg-slate-300"
+                                  ? "bg-[var(--ds-primary-border)]"
                                   : s === "carie"
-                                    ? "bg-red-500"
+                                    ? "bg-[#06b6d4]"
                                     : s === "couronne"
-                                      ? "bg-blue-500"
+                                      ? "bg-[#10b981]"
                                       : s === "chirurgie"
-                                        ? "bg-yellow-500"
-                                        : "bg-slate-400"
+                                        ? "bg-[#f97316]"
+                                        : "bg-[var(--ds-text-muted)]"
                               }`}
                             />
                             {STATUS_LABELS[s]}
@@ -406,65 +419,71 @@ export function DentalChart({ initialState, onChange, onToothClick, value, onVal
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4">
-        <div className="rounded-3xl bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
-              Maxillaire (haut)
-            </p>
-            <p className="text-xs text-slate-500">
-              Cliquez une dent pour changer l’état
-            </p>
-          </div>
-          <div className="mt-3 flex flex-col gap-4">
-            <div className="flex flex-row justify-center gap-2 flex-nowrap w-full flex-shrink-0 whitespace-nowrap">
-              <Row teeth={UPPER_RIGHT} />
+      <div className="overflow-x-auto">
+        <div className="grid w-max min-w-full gap-4">
+          <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3 shadow-[0_8px_30px_rgba(0,0,0,0.04)] lg:p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
+                Maxillaire (haut)
+              </p>
+              <p className="text-xs text-slate-500">
+                Cliquez une dent pour changer l’état
+              </p>
             </div>
-            <div className="flex flex-row justify-center gap-2 flex-nowrap w-full flex-shrink-0 whitespace-nowrap">
-              <Row teeth={UPPER_LEFT} />
+            <div className="mt-3 flex flex-col gap-4">
+              <div className="flex w-full flex-shrink-0 flex-row flex-nowrap justify-center gap-0.5 whitespace-nowrap lg:gap-1">
+                <Row teeth={UPPER_RIGHT} />
+              </div>
+              <div className="flex w-full flex-shrink-0 flex-row flex-nowrap justify-center gap-0.5 whitespace-nowrap lg:gap-1">
+                <Row teeth={UPPER_LEFT} />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="rounded-3xl bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-          <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
-            Mandibule (bas)
-          </p>
-          <div className="mt-3 flex flex-col gap-4">
-            <div className="flex flex-row justify-center gap-2 flex-nowrap w-full flex-shrink-0 whitespace-nowrap">
-              <Row teeth={LOWER_RIGHT} />
-            </div>
-            <div className="flex flex-row justify-center gap-2 flex-nowrap w-full flex-shrink-0 whitespace-nowrap">
-              <Row teeth={LOWER_LEFT} />
+          <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3 shadow-[0_8px_30px_rgba(0,0,0,0.04)] lg:p-5">
+            <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
+              Mandibule (bas)
+            </p>
+            <div className="mt-3 flex flex-col gap-4">
+              <div className="flex w-full flex-shrink-0 flex-row flex-nowrap justify-center gap-0.5 whitespace-nowrap lg:gap-1">
+                <Row teeth={LOWER_RIGHT} />
+              </div>
+              <div className="flex w-full flex-shrink-0 flex-row flex-nowrap justify-center gap-0.5 whitespace-nowrap lg:gap-1">
+                <Row teeth={LOWER_LEFT} />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-3xl bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3 shadow-[0_8px_30px_rgba(0,0,0,0.04)] lg:p-5">
         <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
           Légende
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/40 px-3 py-1 ring-1 ring-white/30">
-            <span className="h-2.5 w-2.5 rounded-full bg-slate-200" />
-            <span className="text-slate-700">Saine</span>
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]/50">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-primary-border)]" />
+            <span className="text-[var(--ds-text)]">Saine</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/40 px-3 py-1 ring-1 ring-red-200/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-            <span className="text-slate-700">Soins</span>
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-cyan-200/50">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#06b6d4]" />
+            <span className="text-[var(--ds-text)]">Soins</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/40 px-3 py-1 ring-1 ring-blue-200/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-            <span className="text-slate-700">Orthopédie</span>
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-emerald-200/50">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />
+            <span className="text-[var(--ds-text)]">Orthopédie</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/40 px-3 py-1 ring-1 ring-yellow-200/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-            <span className="text-slate-700">Chirurgie</span>
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-orange-200/50">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#f97316]" />
+            <span className="text-[var(--ds-text)]">Chirurgie</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/40 px-3 py-1 ring-1 ring-slate-200/40">
-            <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            <span className="text-slate-700">Absente</span>
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-slate-200/40">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-text-muted)]" />
+            <span className="text-[var(--ds-text)]">Absente</span>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-amber-200/60">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-white" />
+            <span className="text-[var(--ds-text)]">À surveiller</span>
           </div>
         </div>
       </div>

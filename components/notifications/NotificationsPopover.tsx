@@ -94,7 +94,7 @@ export function NotificationsPopover() {
                   <button
                     type="button"
                     onClick={handleMarkAllRead}
-                    className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-sky-600 transition-colors hover:bg-white/20"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#7c3aed] transition-colors hover:bg-white/20"
                   >
                     <CheckCheck className="h-3.5 w-3.5" />
                     Tout marquer comme lu

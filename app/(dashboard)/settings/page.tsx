@@ -13,6 +13,12 @@ import {
 } from "lucide-react";
 import { ActesTarifsSection } from "@/components/settings/ActesTarifsSection";
 import { LabsPartnersSection } from "@/components/settings/LabsPartnersSection";
+import {
+  THEMES,
+  applyTheme,
+  getStoredTheme,
+  type Theme,
+} from "@/utils/theme";
 
 /** Champ : label au-dessus (liste verticale). */
 const fieldRow =
@@ -21,17 +27,18 @@ const fieldRow =
 /** Même chose dans une grille : pas de mb (l’espace vient de gap-6). */
 const fieldRowGrid = "flex w-full min-w-0 flex-col gap-2";
 
-const labelClass = "text-sm font-medium text-gray-700";
+const labelClass = "text-sm font-medium text-[var(--ds-text)]";
 
-const labelClassMuted = "text-sm font-medium text-gray-800";
+const labelClassMuted = "text-sm font-medium text-[var(--ds-text-muted)]";
 
 const inputBase =
-  "w-full min-w-0 rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200/80";
+  "w-full min-w-0 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] p-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-soft)] placeholder:text-[var(--ds-text-muted)]";
 
 /** Grille section Clinique & légal (infos + fiscal). */
 const clinicGrid = "grid w-full min-w-0 grid-cols-1 gap-6 md:grid-cols-2";
 
-function Toggle({
+/** Interrupteur ON/OFF — style glass / DS (préférences WhatsApp : ancien look). */
+function ToggleLegacy({
   checked,
   onChange,
 }: {
@@ -46,7 +53,7 @@ function Toggle({
       onClick={() => onChange(!checked)}
       className={[
         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors",
-        checked ? "bg-slate-900" : "bg-slate-300",
+        checked ? "bg-slate-900" : "bg-[var(--ds-primary-border)]",
       ].join(" ")}
     >
       <span
@@ -54,6 +61,55 @@ function Toggle({
           "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform",
           checked ? "translate-x-6" : "translate-x-1",
         ].join(" ")}
+      />
+    </button>
+  );
+}
+
+/** Interrupteur animé (Notifications, 2FA). */
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const isOn = checked;
+  const handleToggle = () => onChange(!checked);
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isOn}
+      onClick={handleToggle}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        width: "52px",
+        height: "28px",
+        borderRadius: "14px",
+        border: "none",
+        cursor: "pointer",
+        padding: "2px",
+        transition: "background-color 0.3s ease",
+        backgroundColor: isOn
+          ? "var(--ds-primary, #7c3aed)"
+          : "rgba(148,163,184,0.4)",
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          display: "block",
+          width: "24px",
+          height: "24px",
+          borderRadius: "50%",
+          backgroundColor: "white",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+          transition: "transform 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+          transform: isOn ? "translateX(24px)" : "translateX(0px)",
+        }}
       />
     </button>
   );
@@ -69,17 +125,53 @@ type SettingsNavId =
   | "modeles"
   | "preferences";
 
+const DEFAULT_ASSISTANT_PERMISSIONS: {
+  stats: boolean;
+  factures: boolean;
+  parametres: boolean;
+} = {
+  stats: false,
+  factures: true,
+  parametres: false,
+};
+
+function normalizeAssistantPermissions(
+  raw: unknown,
+): {
+  stats: boolean;
+  factures: boolean;
+  parametres: boolean;
+} {
+  const base = { ...DEFAULT_ASSISTANT_PERMISSIONS };
+  if (!raw || typeof raw !== "object") return base;
+  const o = raw as Record<string, unknown>;
+  return {
+    stats: typeof o.stats === "boolean" ? o.stats : base.stats,
+    factures:
+      typeof o.factures === "boolean"
+        ? o.factures
+        : typeof o.invoices === "boolean"
+          ? o.invoices
+          : base.factures,
+    parametres:
+      typeof o.parametres === "boolean"
+        ? o.parametres
+        : typeof o.settings === "boolean"
+          ? o.settings
+          : base.parametres,
+  };
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsNavId>("clinique");
   const [twoFA, setTwoFA] = useState(false);
-  const [assistantPermissions, setAssistantPermissions] = useState({
-    stats: true,
-    invoices: true,
-    settings: false,
-  });
+  const [currentTheme, setCurrentTheme] = useState<Theme>("violet");
   const [settings, setSettings] = useState({
     nomCabinet: "",
     praticien: "",
+    praticienPrenom: "",
+    praticienNom: "",
+    praticienEmail: "",
     adresse: "",
     telephone: "",
     email: "",
@@ -91,17 +183,34 @@ export default function SettingsPage() {
     currency: "DA",
     weekStart: "dimanche",
     whatsappReminders: false,
+    assistantPermissions: { ...DEFAULT_ASSISTANT_PERMISSIONS },
+    mentionLegale: "",
+    logoBase64: "",
+    notif_stock: true,
+    notif_rdv: true,
+    notif_impayes: true,
+    notif_labo: true,
   });
 
   useEffect(() => {
     const saved = localStorage.getItem("dental_settings");
     if (!saved) return;
     try {
-      const parsed = JSON.parse(saved);
-      setSettings((prev) => ({ ...prev, ...parsed }));
+      const parsed = JSON.parse(saved) as Record<string, unknown>;
+      setSettings((prev) => {
+        const merged = { ...prev, ...parsed };
+        merged.assistantPermissions = normalizeAssistantPermissions(
+          parsed.assistantPermissions ?? prev.assistantPermissions,
+        );
+        return merged;
+      });
     } catch {
       // Ignore malformed localStorage payload.
     }
+  }, []);
+
+  useEffect(() => {
+    setCurrentTheme(getStoredTheme());
   }, []);
 
   function handleSaveSettings() {
@@ -125,21 +234,21 @@ export default function SettingsPage() {
   ];
 
   const panelClass =
-    "w-full min-w-0 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_1px_0_rgba(0,0,0,0.04)] sm:p-8";
+    "w-full min-w-0 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 sm:p-8";
 
   return (
-    <div className="mx-auto w-full max-w-6xl bg-[#f5f5f7] p-6">
-      <header className="mb-6 w-full">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+    <div className="w-full space-y-6">
+      <header className="mb-6 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-8 py-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--ds-text)]">
           Réglages
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+        <p className="mt-2 text-sm leading-relaxed text-[var(--ds-text-muted)]">
           Cabinet, catalogue d&apos;actes, équipe et préférences.
         </p>
       </header>
 
       <nav
-        className="flex w-full flex-wrap gap-1 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/90 p-1.5 shadow-sm backdrop-blur-sm"
+        className="flex w-full flex-nowrap gap-1 overflow-x-auto scrollbar-none rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-1.5"
         aria-label="Sections des réglages"
       >
         {navItems.map((item) => {
@@ -151,10 +260,10 @@ export default function SettingsPage() {
               type="button"
               onClick={() => setActiveTab(item.id)}
               className={[
-                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition-colors whitespace-nowrap",
+                "flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs transition-colors whitespace-nowrap lg:text-sm",
                 isActive
                   ? "bg-slate-900 font-medium text-white shadow-sm"
-                  : "text-slate-600 hover:bg-slate-100",
+                  : "text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
               ].join(" ")}
             >
               <Icon className="h-4 w-4 shrink-0 opacity-90" />
@@ -168,7 +277,7 @@ export default function SettingsPage() {
             {activeTab === "compte" && (
               <div className={panelClass}>
                 <div>
-                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-slate-900">
+                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
                     Profil
                   </h2>
                   <div className="w-full min-w-0">
@@ -179,8 +288,15 @@ export default function SettingsPage() {
                       <input
                         id="settings-prenom"
                         type="text"
-                        defaultValue="Assil"
                         className={inputBase}
+                        value={settings.praticienPrenom ?? ""}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            praticienPrenom: e.target.value,
+                          }))
+                        }
+                        autoComplete="given-name"
                       />
                     </div>
                     <div className={fieldRow}>
@@ -190,8 +306,15 @@ export default function SettingsPage() {
                       <input
                         id="settings-nom"
                         type="text"
-                        defaultValue="Messaoudi"
                         className={inputBase}
+                        value={settings.praticienNom ?? ""}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            praticienNom: e.target.value,
+                          }))
+                        }
+                        autoComplete="family-name"
                       />
                     </div>
                     <div className={fieldRow}>
@@ -201,197 +324,42 @@ export default function SettingsPage() {
                       <input
                         id="settings-email-perso"
                         type="email"
-                        defaultValue="assil@cabinet.com"
                         className={inputBase}
+                        value={settings.praticienEmail ?? ""}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            praticienEmail: e.target.value,
+                          }))
+                        }
+                        autoComplete="email"
                       />
                     </div>
                   </div>
                   <div className="mt-8">
                     <button
                       type="button"
-                      className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      className="rounded-xl border border-[var(--ds-primary-border)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
                     >
                       Changer le mot de passe
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-12 border-t border-slate-100 pt-10">
-                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-slate-900">
+                <div className="mt-12 border-t border-[var(--ds-primary-border)] pt-10">
+                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
                     Sécurité
                   </h2>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-medium text-slate-800">
+                      <p className="text-sm font-medium text-[var(--ds-text)]">
                         Authentification à double facteur (2FA)
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                         Renforcez la sécurité de votre compte praticien.
                       </p>
                     </div>
                     <Toggle checked={twoFA} onChange={setTwoFA} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "clinique" && (
-              <div className={panelClass}>
-                <div>
-                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-slate-900">
-                    Informations générales
-                  </h2>
-                  <div className={clinicGrid}>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-nom-cabinet">
-                        Nom du cabinet
-                      </label>
-                      <input
-                        id="settings-nom-cabinet"
-                        type="text"
-                        value={settings.nomCabinet}
-                        onChange={(e) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            nomCabinet: e.target.value,
-                          }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-praticien">
-                        Praticien principal
-                      </label>
-                      <input
-                        id="settings-praticien"
-                        type="text"
-                        value={settings.praticien}
-                        onChange={(e) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            praticien: e.target.value,
-                          }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={`${fieldRowGrid} md:col-span-2`}>
-                      <label className={labelClass} htmlFor="settings-adresse">
-                        Adresse complète
-                      </label>
-                      <input
-                        id="settings-adresse"
-                        type="text"
-                        value={settings.adresse}
-                        onChange={(e) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            adresse: e.target.value,
-                          }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-tel">
-                        Téléphone
-                      </label>
-                      <input
-                        id="settings-tel"
-                        type="tel"
-                        value={settings.telephone}
-                        onChange={(e) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            telephone: e.target.value,
-                          }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-email-contact">
-                        Email de contact
-                      </label>
-                      <input
-                        id="settings-email-contact"
-                        type="email"
-                        value={settings.email}
-                        onChange={(e) =>
-                          setSettings((prev) => ({ ...prev, email: e.target.value }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-12 border-t border-slate-100 pt-10">
-                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-slate-900">
-                    Identification fiscale &amp; légale (DZ)
-                  </h2>
-                  <div className={clinicGrid}>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-nif">
-                        NIF
-                      </label>
-                      <input
-                        id="settings-nif"
-                        type="text"
-                        placeholder="Ex: 000216001234567"
-                        value={settings.nif}
-                        onChange={(e) =>
-                          setSettings((prev) => ({ ...prev, nif: e.target.value }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-nis">
-                        NIS
-                      </label>
-                      <input
-                        id="settings-nis"
-                        type="text"
-                        placeholder="Ex: 000216012345678"
-                        value={settings.nis}
-                        onChange={(e) =>
-                          setSettings((prev) => ({ ...prev, nis: e.target.value }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-rc">
-                        RC
-                      </label>
-                      <input
-                        id="settings-rc"
-                        type="text"
-                        placeholder="Ex: 16/00-0123456B00"
-                        value={settings.rc}
-                        onChange={(e) =>
-                          setSettings((prev) => ({ ...prev, rc: e.target.value }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
-                    <div className={fieldRowGrid}>
-                      <label className={labelClass} htmlFor="settings-ordre">
-                        N° inscription à l&apos;Ordre
-                      </label>
-                      <input
-                        id="settings-ordre"
-                        type="text"
-                        placeholder="Ex: 12345"
-                        value={settings.ordre}
-                        onChange={(e) =>
-                          setSettings((prev) => ({ ...prev, ordre: e.target.value }))
-                        }
-                        className={inputBase}
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -407,12 +375,262 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {activeTab === "clinique" && (
+              <>
+              <div className={panelClass}>
+                <div>
+                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
+                    Informations générales
+                  </h2>
+                  <div className={clinicGrid}>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-nom-cabinet">
+                        Nom du cabinet
+                      </label>
+                      <input
+                        id="settings-nom-cabinet"
+                        type="text"
+                        className={inputBase}
+                        value={settings.nomCabinet}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            nomCabinet: e.target.value,
+                          }))
+                        }
+                        autoComplete="organization"
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-praticien">
+                        Praticien principal
+                      </label>
+                      <input
+                        id="settings-praticien"
+                        type="text"
+                        className={inputBase}
+                        value={settings.praticien}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            praticien: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className={`${fieldRowGrid} md:col-span-2`}>
+                      <label className={labelClass} htmlFor="settings-adresse">
+                        Adresse complète
+                      </label>
+                      <input
+                        id="settings-adresse"
+                        type="text"
+                        className={inputBase}
+                        value={settings.adresse}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            adresse: e.target.value,
+                          }))
+                        }
+                        autoComplete="street-address"
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-tel">
+                        Téléphone
+                      </label>
+                      <input
+                        id="settings-tel"
+                        type="tel"
+                        className={inputBase}
+                        value={settings.telephone}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            telephone: e.target.value,
+                          }))
+                        }
+                        autoComplete="tel"
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-email-contact">
+                        Email de contact
+                      </label>
+                      <input
+                        id="settings-email-contact"
+                        type="email"
+                        className={inputBase}
+                        value={settings.email}
+                        onChange={(e) =>
+                          setSettings((prev) => ({ ...prev, email: e.target.value }))
+                        }
+                        autoComplete="email"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-12 border-t border-[var(--ds-primary-border)] pt-10">
+                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
+                    Identification fiscale &amp; légale (DZ)
+                  </h2>
+                  <div className={clinicGrid}>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-nif">
+                        NIF
+                      </label>
+                      <input
+                        id="settings-nif"
+                        type="text"
+                        className={inputBase}
+                        placeholder="Ex: 000216001234567"
+                        value={settings.nif}
+                        onChange={(e) =>
+                          setSettings((prev) => ({ ...prev, nif: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-nis">
+                        NIS
+                      </label>
+                      <input
+                        id="settings-nis"
+                        type="text"
+                        className={inputBase}
+                        placeholder="Ex: 000216012345678"
+                        value={settings.nis}
+                        onChange={(e) =>
+                          setSettings((prev) => ({ ...prev, nis: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-rc">
+                        RC
+                      </label>
+                      <input
+                        id="settings-rc"
+                        type="text"
+                        className={inputBase}
+                        placeholder="Ex: 16/00-0123456B00"
+                        value={settings.rc}
+                        onChange={(e) =>
+                          setSettings((prev) => ({ ...prev, rc: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-ordre">
+                        N° inscription à l&apos;Ordre
+                      </label>
+                      <input
+                        id="settings-ordre"
+                        type="text"
+                        className={inputBase}
+                        placeholder="Ex: 12345"
+                        value={settings.ordre}
+                        onChange={(e) =>
+                          setSettings((prev) => ({ ...prev, ordre: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`${panelClass} mt-6`}>
+                <h2 className="mb-6 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
+                  Horaires d&apos;ouverture
+                </h2>
+                <div className="space-y-3">
+                  {(
+                    [
+                      ["Lundi", "lundi"],
+                      ["Mardi", "mardi"],
+                      ["Mercredi", "mercredi"],
+                      ["Jeudi", "jeudi"],
+                      ["Vendredi", "vendredi"],
+                      ["Samedi", "samedi"],
+                      ["Dimanche", "dimanche"],
+                    ] as const
+                  ).map(([label, key]) => {
+                    const st = settings as unknown as Record<
+                      string,
+                      string | boolean | undefined
+                    >;
+                    const ouvertKey = `horaire_${key}_ouvert`;
+                    const debutKey = `horaire_${key}_debut`;
+                    const finKey = `horaire_${key}_fin`;
+                    const defaultOuvert = key !== "dimanche";
+                    const ouvert = (st[ouvertKey] as boolean | undefined) ?? defaultOuvert;
+                    return (
+                      <div key={key} className="flex items-center gap-4">
+                        <div className="flex w-28 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={ouvert}
+                            onChange={(e) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                [ouvertKey]: e.target.checked,
+                              }))
+                            }
+                            className="h-4 w-4 accent-[var(--ds-primary)]"
+                          />
+                          <span className="text-sm text-[var(--ds-text)]">{label}</span>
+                        </div>
+                        <input
+                          type="time"
+                          value={(st[debutKey] as string | undefined) ?? "08:00"}
+                          onChange={(e) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              [debutKey]: e.target.value,
+                            }))
+                          }
+                          disabled={!ouvert}
+                          className={`${inputBase} w-32`}
+                        />
+                        <span className="text-sm text-[var(--ds-text-muted)]">→</span>
+                        <input
+                          type="time"
+                          value={(st[finKey] as string | undefined) ?? "18:00"}
+                          onChange={(e) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              [finKey]: e.target.value,
+                            }))
+                          }
+                          disabled={!ouvert}
+                          className={`${inputBase} w-32`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-10 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveSettings}
+                  className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  Sauvegarder
+                </button>
+              </div>
+              </>
+            )}
+
             {activeTab === "actes" && <ActesTarifsSection />}
 
             {activeTab === "equipe" && (
               <div className={panelClass}>
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                  <h2 className="text-lg font-semibold tracking-tight text-[var(--ds-text)]">
                     Équipe &amp; accès
                   </h2>
                   <button
@@ -424,10 +642,10 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="mt-8 space-y-4">
-                  <div className="flex items-center justify-between rounded-xl border border-slate-100 px-5 py-4">
+                  <div className="flex items-center justify-between rounded-xl border border-[var(--ds-primary-border)] px-5 py-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">Dr. Assil</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm font-semibold text-[var(--ds-text)]">Dr. Assil</p>
+                      <p className="text-xs text-[var(--ds-text-muted)]">
                         Rôle : Administrateur / Praticien
                       </p>
                     </div>
@@ -436,21 +654,31 @@ export default function SettingsPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between rounded-xl border border-slate-100 px-5 py-4">
+                  <div className="flex items-center justify-between rounded-xl border border-[var(--ds-primary-border)] px-5 py-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">Sofia</p>
-                      <p className="text-xs text-slate-500">Rôle : Assistante</p>
-                      <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                      <p className="text-sm font-semibold text-[var(--ds-text)]">Sofia</p>
+                      <p className="text-xs text-[var(--ds-text-muted)]">Rôle : Assistante</p>
+                      <div className="mt-2 rounded-xl bg-[var(--ds-bg)] p-3 text-sm text-[var(--ds-text)]">
                         <p className="mb-2 font-medium">Permissions accordées :</p>
                         <label className="mt-1 flex items-center gap-2">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-                            checked={assistantPermissions.stats}
+                            className="h-4 w-4 rounded border-[var(--ds-primary-border)] text-[var(--ds-text)] focus:ring-slate-400"
+                            checked={
+                              (
+                                settings.assistantPermissions ?? {
+                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
+                                }
+                              ).stats
+                            }
                             onChange={(e) =>
-                              setAssistantPermissions((prev) => ({
+                              setSettings((prev) => ({
                                 ...prev,
-                                stats: e.target.checked,
+                                assistantPermissions: {
+                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
+                                  ...prev.assistantPermissions,
+                                  stats: e.target.checked,
+                                },
                               }))
                             }
                           />
@@ -459,12 +687,22 @@ export default function SettingsPage() {
                         <label className="mt-1 flex items-center gap-2">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-                            checked={assistantPermissions.invoices}
+                            className="h-4 w-4 rounded border-[var(--ds-primary-border)] text-[var(--ds-text)] focus:ring-slate-400"
+                            checked={
+                              (
+                                settings.assistantPermissions ?? {
+                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
+                                }
+                              ).factures
+                            }
                             onChange={(e) =>
-                              setAssistantPermissions((prev) => ({
+                              setSettings((prev) => ({
                                 ...prev,
-                                invoices: e.target.checked,
+                                assistantPermissions: {
+                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
+                                  ...prev.assistantPermissions,
+                                  factures: e.target.checked,
+                                },
                               }))
                             }
                           />
@@ -473,12 +711,22 @@ export default function SettingsPage() {
                         <label className="mt-1 flex items-center gap-2">
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
-                            checked={assistantPermissions.settings}
+                            className="h-4 w-4 rounded border-[var(--ds-primary-border)] text-[var(--ds-text)] focus:ring-slate-400"
+                            checked={
+                              (
+                                settings.assistantPermissions ?? {
+                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
+                                }
+                              ).parametres
+                            }
                             onChange={(e) =>
-                              setAssistantPermissions((prev) => ({
+                              setSettings((prev) => ({
                                 ...prev,
-                                settings: e.target.checked,
+                                assistantPermissions: {
+                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
+                                  ...prev.assistantPermissions,
+                                  parametres: e.target.checked,
+                                },
                               }))
                             }
                           />
@@ -486,50 +734,111 @@ export default function SettingsPage() {
                         </label>
                       </div>
                     </div>
-                    <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                    <span className="rounded-full bg-[var(--ds-primary-border)] px-3 py-1 text-xs font-semibold text-[var(--ds-primary)]">
                       Actif
                     </span>
                   </div>
+                </div>
+
+                <div className="mt-10 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSaveSettings}
+                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    Sauvegarder
+                  </button>
                 </div>
               </div>
             )}
 
             {activeTab === "abonnement" && (
               <div className={panelClass}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-                    Plan actuel
-                  </h2>
-                  <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">
-                    Premium
-                  </span>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
-                  <p className="text-base font-semibold text-slate-800">Plan Pro</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Prochain prélèvement : 4 500 DA le 12/04/2026
-                  </p>
-                </div>
-
-                <div className="mt-5">
-                  <button
-                    type="button"
-                    className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-50"
-                  >
-                    Gérer la facturation
-                  </button>
-                </div>
-
-                <div className="mt-8">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-slate-800">
-                      Stockage documents
-                    </p>
-                    <p className="text-xs text-slate-500">15 Go / 50 Go utilisés</p>
+                <div className="space-y-6">
+                  <div className="rounded-2xl border-2 border-[var(--ds-primary)] bg-[var(--ds-primary-soft)] p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-[var(--ds-text)]">
+                            Plan Pro
+                          </span>
+                          <span className="rounded-full bg-[var(--ds-primary)] px-2.5 py-0.5 text-xs font-semibold text-white">
+                            Actif
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
+                          4 000 DA / mois · Renouvellement le 1er du mois
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-3xl font-bold tabular-nums text-[var(--ds-primary)]">
+                          4 000
+                        </p>
+                        <p className="text-xs text-[var(--ds-text-muted)]">DA / mois</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-slate-200">
-                    <div className="h-2 w-[30%] rounded-full bg-slate-900" />
+
+                  <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6">
+                    <h3 className="mb-4 text-sm font-bold text-[var(--ds-text)]">
+                      Inclus dans votre plan
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        "Patients illimités",
+                        "Odontogramme interactif",
+                        "Planning & Agenda",
+                        "Module Laboratoire",
+                        "Gestion des stocks",
+                        "Stérilisation & traçabilité",
+                        "Statistiques avancées",
+                        "Export PDF factures",
+                        "Support prioritaire",
+                        "Hébergement sécurisé Algérie",
+                      ].map((f) => (
+                        <div key={f} className="flex items-center gap-2">
+                          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-primary)]" />
+                          <span className="text-sm text-[var(--ds-text-muted)]">{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-[var(--ds-text)]">
+                        Stockage documents
+                      </h3>
+                      <span className="text-xs text-[var(--ds-text-muted)]">
+                        2,3 Go / 50 Go
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-[var(--ds-primary-soft)]">
+                      <div
+                        className="h-2 rounded-full bg-[var(--ds-primary)] transition-all"
+                        style={{ width: "4.6%" }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--ds-text-muted)]">
+                      47,7 Go disponibles
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6">
+                    <div>
+                      <h3 className="text-sm font-bold text-[var(--ds-text)]">
+                        Besoin d&apos;aide ?
+                      </h3>
+                      <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
+                        Contactez notre support Oryx
+                      </p>
+                    </div>
+                    <a
+                      href="mailto:support@oryx.dz"
+                      className="rounded-xl bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-[var(--ds-primary-hover)]"
+                    >
+                      Contacter le support
+                    </a>
                   </div>
                 </div>
               </div>
@@ -537,10 +846,10 @@ export default function SettingsPage() {
 
             {activeTab === "modeles" && (
               <div className={panelClass}>
-                <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                <h2 className="text-lg font-semibold tracking-tight text-[var(--ds-text)]">
                   Modèles PDF
                 </h2>
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                <p className="mt-2 text-sm leading-relaxed text-[var(--ds-text-muted)]">
                   Configurez l&apos;apparence de vos devis et factures pour la conformité
                   CNAS / CASNOS.
                 </p>
@@ -553,37 +862,207 @@ export default function SettingsPage() {
                     id="settings-mention-legale"
                     rows={5}
                     placeholder="Ex: Paiement à réception. Merci de votre confiance."
+                    value={settings.mentionLegale ?? ""}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        mentionLegale: e.target.value,
+                      }))
+                    }
                     className={inputBase}
                   />
                 </div>
 
                 <div className={`mt-8 ${fieldRow}`}>
                   <span className={labelClass}>Logo du cabinet (PNG / JPG)</span>
-                  <label className="flex w-full min-w-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 py-10 text-center text-sm font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-white">
-                    <input type="file" accept="image/png,image/jpeg" className="hidden" />
+                  <label className="flex w-full min-w-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/50 p-2.5 py-10 text-center text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)]">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setSettings((prev) => ({
+                            ...prev,
+                            logoBase64: ev.target?.result as string,
+                          }));
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
                     Importer une image
                   </label>
+                  {settings.logoBase64 ? (
+                    <img
+                      src={settings.logoBase64}
+                      alt="Logo cabinet"
+                      className="mt-3 h-16 w-auto rounded-xl border border-[var(--ds-primary-border)] object-contain p-2"
+                    />
+                  ) : null}
+                </div>
+
+                <div className="mt-10 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSaveSettings}
+                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    Sauvegarder
+                  </button>
                 </div>
               </div>
             )}
 
             {activeTab === "preferences" && (
               <div className={panelClass}>
-                <h2 className="text-lg font-semibold tracking-tight text-slate-900">
+                <div className="space-y-4 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
+                  <div>
+                    <h3 className="text-base font-bold text-[var(--ds-text)]">
+                      Apparence
+                    </h3>
+                    <p className="mt-0.5 text-sm text-[var(--ds-text-muted)]">
+                      Choisissez le thème de votre interface
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {THEMES.map((theme) => (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => {
+                          applyTheme(theme.id);
+                          setCurrentTheme(theme.id);
+                        }}
+                        className={`relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all ${
+                          currentTheme === theme.id
+                            ? "border-[var(--ds-primary)] bg-[var(--ds-primary-soft)]"
+                            : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] hover:border-[var(--ds-primary-border)]"
+                        }`}
+                      >
+                        <div className="flex h-16 w-full overflow-hidden rounded-xl border border-[var(--ds-primary-border)]">
+                          <div
+                            className="h-full w-1/3"
+                            style={{ backgroundColor: theme.color }}
+                          />
+                          <div
+                            className="h-full flex-1"
+                            style={{ backgroundColor: theme.bg }}
+                          >
+                            <div className="space-y-1 p-1.5">
+                              <div className="h-1.5 w-3/4 rounded-full bg-white/60" />
+                              <div className="h-1.5 w-1/2 rounded-full bg-white/40" />
+                              <div className="h-1.5 w-2/3 rounded-full bg-white/40" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`text-xs font-semibold ${
+                            currentTheme === theme.id
+                              ? "text-[var(--ds-primary)]"
+                              : "text-[var(--ds-text-muted)]"
+                          }`}
+                        >
+                          {theme.label}
+                        </span>
+
+                        {currentTheme === theme.id && (
+                          <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--ds-primary)]">
+                            <svg
+                              className="h-3 w-3 text-white"
+                              viewBox="0 0 12 12"
+                              fill="none"
+                            >
+                              <path
+                                d="M2 6l3 3 5-5"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2 border-t border-[var(--ds-primary-border)] pt-2">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{
+                        backgroundColor: THEMES.find((t) => t.id === currentTheme)
+                          ?.color,
+                      }}
+                    />
+                    <p className="text-xs text-[var(--ds-text-muted)]">
+                      Thème actif :{" "}
+                      <span className="font-semibold text-[var(--ds-text)]">
+                        {THEMES.find((t) => t.id === currentTheme)?.label}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`${panelClass} mb-6`}>
+                  <h2 className="mb-4 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
+                    Notifications
+                  </h2>
+                  <div className="space-y-4">
+                    {(
+                      [
+                        ["notif_stock", "Alertes stock faible", "Quand un produit passe sous le seuil"],
+                        ["notif_rdv", "Rappel RDV du jour", "Résumé des RDV chaque matin"],
+                        ["notif_impayes", "Alertes impayés", "Factures en attente depuis + de 7 jours"],
+                        ["notif_labo", "Commandes laboratoire", "Prothèses prêtes ou en retard"],
+                      ] as [string, string, string][]
+                    ).map(([key, label, desc]) => {
+                      const notifVal = Boolean(
+                        (settings as unknown as Record<string, boolean | undefined>)[key] ??
+                          true,
+                      );
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between border-b border-[var(--ds-primary-border)] py-2 last:border-0"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-[var(--ds-text)]">{label}</p>
+                            <p className="text-xs text-[var(--ds-text-muted)]">{desc}</p>
+                          </div>
+                          <Toggle
+                            checked={notifVal}
+                            onChange={(value) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                [key]: value,
+                              }))
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <h2 className="mt-8 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
                   Préférences
                 </h2>
 
                 <div className="mt-8 flex flex-col gap-8">
                   <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-800">
+                      <p className="text-sm font-medium text-[var(--ds-text)]">
                         Rappels WhatsApp automatiques
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
                         Avant les rendez-vous.
                       </p>
                     </div>
-                    <Toggle
+                    <ToggleLegacy
                       checked={settings.whatsappReminders}
                       onChange={(value) =>
                         setSettings((prev) => ({ ...prev, whatsappReminders: value }))
@@ -591,7 +1070,7 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  <div className={`w-full min-w-0 border-t border-slate-100 pt-8 ${fieldRow}`}>
+                  <div className={`w-full min-w-0 border-t border-[var(--ds-primary-border)] pt-8 ${fieldRow}`}>
                     <label className={labelClassMuted} htmlFor="settings-theme">
                       Thème
                     </label>
@@ -609,7 +1088,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
 
-                  <div className={`w-full min-w-0 border-t border-slate-100 pt-8 ${fieldRow}`}>
+                  <div className={`w-full min-w-0 border-t border-[var(--ds-primary-border)] pt-8 ${fieldRow}`}>
                     <label className={labelClassMuted} htmlFor="settings-currency">
                       Devise d&apos;affichage
                     </label>
@@ -626,7 +1105,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
 
-                  <div className={`w-full min-w-0 border-t border-slate-100 pt-8 ${fieldRow}`}>
+                  <div className={`w-full min-w-0 border-t border-[var(--ds-primary-border)] pt-8 ${fieldRow}`}>
                     <label className={labelClassMuted} htmlFor="settings-weekstart">
                       Début de la semaine
                     </label>

@@ -29,15 +29,23 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { loadDentalStock, type StockLine } from "@/utils/stockLogic";
+import {
+  loadDentalStock,
+  STOCK_UPDATED_EVENT,
+  type StockLine,
+} from "@/utils/stockLogic";
 import {
   createPatientQuick,
+  DENTAL_PATIENTS_STORAGE_KEY,
   displayPatientName,
   ensurePatientsHydrated,
   readPatientsFromStorage,
 } from "@/utils/patientData";
+import { syncPatientToDBAction } from "@/app/actions/patients";
+import { syncAppointmentToDBAction } from "@/app/actions/appointments";
 import {
   appendDirectEntryAppointment,
+  DENTAL_APPOINTMENTS_STORAGE_KEY,
   readAppointmentsFromStorage,
 } from "@/utils/appointmentData";
 import { StatusBadge } from "@/components/laboratoire/StatusBadge";
@@ -222,45 +230,7 @@ function loadFluxRowsForToday(): FluxRow[] {
   return mergePlannedAppointmentsIntoFlux(base);
 }
 
-const FLUX_INITIAL: FluxRow[] = [
-  {
-    id: "1",
-    time: "08:50",
-    patient: "M. Yassine",
-    act: "Couronne",
-    status: "Terminé",
-  },
-  {
-    id: "2",
-    time: "09:05",
-    patient: "Mme Benali",
-    act: "Consultation",
-    status: "En attente",
-    attenteMin: 20,
-  },
-  {
-    id: "3",
-    time: "10:10",
-    patient: "M. Ahmed",
-    act: "Extraction",
-    status: "En attente",
-    attenteMin: 0,
-  },
-  {
-    id: "4",
-    time: "11:00",
-    patient: "Mme Amina",
-    act: "Endodontie",
-    status: "À venir",
-  },
-  {
-    id: "5",
-    time: "14:00",
-    patient: "M. Saïd",
-    act: "Contrôle",
-    status: "À venir",
-  },
-];
+const FLUX_INITIAL: FluxRow[] = [];
 
 /** Répartition actes : patients + % (total 120 patients sur 30 j.) */
 type ActeChartDatum = {
@@ -270,13 +240,60 @@ type ActeChartDatum = {
   color: string;
 };
 
-const ACTES_CHART_DATA: ActeChartDatum[] = [
+const ACTES_CHART_FALLBACK: ActeChartDatum[] = [
   { name: "Consultation / Bilan", value: 54, pct: 45, color: "#0ea5e9" },
   { name: "Détartrage", value: 30, pct: 25, color: "#14b8a6" },
   { name: "Composite", value: 18, pct: 15, color: "#8b5cf6" },
   { name: "Endodontie", value: 12, pct: 10, color: "#f59e0b" },
   { name: "Chirurgie", value: 6, pct: 5, color: "#f43f5e" },
 ];
+
+const ACTES_COLORS = [
+  "#7c3aed",
+  "#06b6d4",
+  "#10b981",
+  "#f97316",
+  "#f43f5e",
+];
+
+function computeActesChartDataFromStorage(): ActeChartDatum[] {
+  if (typeof window === "undefined") return ACTES_CHART_FALLBACK;
+  try {
+    ensurePatientsHydrated();
+    const patients = readPatientsFromStorage();
+    const actesCount: Record<string, number> = {};
+    patients.forEach((p) => {
+      const raw = localStorage.getItem(`patient_acts_${p.id}`);
+      if (!raw) return;
+      try {
+        const acts = JSON.parse(raw) as {
+          category?: string;
+          acte?: string;
+        }[];
+        if (!Array.isArray(acts)) return;
+        acts.forEach((a) => {
+          const cat = a.category ?? a.acte ?? "Autre";
+          actesCount[cat] = (actesCount[cat] ?? 0) + 1;
+        });
+      } catch {
+        /* ignore */
+      }
+    });
+    const total = Object.values(actesCount).reduce((s, v) => s + v, 0);
+    const newActesData = Object.entries(actesCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, value], i) => ({
+        name,
+        value,
+        pct: total > 0 ? Math.round((value / total) * 100) : 0,
+        color: ACTES_COLORS[i % ACTES_COLORS.length],
+      }));
+    return newActesData.length > 0 ? newActesData : ACTES_CHART_FALLBACK;
+  } catch {
+    return ACTES_CHART_FALLBACK;
+  }
+}
 
 const TASKS_STORAGE_KEY = "dental_dashboard_tasks";
 
@@ -361,7 +378,7 @@ function PremiumBadge({ className = "" }: { className?: string }) {
   return (
     <span
       className={[
-        "inline-flex items-center gap-0.5 rounded-full border border-violet-200/80 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700",
+        "inline-flex items-center gap-0.5 rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-primary)] lg:px-2 lg:text-xs",
         className,
       ].join(" ")}
     >
@@ -391,14 +408,14 @@ function ActesTooltip({
   );
 }
 
-function ActesDoughnutChart() {
-  const totalPatients = ACTES_CHART_DATA.reduce((a, b) => a + b.value, 0);
+function ActesDoughnutChart({ data }: { data: ActeChartDatum[] }) {
+  const totalPatients = data.reduce((a, b) => a + b.value, 0);
   return (
     <div className="flex min-w-0 w-full flex-col items-center">
       <ResponsiveContainer width="100%" height={250}>
         <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
           <Pie
-            data={ACTES_CHART_DATA as ActeChartDatum[]}
+            data={data as ActeChartDatum[]}
             dataKey="value"
             nameKey="name"
             cx="50%"
@@ -408,7 +425,7 @@ function ActesDoughnutChart() {
             paddingAngle={2}
             stroke="none"
           >
-            {ACTES_CHART_DATA.map((entry, i) => (
+            {data.map((entry, i) => (
               <Cell
                 key={i}
                 fill={entry.color}
@@ -422,8 +439,8 @@ function ActesDoughnutChart() {
           />
         </PieChart>
       </ResponsiveContainer>
-      <ul className="mt-4 w-full space-y-2 border-t border-slate-100 pt-4">
-        {ACTES_CHART_DATA.map((s) => (
+      <ul className="mt-4 w-full space-y-2 border-t border-[var(--ds-primary-border)] pt-4">
+        {data.map((s) => (
           <li
             key={s.name}
             className="flex items-center justify-between gap-2 text-xs"
@@ -433,15 +450,15 @@ function ActesDoughnutChart() {
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: s.color }}
               />
-              <span className="truncate text-slate-600">{s.name}</span>
+              <span className="truncate text-[var(--ds-text-muted)]">{s.name}</span>
             </span>
-            <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+            <span className="shrink-0 font-semibold tabular-nums text-[var(--ds-text)]">
               {s.pct}%
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-center text-[10px] text-slate-400">
+      <p className="mt-3 text-center text-[10px] text-[var(--ds-text-muted)]">
         {totalPatients} patients sur 30 j.
       </p>
     </div>
@@ -558,16 +575,16 @@ function DirectEntryModal({
         onClick={onClose}
         aria-label="Fermer"
       />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2
               id="direct-entry-title"
-              className="text-lg font-semibold text-slate-900"
+              className="text-lg font-semibold text-[var(--ds-text)]"
             >
               Entrée directe
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
               Ajout au flux du jour et au planning (créneau marqué « Direct »,
               heure actuelle).
             </p>
@@ -575,22 +592,22 @@ function DirectEntryModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-lg p-1.5 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="mt-5 flex gap-2 rounded-xl bg-slate-100 p-1">
+        <div className="mt-5 flex gap-2 rounded-xl bg-[var(--ds-primary-soft)] p-1">
           <button
             type="button"
             onClick={() => setMode("existing")}
             className={[
               "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               mode === "existing"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900",
+                ? "bg-[var(--ds-surface)] text-[var(--ds-text)] shadow-sm"
+                : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
             ].join(" ")}
           >
             Patient existant
@@ -601,8 +618,8 @@ function DirectEntryModal({
             className={[
               "flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               mode === "quick"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900",
+                ? "bg-[var(--ds-surface)] text-[var(--ds-text)] shadow-sm"
+                : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
             ].join(" ")}
           >
             Nouveau patient rapide
@@ -611,7 +628,7 @@ function DirectEntryModal({
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
-            <p className="text-xs font-medium text-slate-600">
+            <p className="text-xs font-medium text-[var(--ds-text-muted)]">
               Type de visite <span className="text-red-500">*</span>
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -621,8 +638,8 @@ function DirectEntryModal({
                 className={[
                   "flex-1 min-w-[140px] rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-colors",
                   visitKind === "consultation"
-                    ? "border-sky-500 bg-sky-50 text-sky-900 ring-2 ring-sky-200"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50/50",
+                    ? "border-[var(--ds-primary)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)] ring-2 ring-[var(--ds-primary-border)]"
+                    : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-primary-soft)]/50",
                 ].join(" ")}
               >
                 Consultation <span aria-hidden>🔵</span>
@@ -634,7 +651,7 @@ function DirectEntryModal({
                   "flex-1 min-w-[140px] rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-colors",
                   visitKind === "urgence"
                     ? "border-red-500 bg-red-50 text-red-900 ring-2 ring-red-200"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50/50",
+                    : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-red-200 hover:bg-red-50/50",
                 ].join(" ")}
               >
                 Urgence <span aria-hidden>🔴</span>
@@ -647,26 +664,26 @@ function DirectEntryModal({
               <div>
                 <label
                   htmlFor="direct-entry-search"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Rechercher un patient
                 </label>
                 <div className="relative mt-1.5">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]" />
                   <input
                     id="direct-entry-search"
                     type="search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Nom, prénom…"
-                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none ring-slate-200 focus:border-sky-300 focus:ring-2"
+                    className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-3 text-sm outline-none ring-[var(--ds-primary-border)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                     autoComplete="off"
                   />
                 </div>
               </div>
-              <ul className="max-h-44 overflow-y-auto rounded-xl border border-slate-100">
+              <ul className="max-h-44 overflow-y-auto rounded-xl border border-[var(--ds-primary-border)]">
                 {filtered.length === 0 ? (
-                  <li className="px-4 py-6 text-center text-sm text-slate-500">
+                  <li className="px-4 py-6 text-center text-sm text-[var(--ds-text-muted)]">
                     Aucun patient ne correspond.
                   </li>
                 ) : (
@@ -678,8 +695,8 @@ function DirectEntryModal({
                         className={[
                           "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors",
                           selectedId === p.id
-                            ? "bg-sky-50 font-medium text-sky-900"
-                            : "text-slate-800 hover:bg-slate-50",
+                            ? "bg-[var(--ds-primary-soft)] font-medium text-[var(--ds-primary-hover)]"
+                            : "text-[var(--ds-text)] hover:bg-[var(--ds-bg)]",
                         ].join(" ")}
                       >
                         {p.nom}
@@ -694,7 +711,7 @@ function DirectEntryModal({
               <div>
                 <label
                   htmlFor="quick-nom"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Nom
                 </label>
@@ -703,14 +720,14 @@ function DirectEntryModal({
                   type="text"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                   autoComplete="family-name"
                 />
               </div>
               <div>
                 <label
                   htmlFor="quick-prenom"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Prénom
                 </label>
@@ -719,14 +736,14 @@ function DirectEntryModal({
                   type="text"
                   value={prenom}
                   onChange={(e) => setPrenom(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                   autoComplete="given-name"
                 />
               </div>
               <div>
                 <label
                   htmlFor="quick-tel"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Téléphone
                 </label>
@@ -735,18 +752,18 @@ function DirectEntryModal({
                   type="tel"
                   value={telephone}
                   onChange={(e) => setTelephone(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                   autoComplete="tel"
                 />
               </div>
               <div>
                 <label
                   htmlFor="quick-med-note"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Note médicale (optionnel)
                 </label>
-                <p className="mt-0.5 text-[11px] text-slate-400">
+                <p className="mt-0.5 text-[11px] text-[var(--ds-text-muted)]">
                   Allergies, antécédents…
                 </p>
                 <textarea
@@ -755,17 +772,17 @@ function DirectEntryModal({
                   onChange={(e) => setMedicalNote(e.target.value)}
                   rows={2}
                   placeholder="Ex. allergie pénicilline"
-                  className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full resize-y rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                 />
               </div>
             </div>
           )}
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--ds-primary-border)] pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
             >
               Annuler
             </button>
@@ -783,8 +800,36 @@ function DirectEntryModal({
   );
 }
 
+function getDoctorName() {
+  if (typeof window === "undefined")
+    return { nom: "Assil", initiales: "A" };
+  try {
+    const s = JSON.parse(
+      localStorage.getItem("dental_settings") ?? "{}",
+    ) as Record<string, unknown>;
+    const prenom =
+      typeof s.praticienPrenom === "string" ? s.praticienPrenom : "";
+    const nom =
+      typeof s.praticienNom === "string" ? s.praticienNom : "Assil";
+    const initiales = [prenom, nom]
+      .filter(Boolean)
+      .map((n) => n.charAt(0).toUpperCase())
+      .join("");
+    return {
+      nom: prenom ? `${prenom} ${nom}` : nom,
+      initiales: initiales || "A",
+    };
+  } catch {
+    return { nom: "Assil", initiales: "A" };
+  }
+}
+
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
+  const [doctorInfo, setDoctorInfo] = useState({
+    nom: "Assil",
+    initiales: "A",
+  });
   const [sterileTotal, setSterileTotal] = useState(0);
   const [stockCriticalCount, setStockCriticalCount] = useState(0);
   const [fluxRows, setFluxRows] = useState<FluxRow[]>(FLUX_INITIAL);
@@ -795,6 +840,13 @@ export default function DashboardPage() {
     { id: string; nom: string }[]
   >([]);
   const [labCommandes, setLabCommandes] = useState<LaboratoireCommande[]>([]);
+  const [rdvCount, setRdvCount] = useState(0);
+  const [rdvToConfirmCount, setRdvToConfirmCount] = useState(0);
+  const [patientCount, setPatientCount] = useState(0);
+  const [patientsThisMonthCount, setPatientsThisMonthCount] = useState(0);
+  const [actesChartData, setActesChartData] = useState<ActeChartDatum[]>(
+    ACTES_CHART_FALLBACK,
+  );
 
   const logisticsAlerts = useMemo(
     () => listLogisticsAlerts(labCommandes),
@@ -812,6 +864,10 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    setDoctorInfo(getDoctorName());
+  }, []);
+
+  useEffect(() => {
     setMounted(true);
     setFluxRows(loadFluxRowsForToday());
     setTasks(loadDashboardTasks());
@@ -820,6 +876,66 @@ export default function DashboardPage() {
     const stock = loadDentalStock();
     setStockCriticalCount(stock.filter(isStockCritical).length);
     refreshFluxPatientCandidates();
+
+    const todayKey = getLocalDateISO();
+    const appointments = readAppointmentsFromStorage();
+    setRdvCount(appointments.filter((a) => a.dateKey === todayKey).length);
+
+    let toConfirm = 0;
+    try {
+      const rawApps = localStorage.getItem(DENTAL_APPOINTMENTS_STORAGE_KEY);
+      if (rawApps) {
+        const data = JSON.parse(rawApps) as unknown;
+        if (Array.isArray(data)) {
+          for (const item of data) {
+            if (!item || typeof item !== "object") continue;
+            const o = item as Record<string, unknown>;
+            const dateKey =
+              typeof o.dateKey === "string" ? o.dateKey.trim() : "";
+            if (dateKey !== todayKey) continue;
+            const status =
+              typeof o.status === "string" ? o.status : "";
+            if (status === "pending" || o.confirmed === false) {
+              toConfirm++;
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setRdvToConfirmCount(toConfirm);
+
+    const patients = readPatientsFromStorage();
+    setPatientCount(patients.length);
+
+    let createdThisMonth = 0;
+    try {
+      const rawPts = localStorage.getItem(DENTAL_PATIENTS_STORAGE_KEY);
+      if (rawPts) {
+        const data = JSON.parse(rawPts) as unknown;
+        if (Array.isArray(data)) {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = now.getMonth();
+          for (const item of data) {
+            if (!item || typeof item !== "object") continue;
+            const createdAt = (item as Record<string, unknown>).createdAt;
+            if (typeof createdAt !== "string") continue;
+            const d = new Date(createdAt);
+            if (Number.isNaN(d.getTime())) continue;
+            if (d.getFullYear() === y && d.getMonth() === m) {
+              createdThisMonth++;
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setPatientsThisMonthCount(createdThisMonth);
+
+    setActesChartData(computeActesChartDataFromStorage());
   }, [refreshFluxPatientCandidates]);
 
   useEffect(() => {
@@ -833,6 +949,22 @@ export default function DashboardPage() {
     return () => {
       window.removeEventListener(LAB_COMMANDES_UPDATED_EVENT, refreshLab);
       window.removeEventListener("focus", refreshLab);
+    };
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    function refreshStock() {
+      const stock = loadDentalStock();
+      const criticals = stock.filter(isStockCritical);
+      setStockCriticalCount(criticals.length);
+    }
+    refreshStock();
+    window.addEventListener(STOCK_UPDATED_EVENT, refreshStock);
+    window.addEventListener("focus", refreshStock);
+    return () => {
+      window.removeEventListener(STOCK_UPDATED_EVENT, refreshStock);
+      window.removeEventListener("focus", refreshStock);
     };
   }, [mounted]);
 
@@ -869,6 +1001,12 @@ export default function DashboardPage() {
       patientLabel = displayPatientName(rec);
       patientId = rec.id;
       refreshFluxPatientCandidates();
+      syncPatientToDBAction({
+        id: rec.id,
+        prenom: rec.prenom,
+        nom: rec.nom,
+        telephone: rec.telephone,
+      }).catch(console.error);
     } else {
       patientLabel = payload.patientLabel;
       patientId = payload.patientId;
@@ -878,6 +1016,18 @@ export default function DashboardPage() {
       patientId: patientId ?? null,
       visitKind: payload.visitKind,
     });
+    syncAppointmentToDBAction({
+      id: rdv.id,
+      patientId: rdv.patientId,
+      patientName: rdv.patient,
+      dateKey: rdv.dateKey,
+      startTime: rdv.start,
+      durationMinutes: rdv.durationMinutes,
+      soin: rdv.soin,
+      rdvType: rdv.rdvType,
+      status: rdv.status,
+      urgence: rdv.urgence,
+    }).catch(console.error);
     const row: FluxRow = {
       id: `flux-${rdv.id}`,
       time: rdv.start,
@@ -928,29 +1078,29 @@ export default function DashboardPage() {
 
   if (!mounted) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center bg-slate-50 p-6">
-        <p className="text-sm text-slate-400">Chargement du tableau de bord…</p>
+      <div className="flex min-h-[40vh] items-center justify-center bg-[var(--ds-bg)] p-6">
+        <p className="text-sm text-[var(--ds-text-muted)]">Chargement du tableau de bord…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen space-y-6 bg-slate-50 p-4 sm:p-6">
+    <div className="min-h-screen space-y-6 bg-[var(--ds-bg)] p-4 sm:p-6">
       {/* ── En-tête ───────────────────────────────────────────────────── */}
-      <div className="rounded-3xl border border-slate-100/80 bg-white p-6 shadow-sm">
+      <div className="rounded-3xl border border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)] p-4 shadow-sm lg:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-sky-500 to-teal-500 text-lg font-semibold tracking-tight text-white shadow-lg shadow-sky-500/20">
-              AM
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--ds-primary)] text-sm font-semibold tracking-tight text-white shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_20%,transparent)] lg:h-12 lg:w-12 lg:text-base">
+              {doctorInfo.initiales}
             </span>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
-                Bonjour, Dr. Assil
+                Bonjour, Dr. {doctorInfo.nom}
               </h1>
-              <p className="mt-1 text-sm text-slate-500">{todayLong}</p>
+              <p className="mt-1 text-sm text-[var(--ds-text-muted)]">{todayLong}</p>
             </div>
           </div>
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-100/80">
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100/80 lg:px-4 lg:text-sm">
             <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
             Cabinet Ouvert
           </span>
@@ -958,67 +1108,75 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI 4 colonnes ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-slate-500">RDV du jour</p>
-              <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">
-                12
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
+          <div className="flex flex-col gap-2 p-3 lg:p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
+                RDV du jour
               </p>
-              <span className="mt-3 inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-100">
-                2 à confirmer
-              </span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] lg:h-10 lg:w-10">
+                <Calendar className="h-4 w-4 lg:h-5 lg:w-5" />
+              </div>
             </div>
-            <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-sky-600">
-              <Calendar className="h-5 w-5" />
+            <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--ds-text)]">
+              {rdvCount}
+            </p>
+            <div>
+              <span className="inline-flex max-w-full truncate rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-100 lg:px-3 lg:text-xs">
+                {rdvToConfirmCount} à confirmer
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-slate-500">
+        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
+          <div className="flex flex-col gap-2 p-3 lg:p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
                 Nouveaux patients
               </p>
-              <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">
-                24
-              </p>
-              <span className="mt-3 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-100">
-                +2 ce mois-ci
-              </span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-600 lg:h-10 lg:w-10">
+                <UserPlus className="h-4 w-4 lg:h-5 lg:w-5" />
+              </div>
             </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-600">
-              <UserPlus className="h-5 w-5" />
+            <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--ds-text)]">
+              {patientCount}
+            </p>
+            <div>
+              <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-800 ring-1 ring-emerald-100 lg:px-3 lg:text-xs">
+                +{patientsThisMonthCount} ce mois-ci
+              </span>
             </div>
           </div>
         </div>
 
         <Link
           href="/sterilisation"
-          className="group rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-violet-200/80 hover:shadow-md"
+          className="kpi-card group flex flex-col rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm transition-all hover:border-[var(--ds-primary-border)] hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-medium text-slate-500">
+          <div className="flex flex-col gap-2 p-3 lg:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <p className="min-w-0 truncate text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
                   Kits stériles
                 </p>
-                <PremiumBadge />
+                <PremiumBadge className="shrink-0" />
               </div>
-              <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">
-                {sterileTotal}
-              </p>
-              <p className="mt-2 text-[11px] text-slate-400">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-600 lg:h-10 lg:w-10">
+                <ShieldCheck className="h-4 w-4 lg:h-5 lg:w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--ds-text)]">
+              {sterileTotal}
+            </p>
+            <div>
+              <p className="text-[11px] text-[var(--ds-text-muted)]">
                 Module stérilisation
               </p>
             </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-600">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
           </div>
-          <p className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-500 group-hover:text-violet-600">
+          <p className="flex items-center gap-1 px-3 pb-3 pt-0 text-xs font-medium text-[var(--ds-text-muted)] group-hover:text-[var(--ds-primary)] lg:px-5 lg:pb-5">
             Ouvrir
             <ArrowRight className="h-3.5 w-3.5" />
           </p>
@@ -1026,28 +1184,30 @@ export default function DashboardPage() {
 
         <Link
           href="/stocks"
-          className="group rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-violet-200/80 hover:shadow-md"
+          className="kpi-card group flex flex-col rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm transition-all hover:border-[var(--ds-primary-border)] hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-medium text-slate-500">
+          <div className="flex flex-col gap-2 p-3 lg:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <p className="min-w-0 truncate text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
                   Stock faible
                 </p>
-                <PremiumBadge />
+                <PremiumBadge className="shrink-0" />
               </div>
-              <p className="mt-2 text-3xl font-bold tabular-nums text-red-600">
-                {stockCriticalCount}
-              </p>
-              <p className="mt-2 text-[11px] text-slate-400">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 lg:h-10 lg:w-10">
+                <PackageSearch className="h-4 w-4 lg:h-5 lg:w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold tabular-nums text-red-600">
+              {stockCriticalCount}
+            </p>
+            <div>
+              <p className="text-[11px] text-[var(--ds-text-muted)]">
                 Sous le seuil de sécurité
               </p>
             </div>
-            <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-red-600">
-              <PackageSearch className="h-5 w-5" />
-            </div>
           </div>
-          <p className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-500 group-hover:text-violet-600">
+          <p className="flex items-center gap-1 px-3 pb-3 pt-0 text-xs font-medium text-[var(--ds-text-muted)] group-hover:text-[var(--ds-primary)] lg:px-5 lg:pb-5">
             Ouvrir
             <ArrowRight className="h-3.5 w-3.5" />
           </p>
@@ -1072,7 +1232,7 @@ export default function DashboardPage() {
                 {logisticsAlerts.map((c) => (
                   <li
                     key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-white/90 px-3 py-2.5 text-sm text-amber-950"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-[var(--ds-surface)]/90 px-3 py-2.5 text-sm text-amber-950"
                   >
                     <span className="font-medium">
                       {c.patient}
@@ -1096,11 +1256,11 @@ export default function DashboardPage() {
       ) : null}
 
       {/* ── Layout principal 2/3 + 1/3 ───────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Flux — col 2 */}
         <div className="lg:col-span-2">
-          <div className="h-full rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="h-full rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
+            <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
                   Flux de la journée
@@ -1119,7 +1279,7 @@ export default function DashboardPage() {
               </div>
               <Link
                 href="/planning"
-                className="text-xs font-medium text-slate-400 transition-colors hover:text-[color:var(--ds-primary)]"
+                className="hidden text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:text-[color:var(--ds-primary)] lg:block"
               >
                 Planning complet →
               </Link>
@@ -1132,124 +1292,130 @@ export default function DashboardPage() {
               candidates={fluxPatientCandidates}
             />
 
-            <p className="mb-4 text-xs text-slate-500">
+            <p className="mb-4 text-xs text-[var(--ds-text-muted)]">
               Rendez-vous actifs — file et fauteuil
             </p>
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/50 text-left">
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Heure
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Patient
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Acte prévu
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Statut
-                    </th>
-                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fluxRows.map((row) => {
-                    const badgeClass =
-                      row.status === "Terminé"
-                        ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                        : row.status === "En attente"
-                          ? "bg-sky-50 text-sky-800 ring-sky-100"
-                          : row.status === "Au fauteuil"
-                            ? "bg-amber-50 text-amber-900 ring-amber-100"
-                            : "bg-slate-50 text-slate-600 ring-slate-100";
-                    const badgeText =
-                      row.status === "En attente"
-                        ? `En attente${row.attenteMin != null && row.attenteMin > 0 ? ` — ${row.attenteMin} min` : ""}`
-                        : row.status === "À venir"
-                          ? "À venir"
-                          : row.status;
-                    return (
-                      <tr
-                        key={row.id}
-                        className="border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50/40"
-                      >
-                        <td className="px-4 py-3 font-medium tabular-nums text-slate-600">
-                          {row.time}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-900">
-                          <span className="inline-flex flex-wrap items-center gap-2">
-                            <span>{row.patient}</span>
-                            {row.status === "En attente" &&
-                              row.visitKind != null && (
-                                <span
-                                  className={[
-                                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                                    row.visitKind === "urgence"
-                                      ? "bg-red-100 text-red-800 ring-1 ring-red-200/80"
-                                      : "bg-sky-100 text-sky-800 ring-1 ring-sky-200/80",
-                                  ].join(" ")}
-                                >
-                                  {row.visitKind === "urgence"
-                                    ? "Urgence"
-                                    : "Consultation"}
-                                </span>
-                              )}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-600">{row.act}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={[
-                              "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                              badgeClass,
-                            ].join(" ")}
-                          >
-                            {badgeText}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.status === "En attente" ? (
-                            <button
-                              type="button"
-                              onClick={() => passAuFauteuil(row.id)}
-                              className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 shadow-sm transition-colors hover:bg-sky-100"
+            {fluxRows.length === 0 ? (
+              <div className="py-12 text-center text-sm text-[var(--ds-text-muted)]">
+                Aucun rendez-vous aujourd&apos;hui
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-[var(--ds-primary-border)]/80">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/50 text-left">
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Heure
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Patient
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Acte prévu
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Statut
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fluxRows.map((row) => {
+                      const badgeClass =
+                        row.status === "Terminé"
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+                          : row.status === "En attente"
+                            ? "bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)] ring-[var(--ds-primary-border)]"
+                            : row.status === "Au fauteuil"
+                              ? "bg-amber-50 text-amber-900 ring-amber-100"
+                              : "bg-[var(--ds-bg)] text-[var(--ds-text-muted)] ring-[var(--ds-primary-border)]";
+                      const badgeText =
+                        row.status === "En attente"
+                          ? `En attente${row.attenteMin != null && row.attenteMin > 0 ? ` — ${row.attenteMin} min` : ""}`
+                          : row.status === "À venir"
+                            ? "À venir"
+                            : row.status;
+                      return (
+                        <tr
+                          key={row.id}
+                          className="border-b border-[var(--ds-primary-border)] transition-colors last:border-0 hover:bg-[var(--ds-primary-soft)]/40"
+                        >
+                          <td className="px-4 py-3 font-medium tabular-nums text-[var(--ds-text-muted)]">
+                            {row.time}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-[var(--ds-text)]">
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              <span>{row.patient}</span>
+                              {row.status === "En attente" &&
+                                row.visitKind != null && (
+                                  <span
+                                    className={[
+                                      "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                      row.visitKind === "urgence"
+                                        ? "bg-red-100 text-red-800 ring-1 ring-red-200/80"
+                                        : "bg-[var(--ds-primary-border)] text-[var(--ds-primary-hover)] ring-1 ring-[var(--ds-primary-border)]/80",
+                                    ].join(" ")}
+                                  >
+                                    {row.visitKind === "urgence"
+                                      ? "Urgence"
+                                      : "Consultation"}
+                                  </span>
+                                )}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-[var(--ds-text-muted)]">{row.act}</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={[
+                                "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                                badgeClass,
+                              ].join(" ")}
                             >
-                              Passer au fauteuil
-                            </button>
-                          ) : row.status === "Au fauteuil" ? (
-                            <span className="text-xs text-slate-400">—</span>
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                              {badgeText}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.status === "En attente" ? (
+                              <button
+                                type="button"
+                                onClick={() => passAuFauteuil(row.id)}
+                                className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--ds-primary-hover)] shadow-sm transition-colors hover:bg-[var(--ds-primary-border)]"
+                              >
+                                Passer au fauteuil
+                              </button>
+                            ) : row.status === "Au fauteuil" ? (
+                              <span className="text-xs text-[var(--ds-text-muted)]">—</span>
+                            ) : (
+                              <span className="text-xs text-[var(--ds-text-muted)]">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {firstWaiting && (
-              <p className="mt-4 text-[11px] text-slate-400">
+              <p className="mt-4 text-[11px] text-[var(--ds-text-muted)]">
                 Prochain en attente :{" "}
-                <span className="font-medium text-slate-600">
+                <span className="font-medium text-[var(--ds-text-muted)]">
                   {firstWaiting.patient}
                 </span>
               </p>
             )}
 
-            <div className="mt-8 border-t border-slate-100 pt-8">
+            <div className="mt-8 hidden border-t border-[var(--ds-primary-border)] pt-8 lg:block">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
-                  <h3 className="text-sm font-semibold text-slate-800">
+                <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm">
+                  <h3 className="text-sm font-semibold text-[var(--ds-text)]">
                     📝 Actions Prioritaires
                   </h3>
-                  <div className="mt-4 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5">
+                  <div className="mt-4 flex items-center gap-2 rounded-lg bg-[var(--ds-bg)] px-3 py-2.5">
                     <input
                       type="text"
                       value={newTaskText}
@@ -1261,19 +1427,19 @@ export default function DashboardPage() {
                         }
                       }}
                       placeholder="Ajouter une tâche…"
-                      className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                      className="min-w-0 flex-1 bg-transparent text-sm text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)]"
                       aria-label="Nouvelle tâche"
                     />
                     <button
                       type="button"
                       onClick={addTask}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/80 hover:text-slate-800"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface)]/80 hover:text-[var(--ds-text)]"
                       aria-label="Ajouter une tâche"
                     >
                       <Plus className="h-4 w-4" strokeWidth={2.25} />
                     </button>
                   </div>
-                  <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="mt-4 border-t border-[var(--ds-primary-border)] pt-4">
                     <ul className="space-y-2">
                       {tasks.map((t) => (
                         <li key={t.id}>
@@ -1281,14 +1447,14 @@ export default function DashboardPage() {
                             type="button"
                             aria-pressed={t.isDone}
                             onClick={() => toggleTask(t.id)}
-                            className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-slate-50"
+                            className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-[var(--ds-primary-soft)]"
                           >
                             <span
                               className={[
                                 "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                                 t.isDone
-                                  ? "border-indigo-500 bg-indigo-500"
-                                  : "border-slate-300 bg-transparent",
+                                  ? "border-[var(--ds-primary)] bg-[var(--ds-primary)]"
+                                  : "border-[var(--ds-primary-border)] bg-transparent",
                               ].join(" ")}
                               aria-hidden
                             >
@@ -1301,8 +1467,8 @@ export default function DashboardPage() {
                             </span>
                             <span
                               className={[
-                                "text-sm leading-snug text-slate-700",
-                                t.isDone ? "text-slate-400 line-through" : "",
+                                "text-sm leading-snug text-[var(--ds-text)]",
+                                t.isDone ? "text-[var(--ds-text-muted)] line-through" : "",
                               ].join(" ")}
                             >
                               {t.text}
@@ -1315,20 +1481,20 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-800">
+                  <h3 className="text-sm font-semibold text-[var(--ds-text)]">
                     🔔 À recontacter
                   </h3>
                   <div className="mt-4 space-y-3">
                     {RELANCE_PATIENTS.map((r) => (
                       <div
                         key={r.id}
-                        className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 shadow-sm"
+                        className="flex items-center gap-3 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3 shadow-sm"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="text-sm font-semibold text-[var(--ds-text)]">
                             {r.patient}
                           </p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                          <p className="mt-1 text-xs leading-relaxed text-[var(--ds-text-muted)]">
                             {r.motif}
                           </p>
                         </div>
@@ -1347,30 +1513,30 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Widgets — col 1 */}
-        <div className="flex flex-col gap-6 lg:col-span-1">
-          <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+        {/* Widgets — col 1 (desktop uniquement : graphique + labo) */}
+        <div className="hidden flex-col gap-6 lg:col-span-1 lg:flex">
+          <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-[color:var(--ds-text)]">
               Répartition des actes
             </h3>
-            <p className="mt-1 text-xs text-slate-500">Volume estimé (30 j.)</p>
+            <p className="mt-1 text-xs text-[var(--ds-text-muted)]">Volume estimé (30 j.)</p>
             <div className="mt-6 flex justify-center">
-              <ActesDoughnutChart />
+              <ActesDoughnutChart data={actesChartData} />
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-[color:var(--ds-text)]">
                 Suivi laboratoire
               </h3>
               <PremiumBadge />
             </div>
-            <p className="mt-1 text-xs text-slate-500">Travaux externes</p>
+            <p className="mt-1 text-xs text-[var(--ds-text-muted)]">Travaux externes</p>
 
             <div className="mt-5 flex flex-col gap-3">
               {labCommandes.length === 0 ? (
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[var(--ds-text-muted)]">
                   Aucune commande en cours.
                 </p>
               ) : (
@@ -1387,20 +1553,20 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={row.id}
-                      className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition-colors hover:bg-slate-50/80"
+                      className="flex items-center gap-3 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/50 p-3 transition-colors hover:bg-[var(--ds-primary-soft)]/80"
                     >
                       <FlaskConical
-                        className="h-4 w-4 shrink-0 text-slate-400"
+                        className="h-4 w-4 shrink-0 text-[var(--ds-text-muted)]"
                         strokeWidth={1.75}
                         aria-hidden
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-900">
+                        <p className="text-sm font-medium text-[var(--ds-text)]">
                           {row.patient}
-                          <span className="text-slate-400"> · </span>
+                          <span className="text-[var(--ds-text-muted)]"> · </span>
                           {row.travail}
                         </p>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                           Retour prévu {retourD}
                         </p>
                       </div>
@@ -1413,7 +1579,7 @@ export default function DashboardPage() {
 
             <Link
               href="/laboratoire"
-              className="mt-4 block w-full rounded-lg py-2 text-center text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
+              className="mt-4 block w-full rounded-lg py-2 text-center text-sm font-medium text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]"
             >
               Voir le laboratoire →
             </Link>

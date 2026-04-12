@@ -4,6 +4,8 @@
 
 import protocolsSeed from "@/data/protocols_seed.json";
 
+export const STOCK_UPDATED_EVENT = "dental-stock-updated";
+
 export type StockLine = {
   id: string;
   nom: string;
@@ -292,6 +294,9 @@ export function saveDentalStock(stock: StockLine[]): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(DENTAL_STOCK_LS_KEY, JSON.stringify(stock));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(STOCK_UPDATED_EVENT));
+    }
   } catch {
     // quota / mode privé
   }
@@ -340,15 +345,7 @@ export function consumeStockForAct(
   currentStock: StockLine[],
   protocols: ActProtocolMap
 ): StockLine[] {
-  console.log("2. Recherche dans le dictionnaire pour :", actName);
   const items = protocols[actName];
-  if (!items) {
-    console.log(
-      "❌ ERREUR : Aucun protocole trouvé dans les paramètres pour ce nom exact !",
-    );
-  } else {
-    console.log("✅ RECETTE TROUVÉE :", items);
-  }
   if (!items?.length) {
     return currentStock.map((p) => ({ ...p }));
   }

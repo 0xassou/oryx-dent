@@ -60,7 +60,6 @@ export function PatientFinanceCard() {
       montant: Number.isFinite(amount) ? amount : 0,
       mode,
     };
-    console.log("AddPayment", payload);
     setPayments((prev) => [payload, ...prev]);
     setIsOpen(false);
   }
@@ -72,12 +71,6 @@ export function PatientFinanceCard() {
   }
 
   function handleAddActe() {
-    const montantNum = Number(acteMontant);
-    const payload = {
-      actes: [...selectedActes],
-      montant: Number.isFinite(montantNum) ? montantNum : 0,
-    };
-    console.log("AddActe", payload);
     setSelectedActes([]);
     setActeMontant("");
     setIsActModalOpen(false);
@@ -106,7 +99,7 @@ export function PatientFinanceCard() {
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="flex w-full md:w-auto flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-cyan-700 whitespace-nowrap"
+            className="flex w-full md:w-auto flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-[#6d28d9] whitespace-nowrap"
           >
             <Plus className="h-4 w-4" />
             Enregistrer un paiement
@@ -227,7 +220,7 @@ export function PatientFinanceCard() {
                   <input
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none focus:border-[color:var(--ds-primary)]/60 focus:ring-2 focus:ring-cyan-100"
+                    className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none focus:border-[color:var(--ds-primary)]/60 focus:ring-2 focus:ring-[#ede9fe]"
                     placeholder="Ex: 17 mars 2026"
                   />
                 </div>
@@ -239,7 +232,7 @@ export function PatientFinanceCard() {
                     value={montant}
                     onChange={(e) => setMontant(e.target.value)}
                     inputMode="numeric"
-                    className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none focus:border-[color:var(--ds-primary)]/60 focus:ring-2 focus:ring-cyan-100"
+                    className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none focus:border-[color:var(--ds-primary)]/60 focus:ring-2 focus:ring-[#ede9fe]"
                     placeholder="Ex: 100"
                   />
                 </div>
@@ -252,7 +245,7 @@ export function PatientFinanceCard() {
                 <select
                   value={mode}
                   onChange={(e) => setMode(e.target.value as PaymentMethod)}
-                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none focus:border-[color:var(--ds-primary)]/60 focus:ring-2 focus:ring-cyan-100"
+                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none focus:border-[color:var(--ds-primary)]/60 focus:ring-2 focus:ring-[#ede9fe]"
                 >
                   <option value="CB">CB</option>
                   <option value="Espèces">Espèces</option>
@@ -273,7 +266,7 @@ export function PatientFinanceCard() {
               <button
                 type="button"
                 onClick={handleSave}
-                className="rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2 text-xs font-medium text-white hover:bg-cyan-700"
+                className="rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2 text-xs font-medium text-white hover:bg-[#6d28d9]"
               >
                 Enregistrer
               </button>

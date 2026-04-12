@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,7 +10,10 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, GitBranch, Plus } from "lucide-react";
+import AnimatedButton from "@/components/ui/AnimatedButton";
+import { syncAppointmentToDBAction } from "@/app/actions/appointments";
 import {
   NewAppointmentModal,
   type NewAppointmentPayload,
@@ -106,7 +110,7 @@ function rdvColor(rdv: Rdv) {
   }
   return rdv.urgence
     ? { bg: "bg-red-50", text: "text-red-600", dot: "bg-red-400", border: "border-red-200/60" }
-    : { bg: "bg-[color:var(--ds-primary-soft)]/60", text: "text-[color:var(--ds-primary)]", dot: "bg-cyan-400", border: "border-cyan-200/40" };
+    : { bg: "bg-[color:var(--ds-primary-soft)]/60", text: "text-[color:var(--ds-primary)]", dot: "bg-[var(--ds-primary)]", border: "border-[var(--ds-primary-border)]/40" };
 }
 
 function actBg(soin: string) {
@@ -115,8 +119,8 @@ function actBg(soin: string) {
   if (s.includes("extract")) return "bg-red-50/70";
   if (s.includes("couronne") || s.includes("implant") || s.includes("proth"))
     return "bg-amber-50/80";
-  if (s.includes("blanch")) return "bg-sky-50/70";
-  return "bg-slate-50/70";
+  if (s.includes("blanch")) return "bg-[var(--ds-primary-soft)]/70";
+  return "bg-[var(--ds-bg)]/70";
 }
 
 /** Grille horaire (logique d’affichage, pas de formatage de date). */
@@ -135,6 +139,23 @@ function timeToGridTop(start: string, workStartMinutes: number): number {
     Number(parts[0]) * 60 + Number(parts[1] ?? 0);
   const rel = startMin - workStartMinutes;
   return (rel / GRID_STEP) * SLOT_HEIGHT_PX;
+}
+
+/** Fond + bordure gauche des blocs RDV (vue calendrier) — rgba pour lisibilité clair / sombre. */
+function calendarRdvSurfaceStyle(rdv: Rdv): {
+  backgroundColor: string;
+  borderLeftColor: string;
+} {
+  if (rdv.urgence) {
+    return {
+      backgroundColor: "rgba(239, 68, 68, 0.3)",
+      borderLeftColor: "rgba(239, 68, 68, 0.6)",
+    };
+  }
+  return {
+    backgroundColor: "rgba(124, 58, 237, 0.3)",
+    borderLeftColor: "rgba(124, 58, 237, 0.6)",
+  };
 }
 
 function scrollDayColumnIntoView(
@@ -162,39 +183,32 @@ function Branch({
   items: Rdv[];
 }) {
   return (
-    <div className="relative mt-4 pl-12">
-      {/* Tronc */}
-      <div className="absolute left-3 top-0 bottom-0 w-px bg-gradient-to-b from-cyan-300/60 via-teal-300/40 to-transparent" />
-
-      {/* Label branche */}
-      <div className="relative mb-4 flex items-center gap-6">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-teal-400 shadow-[0_0_12px_rgba(34,211,238,0.35)]">
-          <span className="h-1.5 w-1.5 rounded-full bg-white" />
-        </span>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+    <div className="relative mt-4">
+      {/* Label branche — niveau 2 (+24px) */}
+      <div className="relative mb-4 ml-6 flex items-center gap-6">
+        <div className="flex w-10 shrink-0 justify-center">
+          <span className="relative z-10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--ds-primary)]/70" />
+        </div>
+        <h3 className="text-xs font-bold tracking-widest text-[var(--ds-primary)]/70">
           {label}
         </h3>
       </div>
 
-      {/* Feuilles (RDV) */}
-      <div className="space-y-3 pl-4">
+      {/* Feuilles (RDV) — niveau 3 (+48px) */}
+      <div className="space-y-3">
         {items.length === 0 && (
-          <p className="text-xs text-slate-400">Aucun rendez-vous</p>
+          <div className="ml-12 flex items-start gap-4">
+            <div className="flex w-10 shrink-0 justify-center" aria-hidden />
+            <p className="text-xs text-[var(--ds-text-muted)]">Aucun rendez-vous</p>
+          </div>
         )}
         {items.map((rdv) => {
           const c = rdvColor(rdv);
           return (
-            <div key={rdv.id} className="relative flex items-start gap-4">
-              {/* Branche horizontale */}
-              <div className="absolute -left-4 top-4 h-px w-4 bg-gradient-to-r from-cyan-300/50 to-transparent" />
-
-              {/* Point lumineux */}
-              <span
-                className={[
-                  "mt-3.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white shadow-[0_0_8px_rgba(34,211,238,0.5)]",
-                  c.dot,
-                ].join(" ")}
-              />
+            <div key={rdv.id} className="relative ml-12 flex items-start gap-4">
+              <div className="flex w-10 shrink-0 justify-center">
+                <span className="relative z-10 mt-1.5 h-3 w-3 flex-shrink-0 rounded-full bg-[var(--ds-primary)]/50" />
+              </div>
 
               {/* Carte feuille */}
               <div
@@ -207,10 +221,10 @@ function Branch({
               >
                 {/* Heure en premier, reliée visuellement à la branche */}
                 <div className="flex items-center gap-3">
-                  <p className="text-sm font-semibold tracking-tight text-slate-700">
+                  <p className="text-sm font-semibold tracking-tight text-[var(--ds-text)]">
                     {rdv.start}
                   </p>
-                  <div className="h-px flex-1 rounded-full bg-slate-200/70" />
+                  <div className="h-px flex-1 rounded-full bg-[var(--ds-primary-border)]/70" />
                 </div>
 
                 <div className="mt-1 flex items-start justify-between gap-3">
@@ -229,7 +243,7 @@ function Branch({
                       {rdv.soin}
                     </p>
                   </div>
-                  <p className="mt-0.5 text-[10px] text-slate-400">
+                  <p className="mt-0.5 text-[10px] text-[var(--ds-text-muted)]">
                     {rdv.durationMinutes} min
                   </p>
                 </div>
@@ -342,7 +356,7 @@ function CalendarView({
   const colCount = columns.length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]"
@@ -356,7 +370,7 @@ function CalendarView({
         >
           {/* Coin supérieur gauche : sticky horizontal + vertical */}
           <div
-            className="sticky left-0 top-0 z-[45] min-h-[3.25rem] border-b border-r border-slate-100 bg-white shadow-[1px_1px_0_0_rgb(241_245_249)]"
+            className="sticky left-0 top-0 z-[45] min-h-[3.25rem] border-b border-r border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-[1px_1px_0_0_rgb(241_245_249)]"
             style={{ gridColumn: 1, gridRow: 1 }}
           />
 
@@ -364,10 +378,10 @@ function CalendarView({
             <div
               key={`head-${col.iso}`}
               data-cal-head={col.iso}
-              className="sticky top-0 z-[35] border-b border-slate-100 bg-white px-3 py-2 shadow-[0_1px_0_0_rgb(241_245_249)]"
+              className="sticky top-0 z-[35] border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 shadow-[0_1px_0_0_rgb(241_245_249)]"
               style={{ gridColumn: j + 2, gridRow: 1 }}
             >
-              <p className="text-[10px] font-medium uppercase tracking-tight text-slate-400">
+              <p className="text-[10px] font-medium uppercase tracking-tight text-[var(--ds-text-muted)]">
                 {col.weekdayShort}
               </p>
               <p className="text-sm font-semibold leading-tight tracking-tight text-[color:var(--ds-text)]">
@@ -379,7 +393,7 @@ function CalendarView({
           {workSlots.map((slotStart, rowIdx) => (
             <div
               key={`t-${slotStart}`}
-              className="sticky left-0 z-[25] border-b border-r border-slate-100 bg-white px-2 py-1.5 text-right text-[11px] font-medium tabular-nums text-slate-500 shadow-[1px_0_0_0_rgb(241_245_249)]"
+              className="sticky left-0 z-[25] border-b border-r border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5 text-right text-[11px] font-medium tabular-nums text-[var(--ds-text-muted)] shadow-[1px_0_0_0_rgb(241_245_249)]"
               style={{ gridColumn: 1, gridRow: rowIdx + 2 }}
             >
               {slotStart}
@@ -391,7 +405,7 @@ function CalendarView({
             return (
               <div
                 key={`body-${col.iso}`}
-                className="relative border-l border-slate-100/80"
+                className="relative border-l border-[var(--ds-primary-border)]/80"
                 style={{
                   gridColumn: j + 2,
                   gridRow: `2 / span ${workSlots.length}`,
@@ -405,8 +419,8 @@ function CalendarView({
                     <div
                       key={key}
                       className={[
-                        "border-b border-slate-100/80 bg-slate-50/40 hover:bg-slate-100/40",
-                        isOver ? "ring-2 ring-inset ring-sky-200/70" : "",
+                        "border-b border-[var(--ds-primary-border)]/80 bg-[var(--ds-bg)]/40 hover:bg-[var(--ds-primary-soft)]/40",
+                        isOver ? "ring-2 ring-inset ring-[var(--ds-primary-border)]/70" : "",
                       ].join(" ")}
                       style={{
                         position: "absolute",
@@ -440,27 +454,23 @@ function CalendarView({
                     style={{
                       top: timeToGridTop(rdv.start, startMinutes),
                       height: durationToGridHeight(rdv.durationMinutes),
+                      ...calendarRdvSurfaceStyle(rdv),
                     }}
                     className={[
                       "absolute left-1.5 right-1.5 z-20 overflow-hidden rounded-lg border-l-4 p-1.5 shadow-sm",
-                      rdv.rdvType === "direct"
-                        ? "border-violet-500 bg-violet-50 text-violet-900"
-                        : rdv.urgence
-                          ? "border-red-500 bg-red-50 text-red-600"
-                          : "border-sky-500 bg-sky-50 text-sky-900",
                       "cursor-grab select-none active:cursor-grabbing",
                     ].join(" ")}
                   >
-                    <p className="text-xs font-semibold leading-tight">
+                    <p className="text-xs font-semibold leading-tight text-[#e2d9fa]">
                       {rdv.patient}
                       {rdv.rdvType === "direct" ? (
-                        <span className="ml-1 rounded bg-violet-200/80 px-1 text-[9px] font-bold uppercase text-violet-900">
+                        <span className="ml-1 rounded bg-white/15 px-1 text-[9px] font-bold uppercase text-[#e2d9fa]">
                           Direct
                         </span>
                       ) : null}{" "}
                       — {rdv.soin}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-slate-600/80">
+                    <p className="mt-0.5 text-[10px] text-[#94a3b8]">
                       {rdv.start}
                     </p>
                   </div>
@@ -485,23 +495,28 @@ function TreeView({ rdvs, currentDate }: { rdvs: Rdv[]; currentDate: Date }) {
   const apresmidi = todayRdvs.filter((r) => Number(r.start.split(":")[0]) >= 12);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-      {/* Tronc principal */}
-      <div className="relative flex min-h-0 flex-1 flex-col pl-12">
-        <div className="absolute left-3 top-0 bottom-0 w-0.5 rounded-full bg-gradient-to-b from-cyan-300/80 via-teal-200/50 to-transparent" />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-[var(--ds-surface)] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          className="pointer-events-none absolute left-[19px] top-4 bottom-4 w-0.5 bg-[var(--ds-primary)]/30 lg:left-[23px]"
+          aria-hidden
+        />
+
         <div className="relative mb-4 flex shrink-0 items-center gap-6">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-teal-500 shadow-[0_0_18px_rgba(8,145,178,0.35)]">
-            <span className="h-2 w-2 rounded-full bg-white" />
-          </span>
+          <div className="flex w-10 shrink-0 justify-center">
+            <span className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--ds-primary)] text-white shadow-lg shadow-[var(--ds-primary)]/30">
+              <span className="h-2 w-2 rounded-full bg-white" />
+            </span>
+          </div>
           <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
             {dayLabel}
           </p>
-          <span className="rounded-full bg-cyan-50 px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--ds-primary)]">
+          <span className="rounded-full bg-[var(--ds-primary-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--ds-primary)]">
             {todayRdvs.length} RDV
           </span>
         </div>
 
-        <div className="mt-2 min-h-0 flex-1 space-y-8 overflow-y-auto pl-4 pr-3 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+        <div className="mt-2 min-h-0 flex-1 space-y-8 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-[var(--ds-primary-border)] scrollbar-track-[var(--ds-primary-soft)]">
           <Branch label="Matin" items={matin} />
           <Branch label="Après-midi" items={apresmidi} />
         </div>
@@ -531,12 +546,15 @@ function formatSlidingRange(centerDate: Date): string {
   return `${a} → ${b} — ${INITIAL_APPOINTMENTS.length} rendez-vous`;
 }
 
-export default function PlanningPage() {
+function PlanningPageContent() {
+  const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<ViewMode>("calendar");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [treeViewDate, setTreeViewDate] = useState<Date>(() => new Date());
   const [isNewRdvModalOpen, setIsNewRdvModalOpen] = useState(false);
+  const [newRdvDefaultPatientName, setNewRdvDefaultPatientName] =
+    useState("");
   const [appointments, setAppointments] = useState<Rdv[]>(INITIAL_APPOINTMENTS);
   const setWindowCenter = setCurrentDate;
   const [scrollAnchorIso, setScrollAnchorIso] = useState<string | null>(null);
@@ -550,8 +568,35 @@ export default function PlanningPage() {
   }, []);
 
   useEffect(() => {
+    const patientId = searchParams.get("patientId");
+    const patientName = searchParams.get("patientName");
+    void patientId;
+    if (patientName) setNewRdvDefaultPatientName(patientName);
+    else setNewRdvDefaultPatientName("");
+
+    const newRdv = searchParams.get("newRdv");
+    if (newRdv === "true") {
+      setIsNewRdvModalOpen(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!mounted) return;
     writeAppointmentsToStorage(appointments);
+    appointments.forEach((a) => {
+      syncAppointmentToDBAction({
+        id: a.id,
+        patientId: a.patientId,
+        patientName: a.patient,
+        dateKey: a.dateKey,
+        startTime: a.start,
+        durationMinutes: a.durationMinutes,
+        soin: a.soin,
+        rdvType: a.rdvType,
+        status: a.status,
+        urgence: a.urgence,
+      }).catch(console.error);
+    });
   }, [mounted, appointments]);
 
   const slidingColumns = buildSlidingDayColumns(currentDate);
@@ -601,12 +646,12 @@ export default function PlanningPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header slim : une ligne, padding vertical serré */}
-      <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200/50 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-[var(--ds-primary-border)]/50 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 sm:flex-nowrap sm:gap-x-4">
           <h1 className="shrink-0 text-xl font-semibold leading-none tracking-tight text-[color:var(--ds-text)]">
             Planning
           </h1>
-          <p className="hidden min-w-0 truncate text-[11px] text-slate-500 sm:block">
+          <p className="hidden min-w-0 truncate text-[11px] text-[var(--ds-text-muted)] sm:block">
             {formatSlidingRange(currentDate).replace(
               /— \d+ rendez-vous$/,
               `— ${appointments.length} rendez-vous`
@@ -616,12 +661,12 @@ export default function PlanningPage() {
             <button
               type="button"
               onClick={goPrev}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200/60 bg-white/80 shadow-sm backdrop-blur-md transition-colors hover:bg-slate-50 hover:border-slate-300/60"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)] hover:border-[var(--ds-primary-border)]/60"
               aria-label="Jour précédent"
             >
-              <ChevronLeft className="h-3.5 w-3.5 text-slate-600" />
+              <ChevronLeft className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
             </button>
-            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200/60 bg-white/80 px-2 py-1 shadow-sm backdrop-blur-md transition-colors hover:bg-slate-50 hover:border-slate-300/60">
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 px-2 py-1 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)] hover:border-[var(--ds-primary-border)]/60">
               <span className="text-sm leading-none" aria-hidden>
                 📅
               </span>
@@ -649,22 +694,22 @@ export default function PlanningPage() {
             <button
               type="button"
               onClick={goNext}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200/60 bg-white/80 shadow-sm backdrop-blur-md transition-colors hover:bg-slate-50 hover:border-slate-300/60"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)] hover:border-[var(--ds-primary-border)]/60"
               aria-label="Jour suivant"
             >
-              <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+              <ChevronRight className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
             </button>
             <button
               type="button"
               onClick={goToday}
-              className="rounded-lg border border-slate-200/60 bg-white/80 px-2 py-1 text-[11px] font-medium text-[color:var(--ds-text)] shadow-sm backdrop-blur-md transition-colors hover:bg-slate-50 hover:border-slate-300/60"
+              className="rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 px-2 py-1 text-[11px] font-medium text-[color:var(--ds-text)] shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)] hover:border-[var(--ds-primary-border)]/60"
             >
               Aujourd&apos;hui
             </button>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <div className="flex rounded-xl border border-slate-200/60 bg-white p-0.5 shadow-sm backdrop-blur-md">
+          <div className="flex rounded-xl border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)] p-0.5 shadow-sm backdrop-blur-md">
             <button
               type="button"
               onClick={() => {
@@ -672,10 +717,10 @@ export default function PlanningPage() {
                 setView("calendar");
               }}
               className={[
-                "flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all",
+                "hidden items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all lg:flex",
                 view === "calendar"
                   ? "bg-[color:var(--ds-primary)] text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-700",
+                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
               ].join(" ")}
             >
               <CalendarDays className="h-3 w-3" />
@@ -691,7 +736,7 @@ export default function PlanningPage() {
                 "flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium transition-all",
                 view === "tree"
                   ? "bg-[color:var(--ds-primary)] text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-700",
+                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
               ].join(" ")}
             >
               <GitBranch className="h-3 w-3" />
@@ -699,20 +744,17 @@ export default function PlanningPage() {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsNewRdvModalOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[color:var(--ds-primary)] px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition-colors hover:opacity-90"
-          >
-            <Plus className="h-3 w-3" />
+          <AnimatedButton onClick={() => setIsNewRdvModalOpen(true)}>
+            <Plus className="h-4 w-4" strokeWidth={2} />
             Nouveau RDV
-          </button>
+          </AnimatedButton>
         </div>
       </div>
 
       <NewAppointmentModal
         open={isNewRdvModalOpen}
         onClose={() => setIsNewRdvModalOpen(false)}
+        defaultPatientName={newRdvDefaultPatientName}
         onConfirm={(payload: NewAppointmentPayload) => {
           const p = payload;
           const rawDate = p.date?.trim() ?? "";
@@ -747,9 +789,14 @@ export default function PlanningPage() {
         }}
       />
 
-      {/* Contenu : occupe l’espace restant + scroll interne */}
+      {/* Contenu : calendrier semaine (desktop) + vue arbre (mobile par défaut ou mode arbre) */}
       <div className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
-        {view === "calendar" ? (
+        <div
+          className={[
+            "min-h-0 flex-1 flex-col overflow-hidden",
+            view === "calendar" ? "hidden lg:flex lg:flex-col" : "hidden",
+          ].join(" ")}
+        >
           <CalendarView
             items={appointments}
             onItemsChange={setAppointments}
@@ -757,10 +804,24 @@ export default function PlanningPage() {
             scrollAnchorIso={scrollAnchorIso}
             onScrollAnchorConsumed={handleScrollAnchorConsumed}
           />
-        ) : (
+        </div>
+        <div
+          className={[
+            "min-h-0 flex-1 flex-col overflow-hidden",
+            view === "calendar" ? "flex flex-col lg:hidden" : "flex flex-col",
+          ].join(" ")}
+        >
           <TreeView rdvs={appointments} currentDate={treeViewDate} />
-        )}
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function PlanningPage() {
+  return (
+    <Suspense fallback={null}>
+      <PlanningPageContent />
+    </Suspense>
   );
 }

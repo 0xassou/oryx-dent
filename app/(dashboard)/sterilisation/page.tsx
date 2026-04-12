@@ -15,6 +15,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,7 +70,8 @@ const KIT_TYPES: KitType[] = [
     label: "Examen",
     instruments: "Miroir / Sonde / Précelles",
     icon: Stethoscope,
-    color: "bg-sky-50 text-sky-700 border-sky-100",
+    color:
+      "bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] border-[var(--ds-primary-border)]",
   },
   {
     id: "chirurgie",
@@ -494,7 +496,7 @@ export default function SterilisationPage() {
   if (!isMounted) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-slate-400">Chargement…</p>
+        <p className="text-sm text-[var(--ds-text-muted)]">Chargement…</p>
       </div>
     );
   }
@@ -506,26 +508,22 @@ export default function SterilisationPage() {
           <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
             Stérilisation
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
             Boucle stock : prêt → utilisé (sale) → autoclave (en cours) → prêt.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCycleModal(true)}
-          className="inline-flex items-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:opacity-90"
-        >
-          <Plus className="h-4 w-4" />
+        <AnimatedButton onClick={() => setShowCycleModal(true)}>
+          <Plus className="h-4 w-4" strokeWidth={2} />
           Nouveau Cycle
-        </button>
+        </AnimatedButton>
       </div>
 
       {/* Cartes stock par type */}
       <section>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
           Stock par type de kit
         </h2>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
           {KIT_TYPES.map((kt) => {
             const st = stockByType[kt.id];
             const Icon = kt.icon;
@@ -533,7 +531,7 @@ export default function SterilisationPage() {
             return (
               <div
                 key={kt.id}
-                className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
+                className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -546,8 +544,8 @@ export default function SterilisationPage() {
                       <Icon className="h-5 w-5" />
                     </span>
                     <div>
-                      <p className="font-semibold text-slate-900">{kt.label}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="font-semibold text-[var(--ds-text)]">{kt.label}</p>
+                      <p className="text-[11px] text-[var(--ds-text-muted)]">
                         {kt.instruments}
                       </p>
                     </div>
@@ -562,37 +560,37 @@ export default function SterilisationPage() {
                         : "Aucun kit prêt"
                     }
                     className={[
-                      "shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
+                      "shrink-0 rounded-xl border px-4 py-1.5 text-xs font-semibold transition-all",
                       canUse
-                        ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                        : "cursor-not-allowed border border-slate-100 bg-slate-50 text-slate-400",
+                        ? "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] hover:bg-[var(--ds-primary)] hover:text-white"
+                        : "cursor-not-allowed border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)] opacity-50",
                     ].join(" ")}
                   >
                     Utiliser
                   </button>
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/80 py-2">
-                    <p className="text-[10px] font-semibold uppercase text-emerald-800">
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-center lg:p-3">
+                    <p className="text-xs font-bold tracking-widest text-emerald-400 lg:text-sm">
                       Prêt
                     </p>
-                    <p className="text-xl font-bold tabular-nums text-emerald-700">
+                    <p className="text-3xl font-bold tabular-nums text-emerald-400">
                       {st.disponible}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-red-100 bg-red-50/80 py-2">
-                    <p className="text-[10px] font-semibold uppercase text-red-800">
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-center lg:p-3">
+                    <p className="text-xs font-bold tracking-widest text-red-400 lg:text-sm">
                       Sale
                     </p>
-                    <p className="text-xl font-bold tabular-nums text-red-700">
+                    <p className="text-3xl font-bold tabular-nums text-red-400">
                       {st.sale}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-sky-100 bg-sky-50/80 py-2">
-                    <p className="text-[10px] font-semibold uppercase text-sky-900">
+                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] p-2 text-center lg:p-3">
+                    <p className="text-xs font-bold tracking-widest text-[var(--ds-primary)] lg:text-sm">
                       En machine
                     </p>
-                    <p className="text-xl font-bold tabular-nums text-sky-700">
+                    <p className="text-3xl font-bold tabular-nums text-[var(--ds-primary)]">
                       {st.enCours}
                     </p>
                   </div>
@@ -603,32 +601,32 @@ export default function SterilisationPage() {
         </div>
       </section>
 
-      <div className="rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50/60 to-white p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+      <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5">
+        <p className="mb-4 text-xs font-bold tracking-widest text-[var(--ds-text-muted)]">
           Totaux agrégés
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-[var(--ds-surface)] px-3 py-2 shadow-sm">
             <span className="text-xs font-medium text-emerald-800">Prêt</span>
             <span className="text-lg font-bold tabular-nums text-emerald-700">
               {totals.disponible}
             </span>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-white px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-[var(--ds-surface)] px-3 py-2 shadow-sm">
             <span className="text-xs font-medium text-red-800">Sale</span>
             <span className="text-lg font-bold tabular-nums text-red-700">
               {totals.sale}
             </span>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2 shadow-sm">
-            <span className="text-xs font-medium text-sky-900">En machine</span>
-            <span className="text-lg font-bold tabular-nums text-sky-700">
+          <div className="flex items-center gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 shadow-sm">
+            <span className="text-xs font-medium text-[var(--ds-primary-hover)]">En machine</span>
+            <span className="text-lg font-bold tabular-nums text-[var(--ds-primary)]">
               {totals.enCours}
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-2 rounded-xl bg-emerald-600/10 px-4 py-2">
-            <ShieldCheck className="h-5 w-5 text-emerald-600" />
-            <span className="text-sm font-bold text-emerald-700">
+          <div className="ml-auto flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400">
+            <ShieldCheck className="h-5 w-5 text-emerald-400" />
+            <span>
               {totals.disponible} kit{totals.disponible !== 1 ? "s" : ""} prêt
               {totals.disponible !== 1 ? "s" : ""}
             </span>
@@ -647,13 +645,13 @@ export default function SterilisationPage() {
           icon={Thermometer}
           label="Cycles du jour"
           value={String(cyclesToday)}
-          badgeClass="bg-sky-50 text-sky-700"
+          badgeClass="bg-[var(--ds-primary-soft)] text-[var(--ds-primary)]"
         />
         <KpiCard
           icon={Clock}
           label="En autoclave (en cours)"
           value={String(totals.enCours)}
-          badgeClass="bg-sky-50 text-sky-800"
+          badgeClass="bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)]"
         />
         <KpiCard
           icon={AlertTriangle}
@@ -664,11 +662,11 @@ export default function SterilisationPage() {
         />
       </div>
 
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
+      <section className="rounded-3xl bg-[var(--ds-surface)] p-6 shadow-sm">
         <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
           Cycles Autoclave
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
           Lancer un cycle consomme le stock <strong>sale</strong>. Valider le
           cycle rend les kits <strong>prêts</strong> (disponible).
         </p>
@@ -676,7 +674,7 @@ export default function SterilisationPage() {
         <div className="mt-5 overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wider text-slate-400">
+              <tr className="border-b border-[var(--ds-primary-border)] text-xs font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
                 <th className="pb-3 pr-4">N°</th>
                 <th className="pb-3 pr-4">Date</th>
                 <th className="pb-3 pr-4">Opérateur</th>
@@ -687,12 +685,12 @@ export default function SterilisationPage() {
                 <th className="pb-3 pr-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-[var(--ds-primary-border)]/40">
               {cycles.length === 0 ? (
                 <tr>
                   <td
                     colSpan={8}
-                    className="py-10 text-center text-sm text-slate-400"
+                    className="py-10 text-center text-sm text-[var(--ds-text-muted)]"
                   >
                     Aucun cycle enregistré.
                   </td>
@@ -710,13 +708,13 @@ export default function SterilisationPage() {
                     }).filter(Boolean);
                     return (
                       <tr key={c.id} className="group">
-                        <td className="py-3 pr-4 font-semibold text-slate-700">
+                        <td className="py-3 pr-4 font-semibold text-[var(--ds-text)]">
                           #{c.numero}
                         </td>
-                        <td className="py-3 pr-4 text-slate-600">
+                        <td className="py-3 pr-4 text-[var(--ds-text-muted)]">
                           {formatDateShort(c.date)}
                         </td>
-                        <td className="py-3 pr-4 text-slate-600">
+                        <td className="py-3 pr-4 text-[var(--ds-text-muted)]">
                           {c.operateur}
                         </td>
                         <td className="py-3 pr-4">
@@ -725,7 +723,7 @@ export default function SterilisationPage() {
                         <td className="py-3 pr-4">
                           <TestBadge result={c.helix} />
                         </td>
-                        <td className="py-3 pr-4 text-xs text-slate-600">
+                        <td className="py-3 pr-4 text-xs text-[var(--ds-text-muted)]">
                           {summary.length > 0 ? summary.join(", ") : "—"}
                         </td>
                         <td className="py-3 pr-4">
@@ -734,7 +732,7 @@ export default function SterilisationPage() {
                               Terminé / Validé
                             </span>
                           ) : (
-                            <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 ring-1 ring-sky-100">
+                            <span className="inline-flex rounded-full bg-[var(--ds-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ds-primary-hover)] ring-1 ring-[var(--ds-primary-border)]">
                               En cours
                             </span>
                           )}
@@ -749,7 +747,7 @@ export default function SterilisationPage() {
                               Terminer / Valider
                             </button>
                           ) : (
-                            <span className="text-xs text-slate-400">—</span>
+                            <span className="text-xs text-[var(--ds-text-muted)]">—</span>
                           )}
                         </td>
                       </tr>
@@ -763,10 +761,10 @@ export default function SterilisationPage() {
 
       {showCycleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-3xl bg-[var(--ds-surface)] p-6 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Autoclave
                 </p>
                 <h3 className="mt-0.5 text-lg font-semibold text-[color:var(--ds-text)]">
@@ -776,7 +774,7 @@ export default function SterilisationPage() {
               <button
                 type="button"
                 onClick={resetModal}
-                className="flex h-9 w-9 items-center justify-center rounded-2xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                className="flex h-9 w-9 items-center justify-center rounded-2xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text-muted)]"
                 aria-label="Fermer"
               >
                 <X className="h-5 w-5" />
@@ -785,13 +783,13 @@ export default function SterilisationPage() {
 
             <div className="mt-6 space-y-5">
               <div>
-                <label className="block text-xs font-medium text-slate-700">
+                <label className="block text-xs font-medium text-[var(--ds-text)]">
                   Opérateur
                 </label>
                 <select
                   value={newOperateur}
                   onChange={(e) => setNewOperateur(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 >
                   {DEFAULT_OPERATORS.map((op) => (
                     <option key={op} value={op}>
@@ -815,7 +813,7 @@ export default function SterilisationPage() {
               </div>
 
               <div>
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Kits dans ce cycle (depuis le stock sale)
                 </p>
                 <div className="space-y-3">
@@ -826,7 +824,7 @@ export default function SterilisationPage() {
                     return (
                       <div
                         key={kt.id}
-                        className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3"
+                        className="flex items-center gap-3 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-4 py-3"
                       >
                         <span
                           className={[
@@ -837,10 +835,10 @@ export default function SterilisationPage() {
                           <Icon className="h-4 w-4" />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-slate-800">
+                          <p className="text-sm font-medium text-[var(--ds-text)]">
                             {kt.label}
                           </p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px] text-[var(--ds-text-muted)]">
                             Sale : {maxSale} disponible(s)
                           </p>
                         </div>
@@ -853,11 +851,11 @@ export default function SterilisationPage() {
                                 [kt.id]: Math.max(0, prev[kt.id] - 1),
                               }))
                             }
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-sm font-semibold text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
                           >
                             −
                           </button>
-                          <span className="w-8 text-center text-sm font-bold tabular-nums text-slate-800">
+                          <span className="w-8 text-center text-sm font-bold tabular-nums text-[var(--ds-text)]">
                             {count}
                           </span>
                           <button
@@ -868,7 +866,7 @@ export default function SterilisationPage() {
                                 [kt.id]: Math.min(maxSale, prev[kt.id] + 1),
                               }))
                             }
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-sm font-semibold text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
                           >
                             +
                           </button>
@@ -879,7 +877,7 @@ export default function SterilisationPage() {
                 </div>
 
                 {totalNewKits > 0 && (
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-2 text-xs text-[var(--ds-text-muted)]">
                     <strong>{totalNewKits}</strong> kit
                     {totalNewKits > 1 ? "s" : ""} pris depuis la zone{" "}
                     <strong>sale</strong> → <strong>en machine</strong>.
@@ -907,7 +905,7 @@ export default function SterilisationPage() {
               <button
                 type="button"
                 onClick={resetModal}
-                className="rounded-2xl px-5 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100"
+                className="rounded-2xl px-5 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
               >
                 Annuler
               </button>
@@ -918,7 +916,7 @@ export default function SterilisationPage() {
                 className={[
                   "rounded-2xl px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors",
                   totalNewKits === 0 || !stockSufficient
-                    ? "cursor-not-allowed bg-slate-300"
+                    ? "cursor-not-allowed bg-[var(--ds-primary-border)]"
                     : "bg-[color:var(--ds-primary)] hover:opacity-90",
                 ].join(" ")}
               >
@@ -958,7 +956,7 @@ function KpiCard({
   return (
     <div
       className={[
-        "relative rounded-2xl bg-white p-5 shadow-sm transition-shadow hover:shadow-md",
+        "kpi-card relative rounded-2xl bg-[var(--ds-surface)] p-5 shadow-sm transition-shadow hover:shadow-md",
         alert ? "ring-1 ring-red-200" : "",
       ].join(" ")}
     >
@@ -972,7 +970,7 @@ function KpiCard({
           <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <p className="text-xs font-medium text-[var(--ds-text-muted)]">{label}</p>
           <p className="text-xl font-bold tracking-tight text-[color:var(--ds-text)]">
             {value}
           </p>
@@ -1015,7 +1013,7 @@ function TestToggle({
   const ok = value === "conforme";
   return (
     <div>
-      <p className="mb-1.5 text-xs font-medium text-slate-700">{label}</p>
+      <p className="mb-1.5 text-xs font-medium text-[var(--ds-text)]">{label}</p>
       <div className="flex gap-2">
         <button
           type="button"
@@ -1024,7 +1022,7 @@ function TestToggle({
             "flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
             ok
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+              : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]",
           ].join(" ")}
         >
           <Check className="mr-1 inline-block h-3.5 w-3.5" strokeWidth={2.5} />
@@ -1037,7 +1035,7 @@ function TestToggle({
             "flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition-colors",
             !ok
               ? "border-red-200 bg-red-50 text-red-600"
-              : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50",
+              : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]",
           ].join(" ")}
         >
           <XCircle className="mr-1 inline-block h-3.5 w-3.5" />

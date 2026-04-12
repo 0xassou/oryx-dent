@@ -87,7 +87,7 @@ export function CatalogActCombobox({
           aria-expanded={open}
           aria-controls={`${id}-listbox`}
           aria-autocomplete="list"
-          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-sky-200 focus:ring-2 focus:ring-sky-100"
+          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-[#ede9fe] focus:ring-2 focus:ring-[#ede9fe]"
         />
       </div>
       {open && filtered.length > 0 ? (

@@ -18,17 +18,17 @@ export default function FinancesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#fafafa] p-4 sm:p-8">
+    <div className="min-h-screen bg-[var(--ds-bg)] p-4 sm:p-8">
       <div className="mx-auto max-w-6xl">
-        <header className="border-b border-slate-200/90 pb-6">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+        <header className="border-b border-[var(--ds-primary-border)]/90 pb-6">
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--ds-text)]">
             Finances
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
             Recettes, dépenses et pilotage en un seul endroit.
           </p>
           <nav
-            className="mt-6 flex flex-wrap gap-1 border-b border-transparent"
+            className="mt-6 flex flex-nowrap gap-1 overflow-x-auto scrollbar-none border-b border-transparent"
             role="tablist"
             aria-label="Sections Finances"
           >
@@ -42,10 +42,10 @@ export default function FinancesPage() {
                   aria-selected={selected}
                   onClick={() => setTab(t.id)}
                   className={[
-                    "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                    "-mb-px border-b-2 px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap lg:px-4 lg:text-sm",
                     selected
-                      ? "border-slate-900 text-slate-900"
-                      : "border-transparent text-slate-500 hover:text-slate-800",
+                      ? "border-[var(--ds-primary)] text-[var(--ds-text)]"
+                      : "border-transparent text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
                   ].join(" ")}
                 >
                   {t.label}

@@ -31,10 +31,12 @@ interface NewAppointmentModalProps {
   open: boolean;
   onClose: () => void;
   onConfirm: (payload: NewAppointmentPayload) => void;
+  /** Pré-remplissage du champ patient (ex. query `patientName` depuis la fiche patient). */
+  defaultPatientName?: string;
 }
 
 const inputBase =
-  "mt-0 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+  "mt-0 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
 
 const fieldStack = "flex flex-col gap-2";
 
@@ -42,6 +44,7 @@ export function NewAppointmentModal({
   open,
   onClose,
   onConfirm,
+  defaultPatientName = "",
 }: NewAppointmentModalProps) {
   const [patient, setPatient] = useState("");
   const [date, setDate] = useState(() => todayDateInputValue());
@@ -54,13 +57,13 @@ export function NewAppointmentModal({
 
   useEffect(() => {
     if (!open) return;
-    setPatient("");
+    setPatient(defaultPatientName.trim());
     setDate(todayDateInputValue());
     setTime(roundStartTimeToNextTenMinutes(new Date()));
     setDuree(30);
     setSelectedMotifs([]);
     setNotes("");
-  }, [open]);
+  }, [open, defaultPatientName]);
 
   if (!open) return null;
 
@@ -115,7 +118,7 @@ export function NewAppointmentModal({
   return (
     <div
       lang="fr"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-rdv-title"
@@ -124,10 +127,10 @@ export function NewAppointmentModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-3xl bg-white/95 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
+        className="flex max-h-[90vh] min-h-0 w-full max-w-lg flex-col rounded-3xl bg-[var(--ds-surface)]/95 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/60 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--ds-primary-border)]/60 px-6 py-4">
           <div>
             <h2
               id="new-rdv-title"
@@ -135,26 +138,26 @@ export function NewAppointmentModal({
             >
               Nouveau rendez-vous
             </h2>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-[var(--ds-text-muted)]">
               Patient, date, heure et motif
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 pb-20 lg:pb-6">
           <div className="space-y-6">
             <div className={fieldStack}>
               <label
                 htmlFor="new-rdv-patient"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-[var(--ds-text)]"
               >
                 Nom du patient
               </label>
@@ -172,9 +175,9 @@ export function NewAppointmentModal({
               <div className={`min-w-0 ${fieldStack}`}>
                 <label
                   htmlFor="new-rdv-date"
-                  className="text-sm font-medium text-slate-700"
+                  className="text-sm font-medium text-[var(--ds-text)]"
                 >
-                  Date <span className="text-slate-400">(YYYY-MM-DD)</span>
+                  Date <span className="text-[var(--ds-text-muted)]">(YYYY-MM-DD)</span>
                 </label>
                 <input
                   id="new-rdv-date"
@@ -187,9 +190,9 @@ export function NewAppointmentModal({
               <div className={`min-w-0 ${fieldStack}`}>
                 <label
                   htmlFor="new-rdv-time"
-                  className="text-sm font-medium text-slate-700"
+                  className="text-sm font-medium text-[var(--ds-text)]"
                 >
-                  Heure <span className="text-slate-400">(24 h)</span>
+                  Heure <span className="text-[var(--ds-text-muted)]">(24 h)</span>
                 </label>
                 <input
                   id="new-rdv-time"
@@ -205,7 +208,7 @@ export function NewAppointmentModal({
             <div className={fieldStack}>
               <label
                 htmlFor="new-rdv-duree"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-[var(--ds-text)]"
               >
                 Durée
               </label>
@@ -224,7 +227,7 @@ export function NewAppointmentModal({
             </div>
 
             <div className="flex flex-col gap-3">
-              <p className="text-sm font-medium text-slate-700">
+              <p className="text-sm font-medium text-[var(--ds-text)]">
                 Motif du RDV
               </p>
               <div className="flex flex-wrap gap-2">
@@ -245,7 +248,7 @@ export function NewAppointmentModal({
                             : "bg-[color:var(--ds-primary)] text-white shadow-[0_2px_8px_rgba(8,145,178,0.25)]"
                           : isUrgence
                             ? "bg-red-50 text-red-600 hover:bg-red-100"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200/80",
+                            : "bg-[var(--ds-primary-soft)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-border)]/80",
                       ].join(" ")}
                     >
                       {label}
@@ -258,9 +261,9 @@ export function NewAppointmentModal({
             <div className={fieldStack}>
               <label
                 htmlFor="new-rdv-notes"
-                className="text-sm font-medium text-slate-700"
+                className="text-sm font-medium text-[var(--ds-text)]"
               >
-                Notes <span className="text-slate-400">(optionnel)</span>
+                Notes <span className="text-[var(--ds-text-muted)]">(optionnel)</span>
               </label>
               <textarea
                 id="new-rdv-notes"
@@ -274,11 +277,11 @@ export function NewAppointmentModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200/60 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-[var(--ds-primary-border)]/60 px-6 py-4 pb-24 lg:pb-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+            className="rounded-xl border border-[var(--ds-primary-border)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-bg)]"
           >
             Annuler
           </button>

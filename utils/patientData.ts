@@ -4,6 +4,10 @@
 
 export const DENTAL_PATIENTS_STORAGE_KEY = "dental_patients_data";
 
+function capitalizeStoragePart(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "";
+}
+
 /** IDs 1–4 réservés à la démo : ne pas écraser leur historique d’actes. */
 export function isReservedDemoPatientId(id: string): boolean {
   return /^[1-4]$/.test(id.trim());
@@ -23,6 +27,7 @@ export type DentalPatientRecord = {
   telephone: string;
   /** ISO 8601 */
   derniereVisite: string;
+  createdAt?: string;
 };
 
 export function displayPatientName(p: DentalPatientRecord): string {
@@ -151,10 +156,11 @@ export function upsertPatientFields(
   } else {
     list.unshift({
       id: partial.id,
-      nom: partial.nom ?? "",
-      prenom: partial.prenom ?? "",
+      nom: capitalizeStoragePart(partial.nom ?? ""),
+      prenom: capitalizeStoragePart(partial.prenom ?? ""),
       telephone: partial.telephone ?? "",
       derniereVisite: partial.derniereVisite ?? now,
+      createdAt: new Date().toISOString(),
     });
   }
   writePatientsToStorage(list);
@@ -233,10 +239,11 @@ export function createPatientQuick(args: {
   const note = args.medicalNote?.trim();
   const record: DentalPatientRecord = {
     id,
-    prenom: args.prenom.trim(),
-    nom: args.nom.trim(),
+    prenom: capitalizeStoragePart(args.prenom.trim()),
+    nom: capitalizeStoragePart(args.nom.trim()),
     telephone: args.telephone.trim() || "—",
     derniereVisite: now,
+    createdAt: new Date().toISOString(),
   };
   upsertPatientInStorage(record);
   const fullName = displayPatientName(record);

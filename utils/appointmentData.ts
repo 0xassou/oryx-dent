@@ -20,6 +20,7 @@ export type AppointmentRdv = {
   /** RDV créé depuis le planning vs entrée directe dashboard */
   rdvType?: "planned" | "direct";
   patientId?: string;
+  status?: "pending" | "confirmed" | "done";
 };
 
 /** Date valide pour calculs ; sinon aujourd'hui (évite Invalid Date / crash toISOString). */
@@ -151,6 +152,7 @@ export function writeAppointmentsToStorage(
     DENTAL_APPOINTMENTS_STORAGE_KEY,
     JSON.stringify(items),
   );
+  // Sync PostgreSQL — branché dans les handlers
   if (!options?.silent) {
     window.dispatchEvent(new CustomEvent(APPOINTMENTS_UPDATED_EVENT));
   }
@@ -198,6 +200,7 @@ export function appendDirectEntryAppointment(args: {
         : "Consultation (entrée directe)",
     urgence: args.visitKind === "urgence",
     rdvType: "direct",
+    status: "pending",
     ...(args.patientId ? { patientId: args.patientId } : {}),
   };
   const list = readAppointmentsFromStorage();

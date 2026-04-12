@@ -1,10 +1,416 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 :root {
-  --ds-bg: #f8fafc;
+  --ds-bg: #faf9ff;
   --ds-text: #0f172a;
-  --ds-primary: #0891b2;
-  --ds-primary-soft: #e0f2fe;
+  --ds-primary: #7c3aed;
+  --ds-primary-soft: #f5f3ff;
+  --ds-primary-border: #ede9fe;
+}
+
+/* ── Thème Violet (défaut) ── */
+[data-theme="violet"] {
+  --ds-bg: #faf9ff;
+  --ds-surface: #ffffff;
+  --ds-text: #0f172a;
+  --ds-text-muted: #64748b;
+  --ds-primary: #7c3aed;
+  --ds-primary-hover: #6d28d9;
+  --ds-primary-soft: #f5f3ff;
+  --ds-primary-border: #ede9fe;
+  --ds-sidebar-bg: #7c3aed;
+  --ds-layout-bg: #ddd6fe;
+}
+
+/* ── Thème Bleu ardoise ── */
+[data-theme="blue"] {
+  --ds-bg: #f8faff;
+  --ds-surface: #ffffff;
+  --ds-text: #0f172a;
+  --ds-text-muted: #64748b;
+  --ds-primary: #2563eb;
+  --ds-primary-hover: #1d4ed8;
+  --ds-primary-soft: #eff6ff;
+  --ds-primary-border: #dbeafe;
+  --ds-sidebar-bg: #2563eb;
+  --ds-layout-bg: #bfdbfe;
+}
+
+/* ── Thème Émeraude ── */
+[data-theme="emerald"] {
+  --ds-bg: #f0fdf9;
+  --ds-surface: #ffffff;
+  --ds-text: #0f172a;
+  --ds-text-muted: #64748b;
+  --ds-primary: #059669;
+  --ds-primary-hover: #047857;
+  --ds-primary-soft: #ecfdf5;
+  --ds-primary-border: #d1fae5;
+  --ds-sidebar-bg: #059669;
+  --ds-layout-bg: #a7f3d0;
+}
+
+/* ── Dark Mode ── */
+[data-theme="dark"] {
+  --ds-bg: #0f0f13;
+  --ds-surface: #1a1a24;
+  --ds-text: #f1f5f9;
+  --ds-text-muted: #94a3b8;
+  --ds-primary: #a78bfa;
+  --ds-primary-hover: #8b5cf6;
+  --ds-primary-soft: #1e1a2e;
+  --ds-primary-border: #312e5a;
+  --ds-sidebar-bg: #13101f;
+  --ds-layout-bg: #0a0a0f;
+}
+
+[data-theme="dark"] .mobile-nav-glass {
+  background: rgba(20, 16, 35, 0.7) !important;
+  border-color: rgba(124, 58, 237, 0.3) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Couleurs de statut adaptées dark mode */
+
+[data-theme="dark"] .bg-emerald-50 {
+  background-color: rgba(16,185,129,0.12) !important;
+}
+[data-theme="dark"] .bg-emerald-100 {
+  background-color: rgba(16,185,129,0.18) !important;
+}
+[data-theme="dark"] .text-emerald-700,
+[data-theme="dark"] .text-emerald-800 {
+  color: #34d399 !important;
+}
+[data-theme="dark"] .border-emerald-100,
+[data-theme="dark"] .border-emerald-200 {
+  border-color: rgba(16,185,129,0.2) !important;
+}
+
+[data-theme="dark"] .bg-amber-50 {
+  background-color: rgba(245,158,11,0.12) !important;
+}
+[data-theme="dark"] .bg-amber-100 {
+  background-color: rgba(245,158,11,0.18) !important;
+}
+[data-theme="dark"] .text-amber-700,
+[data-theme="dark"] .text-amber-800 {
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .border-amber-100,
+[data-theme="dark"] .border-amber-200 {
+  border-color: rgba(245,158,11,0.2) !important;
+}
+
+[data-theme="dark"] .bg-orange-50 {
+  background-color: rgba(249,115,22,0.12) !important;
+}
+[data-theme="dark"] .bg-orange-100 {
+  background-color: rgba(249,115,22,0.18) !important;
+}
+[data-theme="dark"] .text-orange-600,
+[data-theme="dark"] .text-orange-700,
+[data-theme="dark"] .text-orange-800 {
+  color: #fb923c !important;
+}
+[data-theme="dark"] .border-orange-100,
+[data-theme="dark"] .border-orange-200 {
+  border-color: rgba(249,115,22,0.2) !important;
+}
+
+[data-theme="dark"] .bg-cyan-50 {
+  background-color: rgba(6,182,212,0.12) !important;
+}
+[data-theme="dark"] .bg-cyan-100 {
+  background-color: rgba(6,182,212,0.18) !important;
+}
+[data-theme="dark"] .text-cyan-700,
+[data-theme="dark"] .text-cyan-800 {
+  color: #22d3ee !important;
+}
+
+[data-theme="dark"] .bg-violet-50,
+[data-theme="dark"] .bg-purple-50 {
+  background-color: rgba(124,58,237,0.12) !important;
+}
+[data-theme="dark"] .bg-violet-100,
+[data-theme="dark"] .bg-purple-100 {
+  background-color: rgba(124,58,237,0.18) !important;
+}
+[data-theme="dark"] .text-violet-700,
+[data-theme="dark"] .text-violet-800 {
+  color: #a78bfa !important;
+}
+
+[data-theme="dark"] .bg-green-100 {
+  background-color: rgba(16,185,129,0.15) !important;
+}
+[data-theme="dark"] .text-green-700,
+[data-theme="dark"] .text-green-800 {
+  color: #34d399 !important;
+}
+
+[data-theme="dark"] .bg-yellow-100 {
+  background-color: rgba(234,179,8,0.15) !important;
+}
+[data-theme="dark"] .text-yellow-700,
+[data-theme="dark"] .text-yellow-800 {
+  color: #fbbf24 !important;
+}
+
+/* Settings — inputs visibles */
+[data-theme="dark"]
+  input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: #1e1a2e !important;
+  border-color: #312e5a !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #475569 !important;
+}
+
+/* Header */
+[data-theme="dark"] header {
+  background-color: #13101f !important;
+  border-color: #2e2a3d !important;
+}
+
+/* Séparateurs */
+[data-theme="dark"] .divide-slate-100 > * + *,
+[data-theme="dark"] .divide-y > * + * {
+  border-color: #2e2a3d !important;
+}
+
+/* Scrollbar élégante */
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #2e2a3d;
+  border-radius: 4px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #3d3854;
+}
+
+/* Planning — RDV blancs */
+[data-theme="dark"] .bg-white.rounded-lg,
+[data-theme="dark"] .bg-white.rounded-xl,
+[data-theme="dark"] .bg-white.rounded-2xl {
+  background-color: #1a1a24 !important;
+}
+
+/* Planning — RDV en dark mode */
+[data-theme="dark"] .rounded-lg.border-l-4,
+[data-theme="dark"] .rounded-md.border-l-4 {
+  background-color: rgba(167, 139, 250, 0.15) !important;
+  color: #e2d9fa !important;
+}
+
+/* Textes sur le planning */
+[data-theme="dark"] .text-\[\#7c3aed\] {
+  color: #a78bfa !important;
+}
+[data-theme="dark"] .text-\[\#6d28d9\] {
+  color: #8b5cf6 !important;
+}
+
+/* ── Finances — cartes KPI ── */
+[data-theme="dark"] .bg-emerald-50 {
+  background-color: rgba(16,185,129,0.1) !important;
+  border-color: rgba(16,185,129,0.15) !important;
+}
+[data-theme="dark"] .text-emerald-600 {
+  color: #6ee7b7 !important;
+}
+[data-theme="dark"] .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+[data-theme="dark"] .border-emerald-100 {
+  border-color: rgba(16,185,129,0.15) !important;
+}
+
+/* ── Planning — blocs RDV ── */
+[data-theme="dark"] [class*="bg-red-"][class*="rounded"] {
+  background-color: rgba(239,68,68,0.15) !important;
+}
+[data-theme="dark"] [class*="bg-red-50"] {
+  background-color: rgba(239,68,68,0.12) !important;
+}
+[data-theme="dark"] .text-red-600 {
+  color: #fca5a5 !important;
+}
+[data-theme="dark"] .text-red-700 {
+  color: #fca5a5 !important;
+}
+
+/* Planning calendrier — cellules RDV */
+[data-theme="dark"] [style*="background"][class*="rounded-lg"],
+[data-theme="dark"] [style*="background"][class*="rounded-md"] {
+  opacity: 0.9;
+}
+
+/* ── Icônes KPI — plus visibles ── */
+[data-theme="dark"] .bg-violet-50 .text-violet-600,
+[data-theme="dark"] .bg-emerald-50 .text-emerald-600,
+[data-theme="dark"] .bg-cyan-50 .text-cyan-600,
+[data-theme="dark"] .bg-orange-50 .text-orange-600,
+[data-theme="dark"] .bg-red-50 .text-red-500 {
+  filter: brightness(1.4);
+}
+
+/* ── Page header — titre et sous-titre ── */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3 {
+  color: #f1f5f9 !important;
+}
+
+/* ── Finances header blanc ── */
+[data-theme="dark"] .bg-\[\#faf9ff\],
+[data-theme="dark"] .bg-\[var\(--ds-bg\)\] {
+  background-color: var(--ds-bg) !important;
+}
+
+/* ── Graphiques Recharts ── */
+[data-theme="dark"] .recharts-cartesian-grid line {
+  stroke: rgba(255,255,255,0.06) !important;
+}
+[data-theme="dark"] .recharts-text {
+  fill: #94a3b8 !important;
+}
+[data-theme="dark"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1a1a24 !important;
+  border-color: #312e5a !important;
+  color: #f1f5f9 !important;
+}
+
+/* Sidebar — bg violet adapté dark */
+[data-theme="dark"] [style*="--ds-sidebar-bg"] {
+  background-color: #13101f;
+}
+
+/* Page Finances — header et onglets */
+[data-theme="dark"] .border-b.border-slate-200 {
+  border-color: #312e5a !important;
+}
+
+/* Finances page — fonds résiduels */
+[data-theme="dark"] .bg-\[\#fafafa\] {
+  background-color: var(--ds-bg) !important;
+}
+[data-theme="dark"] .bg-\[\#faf9ff\] {
+  background-color: var(--ds-bg) !important;
+}
+
+/* Actes enregistrés fiche patient — fond des cartes */
+[data-theme="dark"] .bg-amber-50 {
+  background-color: rgba(245,158,11,0.1) !important;
+}
+[data-theme="dark"] .bg-amber-100 {
+  background-color: rgba(245,158,11,0.15) !important;
+}
+
+/* Tableau de bord — texte titre principal */
+[data-theme="dark"] h1.text-\[var\(--ds-text\)\],
+[data-theme="dark"] h2.text-\[var\(--ds-text\)\] {
+  color: #f1f5f9 !important;
+}
+
+/* Cockpit patient — cartes actes enregistrés */
+[data-theme="dark"] .border.rounded-xl.bg-\[var\(--ds-surface\)\] {
+  background-color: #1a1a24 !important;
+  border-color: #312e5a !important;
+}
+
+/* Finances onglets — fond page */
+[data-theme="dark"] .min-h-screen {
+  background-color: var(--ds-bg) !important;
+}
+
+/* Settings — page */
+[data-theme="dark"] header.bg-\[var\(--ds-surface\)\] {
+  background-color: #1a1a24 !important;
+  border-color: #312e5a !important;
+}
+
+/* Odontogramme — fond des sections Maxillaire/Mandibule */
+[data-theme="dark"] .rounded-2xl.bg-\[var\(--ds-surface\)\] {
+  background-color: #1a1a24 !important;
+}
+
+/* Textes des actes enregistrés sur fiche patient */
+[data-theme="dark"] .text-\[var\(--ds-text\)\] {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .text-\[var\(--ds-text-muted\)\] {
+  color: #94a3b8 !important;
+}
+
+/* Alertes médicales */
+[data-theme="dark"] .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+[data-theme="dark"] .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Finances — bénéfice net */
+[data-theme="dark"] .bg-emerald-50\/20 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Header page — fond blanc résiduel */
+[data-theme="dark"] .bg-\[var\(--ds-surface\)\] {
+  background-color: #1a1a24 !important;
+}
+
+/* Onglets Finance — texte et indicateur */
+[data-theme="dark"] .border-b-2 {
+  border-color: var(--ds-primary) !important;
+}
+
+/* Forcer le violet partout */
+.bg-sky-500,
+.bg-cyan-600,
+.bg-teal-500 {
+  background-color: #7c3aed !important;
+}
+.text-sky-700,
+.text-cyan-700,
+.text-teal-700 {
+  color: #7c3aed !important;
+}
+.from-sky-500,
+.from-cyan-500,
+.from-teal-500 {
+  --tw-gradient-from: #7c3aed !important;
+}
+.to-teal-500,
+.to-cyan-600 {
+  --tw-gradient-to: #6d28d9 !important;
+}
+.ring-sky-500,
+.ring-cyan-500 {
+  --tw-ring-color: #7c3aed !important;
+}
+.border-sky-300,
+.border-cyan-300 {
+  border-color: #ede9fe !important;
+}
+.hover\:text-\[color\:var\(--ds-primary\)\]:hover {
+  color: #7c3aed !important;
 }
 
 @theme inline {
@@ -17,7 +423,7 @@
 body {
   background: var(--ds-bg);
   color: var(--ds-text);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: "Sora", sans-serif;
   font-size: 0.95rem;
   letter-spacing: 0.01em;
 }
@@ -50,4 +456,48 @@ body {
 
 .animate-lab-retouche {
   animation: lab-retouche-soft 2.2s ease-in-out infinite;
+}
+
+/* Onglets horizontaux (ex. Finances) — scroll sans barre visible */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Neumorphisme — effet relief KPI */
+.kpi-card {
+  transition: all 0.3s ease;
+  box-shadow:
+    6px 6px 12px rgba(0, 0, 0, 0.08),
+    -6px -6px 12px rgba(255, 255, 255, 0.8);
+}
+
+.kpi-card:hover {
+  box-shadow:
+    4px 4px 8px rgba(0, 0, 0, 0.06),
+    -4px -4px 8px rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.kpi-card:active {
+  box-shadow:
+    2px 2px 6px rgba(0, 0, 0, 0.06),
+    -2px -2px 6px rgba(255, 255, 255, 0.8);
+  transform: translateY(0px);
+}
+
+[data-theme="dark"] .kpi-card {
+  box-shadow:
+    6px 6px 12px rgba(0, 0, 0, 0.4),
+    -6px -6px 12px rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .kpi-card:hover {
+  box-shadow:
+    4px 4px 8px rgba(0, 0, 0, 0.5),
+    -4px -4px 8px rgba(255, 255, 255, 0.04);
+  transform: translateY(-1px);
 }

@@ -97,7 +97,7 @@ export function FinancesDepensesTab() {
 
   if (!mounted) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500">
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-[var(--ds-text-muted)]">
         Chargement…
       </div>
     );
@@ -110,7 +110,7 @@ export function FinancesDepensesTab() {
           <h2 className="text-xl font-semibold text-[color:var(--ds-text)]">
             Dépenses
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
             Enregistrez les sorties d&apos;argent (stock, labo, frais). Les
             totaux alimentent le tableau de bord Finances.
           </p>
@@ -125,29 +125,29 @@ export function FinancesDepensesTab() {
         </button>
       </div>
 
-      <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-800">
+      <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
+        <h2 className="text-sm font-semibold text-[var(--ds-text)]">
           Dernières sorties
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
           Les plus récentes en premier
         </p>
         {expenses.length === 0 ? (
-          <p className="mt-8 text-center text-sm text-slate-500">
+          <p className="mt-8 text-center text-sm text-[var(--ds-text-muted)]">
             Aucune dépense enregistrée. Utilisez le bouton ci-dessus.
           </p>
         ) : (
-          <ul className="mt-4 divide-y divide-slate-100">
+          <ul className="mt-4 divide-y divide-[var(--ds-primary-border)]">
             {expenses.map((e) => (
               <li
                 key={e.id}
                 className="flex flex-wrap items-center justify-between gap-3 py-4 first:pt-2"
               >
                 <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{e.libelle}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="font-medium text-[var(--ds-text)]">{e.libelle}</p>
+                  <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                     {formatDate(e.date)} ·{" "}
-                    <span className="font-medium text-slate-600">
+                    <span className="font-medium text-[var(--ds-text-muted)]">
                       {e.categorie}
                     </span>
                   </p>
@@ -161,7 +161,7 @@ export function FinancesDepensesTab() {
                       href={e.justificatif_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-medium text-sky-600 hover:underline"
+                      className="text-xs font-medium text-[var(--ds-primary)] hover:underline"
                     >
                       Justificatif
                     </a>
@@ -176,7 +176,7 @@ export function FinancesDepensesTab() {
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="depense-modal-title"
@@ -184,14 +184,14 @@ export function FinancesDepensesTab() {
             <div className="flex items-start justify-between gap-3">
               <h2
                 id="depense-modal-title"
-                className="text-lg font-semibold text-slate-900"
+                className="text-lg font-semibold text-[var(--ds-text)]"
               >
                 Nouvelle dépense
               </h2>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg p-1 text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
                 aria-label="Fermer"
               >
                 <X className="h-5 w-5" />
@@ -201,7 +201,7 @@ export function FinancesDepensesTab() {
               <div>
                 <label
                   htmlFor="exp-date"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Date
                 </label>
@@ -210,14 +210,14 @@ export function FinancesDepensesTab() {
                   type="date"
                   value={formDate}
                   onChange={(e) => setFormDate(e.target.value)}
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                   required
                 />
               </div>
               <div>
                 <label
                   htmlFor="exp-lib"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Libellé
                 </label>
@@ -227,14 +227,14 @@ export function FinancesDepensesTab() {
                   value={formLibelle}
                   onChange={(e) => setFormLibelle(e.target.value)}
                   placeholder="Ex. Commande gants nitrile"
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                   required
                 />
               </div>
               <div>
                 <label
                   htmlFor="exp-montant"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Montant (DA)
                 </label>
@@ -245,14 +245,14 @@ export function FinancesDepensesTab() {
                   value={formMontant}
                   onChange={(e) => setFormMontant(e.target.value)}
                   placeholder="Ex. 35000"
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                   required
                 />
               </div>
               <div>
                 <label
                   htmlFor="exp-cat"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Catégorie
                 </label>
@@ -262,7 +262,7 @@ export function FinancesDepensesTab() {
                   onChange={(e) =>
                     setFormCategorie(e.target.value as DentalExpense["categorie"])
                   }
-                  className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
                 >
                   {EXPENSE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
@@ -274,7 +274,7 @@ export function FinancesDepensesTab() {
               <div>
                 <label
                   htmlFor="exp-justif"
-                  className="text-xs font-medium text-slate-600"
+                  className="text-xs font-medium text-[var(--ds-text-muted)]"
                 >
                   Justificatif (optionnel, max 5 Mo)
                 </label>
@@ -285,14 +285,14 @@ export function FinancesDepensesTab() {
                   onChange={(e) =>
                     setFormJustif(e.target.files?.[0] ?? null)
                   }
-                  className="mt-1.5 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700"
+                  className="mt-1.5 block w-full text-sm text-[var(--ds-text-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--ds-primary-soft)] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--ds-text)]"
                 />
               </div>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <div className="flex justify-end gap-2 border-t border-[var(--ds-primary-border)] pt-4">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-[var(--ds-primary-border)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] hover:bg-[var(--ds-bg)]"
                 >
                   Annuler
                 </button>

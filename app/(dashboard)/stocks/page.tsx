@@ -11,6 +11,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
   DENTAL_STOCK_LS_KEY,
@@ -346,22 +347,22 @@ function ProductModal({
       }}
     >
       <div
-        className="w-full max-w-2xl rounded-3xl bg-white/95 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
+        className="w-full max-w-2xl rounded-3xl bg-[var(--ds-surface)]/95 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200/60 px-6 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--ds-primary-border)]/60 px-6 py-4">
           <div>
             <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
               {mode === "create" ? "Ajouter un produit" : "Modifier le produit"}
             </h3>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
               Renseignez les informations requises.
             </p>
           </div>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -371,26 +372,26 @@ function ProductModal({
         <div className="px-6 py-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-[var(--ds-text)]">
                 Nom du produit
               </label>
               <input
                 type="text"
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 placeholder="Ex: Résine Composite A2 - Filtek"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-[var(--ds-text)]">
                 Catégorie
               </label>
               <select
                 value={categorie}
                 onChange={(e) => setCategorie(e.target.value as Categorie)}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
               >
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -401,7 +402,7 @@ function ProductModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-[var(--ds-text)]">
                 Quantité Actuelle
               </label>
               <input
@@ -409,12 +410,12 @@ function ProductModal({
                 min={0}
                 value={quantite}
                 onChange={(e) => setQuantite(Number(e.target.value))}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-[var(--ds-text)]">
                 Quantité Max/Idéale
               </label>
               <input
@@ -422,16 +423,16 @@ function ProductModal({
                 min={0}
                 value={quantiteMax}
                 onChange={(e) => setQuantiteMax(Number(e.target.value))}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
               />
             </div>
 
             <div className="sm:col-span-2 space-y-2">
               <div>
-                <p className="text-sm font-medium text-slate-700">
+                <p className="text-sm font-medium text-[var(--ds-text)]">
                   Mode de déduction au fauteuil
                 </p>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                   Détermine si la consommation est déduite automatiquement lors des actes ou suivie
                   manuellement (multi-doses).
                 </p>
@@ -441,8 +442,8 @@ function ProductModal({
                   className={[
                     "flex cursor-pointer gap-3 rounded-xl border p-3.5 transition-colors",
                     gestion === "unitaire"
-                      ? "border-[color:var(--ds-primary)] bg-sky-50/60 ring-1 ring-[color:var(--ds-primary)]/15"
-                      : "border-slate-200 bg-white/80 hover:border-slate-300",
+                      ? "border-[color:var(--ds-primary)] bg-[var(--ds-primary-soft)]/60 ring-1 ring-[color:var(--ds-primary)]/15"
+                      : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 hover:border-[var(--ds-primary-border)]",
                   ].join(" ")}
                 >
                   <input
@@ -452,9 +453,9 @@ function ProductModal({
                     checked={gestion === "unitaire"}
                     onChange={() => setGestion("unitaire")}
                   />
-                  <span className="min-w-0 text-sm leading-snug text-slate-800">
+                  <span className="min-w-0 text-sm leading-snug text-[var(--ds-text)]">
                     <span className="font-medium">Automatique (Unitaire)</span>
-                    <span className="mt-1 block text-xs font-normal text-slate-500">
+                    <span className="mt-1 block text-xs font-normal text-[var(--ds-text-muted)]">
                       Ex. : gants, aiguilles
                     </span>
                   </span>
@@ -463,8 +464,8 @@ function ProductModal({
                   className={[
                     "flex cursor-pointer gap-3 rounded-xl border p-3.5 transition-colors",
                     gestion === "multidose"
-                      ? "border-[color:var(--ds-primary)] bg-sky-50/60 ring-1 ring-[color:var(--ds-primary)]/15"
-                      : "border-slate-200 bg-white/80 hover:border-slate-300",
+                      ? "border-[color:var(--ds-primary)] bg-[var(--ds-primary-soft)]/60 ring-1 ring-[color:var(--ds-primary)]/15"
+                      : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 hover:border-[var(--ds-primary-border)]",
                   ].join(" ")}
                 >
                   <input
@@ -474,9 +475,9 @@ function ProductModal({
                     checked={gestion === "multidose"}
                     onChange={() => setGestion("multidose")}
                   />
-                  <span className="min-w-0 text-sm leading-snug text-slate-800">
+                  <span className="min-w-0 text-sm leading-snug text-[var(--ds-text)]">
                     <span className="font-medium">Manuelle (Multi-doses)</span>
-                    <span className="mt-1 block text-xs font-normal text-slate-500">
+                    <span className="mt-1 block text-xs font-normal text-[var(--ds-text-muted)]">
                       Ex. : tubes, flacons
                     </span>
                   </span>
@@ -485,24 +486,24 @@ function ProductModal({
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700">
+              <label className="block text-sm font-medium text-[var(--ds-text)]">
                 Date de péremption
               </label>
               <input
                 type="date"
                 value={peremptionIso}
                 onChange={(e) => setPeremptionIso(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-slate-200/60 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--ds-primary-border)]/60 px-6 py-4">
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+            className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-bg)]"
           >
             Annuler
           </button>
@@ -701,59 +702,55 @@ export default function StocksPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
             Gestion des Stocks
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
             Vue d&apos;ensemble du matériel et des consommables
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-xs font-medium text-white shadow-sm transition-colors hover:opacity-90"
-        >
-          <Plus className="h-4 w-4" />
+        <AnimatedButton onClick={openCreateModal}>
+          <Plus className="h-4 w-4" strokeWidth={2} />
           Ajouter un produit
-        </button>
+        </AnimatedButton>
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-50 text-[color:var(--ds-primary)]">
+      <div className="grid grid-cols-3 gap-3 lg:grid-cols-3">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl bg-[var(--ds-surface)] p-3 shadow-sm lg:p-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)]">
             <Package className="h-5 w-5" />
           </span>
-          <div>
-            <p className="text-[11px] font-medium tracking-tight text-slate-500">
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-tight text-[var(--ds-text-muted)] lg:text-sm">
               Total Produits
             </p>
-            <p className="mt-0.5 text-xl font-semibold tracking-tight text-[color:var(--ds-text)]">
+            <p className="mt-0.5 text-2xl font-semibold tracking-tight text-[color:var(--ds-text)] lg:text-3xl">
               {totalProduits}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl bg-[var(--ds-surface)] p-3 shadow-sm lg:p-5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500">
             <AlertTriangle className="h-5 w-5" />
           </span>
-          <div>
-            <p className="text-[11px] font-medium tracking-tight text-slate-500">
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-tight text-[var(--ds-text-muted)] lg:text-sm">
               En rupture
             </p>
-            <p className="mt-0.5 text-xl font-semibold tracking-tight text-red-600">
+            <p className="mt-0.5 text-2xl font-semibold tracking-tight text-red-600 lg:text-3xl">
               {enRupture}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl bg-[var(--ds-surface)] p-3 shadow-sm lg:p-5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
             <Clock className="h-5 w-5" />
           </span>
-          <div>
-            <p className="text-[11px] font-medium tracking-tight text-slate-500">
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-tight text-[var(--ds-text-muted)] lg:text-sm">
               Péremption proche
             </p>
-            <p className="mt-0.5 text-xl font-semibold tracking-tight text-amber-600">
+            <p className="mt-0.5 text-2xl font-semibold tracking-tight text-amber-600 lg:text-3xl">
               {peremptionProche}
             </p>
           </div>
@@ -763,19 +760,19 @@ export default function StocksPage() {
       {/* Recherche & Filtres */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Rechercher un produit…"
-            className="w-full rounded-xl border border-slate-200 bg-white/80 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+            className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 py-2.5 pl-9 pr-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
           />
         </div>
         <select
           value={filtre}
           onChange={(e) => setFiltre(e.target.value as Categorie | "")}
-          className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+          className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
         >
           <option value="">Toutes les catégories</option>
           {CATEGORIES.map((c) => (
@@ -788,7 +785,7 @@ export default function StocksPage() {
         <button
           type="button"
           onClick={() => setShowHistoryModal(true)}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-[color:var(--ds-text)] sm:w-auto sm:ml-2"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-xs font-medium text-[var(--ds-text-muted)] shadow-sm transition-colors hover:bg-[var(--ds-bg)] hover:text-[color:var(--ds-text)] sm:w-auto sm:ml-2"
           aria-label="Historique des mouvements de stock"
         >
           <Clock className="h-4 w-4" />
@@ -797,27 +794,26 @@ export default function StocksPage() {
       </div>
 
       {/* Tableau */}
-      <div className="rounded-2xl bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px]">
+      <div className="overflow-x-auto rounded-2xl bg-[var(--ds-surface)] shadow-sm">
+        <table className="w-full min-w-[720px]">
             <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr className="border-b border-[var(--ds-primary-border)]">
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Produit
                 </th>
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Quantité
                 </th>
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Statut
                 </th>
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Péremption
                 </th>
-                <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Options
                 </th>
-                <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Actions
                 </th>
               </tr>
@@ -834,14 +830,14 @@ export default function StocksPage() {
                 return (
                   <tr
                     key={p.id}
-                    className="border-b border-slate-50 last:border-0 transition-colors hover:bg-slate-50/60"
+                    className="border-b border-slate-50 last:border-0 transition-colors hover:bg-[var(--ds-bg)]/60"
                   >
                     {/* Produit */}
                     <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-slate-800">
+                      <p className="text-sm font-medium text-[var(--ds-text)]">
                         {p.nom}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
+                      <p className="mt-0.5 text-[11px] text-[var(--ds-text-muted)]">
                         {p.categorie}
                       </p>
                     </td>
@@ -849,13 +845,13 @@ export default function StocksPage() {
                     {/* Quantité (jauge) */}
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--ds-primary-soft)]">
                           <div
                             className={`h-full rounded-full transition-all ${progressBarClass(p)}`}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <span className="text-xs font-semibold tabular-nums text-slate-700">
+                        <span className="text-xs font-semibold tabular-nums text-[var(--ds-text)]">
                           {p.quantite}/{p.quantiteMax}
                         </span>
                       </div>
@@ -871,7 +867,7 @@ export default function StocksPage() {
                     </td>
 
                     {/* Péremption */}
-                    <td className="px-5 py-4 text-sm text-slate-600">
+                    <td className="px-5 py-4 text-sm text-[var(--ds-text-muted)]">
                       {formatPeremptionForDisplay(p.peremption)}
                     </td>
 
@@ -882,7 +878,7 @@ export default function StocksPage() {
                         onClick={() =>
                           setOpenActionsId(isActionsOpen ? null : p.id)
                         }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
                         aria-label={`Actions pour ${p.nom}`}
                       >
                         <MoreVertical className="h-4 w-4" />
@@ -895,18 +891,17 @@ export default function StocksPage() {
                             aria-hidden="true"
                             onClick={() => setOpenActionsId(null)}
                           />
-                          <div className="absolute right-5 top-full z-50 mt-1 w-40 overflow-hidden rounded-2xl bg-white py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
+                          <div className="absolute right-5 top-full z-50 mt-1 w-40 overflow-hidden rounded-2xl bg-[var(--ds-surface)] py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
                             <button
                               type="button"
                               onClick={() => openEditModal(p)}
-                              className="flex w-full items-center px-4 py-2 text-left text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                              className="flex w-full items-center px-4 py-2 text-left text-xs font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
                             >
                               Modifier
                             </button>
                             <button
                               type="button"
                               onClick={() => {
-                                console.log("Suppression du produit", p.id);
                                 setProduits((prev) =>
                                   prev.filter((x) => x.id !== p.id),
                                 );
@@ -931,7 +926,7 @@ export default function StocksPage() {
                               handleOpenMultidoseUnit(p.id);
                               setOpenActionsId(null);
                             }}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-50 text-sky-600 transition-colors hover:bg-sky-100"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-border)]"
                             title="Ouvrir une unité (Multidose)"
                             aria-label={`Ouvrir une unité — ${p.nom}`}
                           >
@@ -961,7 +956,7 @@ export default function StocksPage() {
                             setStockReason("");
                             setOpenActionsId(null);
                           }}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sky-50 text-sky-700 transition-colors hover:bg-sky-50/80"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]/80"
                           aria-label={`Ajouter du stock : ${p.nom}`}
                         >
                           +
@@ -976,7 +971,7 @@ export default function StocksPage() {
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-5 py-12 text-center text-sm text-slate-400"
+                    className="px-5 py-12 text-center text-sm text-[var(--ds-text-muted)]"
                   >
                     Aucun produit trouvé.
                   </td>
@@ -984,7 +979,6 @@ export default function StocksPage() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
 
       {editingStock && (
@@ -1002,7 +996,7 @@ export default function StocksPage() {
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            className="w-full max-w-md rounded-2xl bg-[var(--ds-surface)] p-6 shadow-xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
@@ -1010,10 +1004,10 @@ export default function StocksPage() {
                 ? "Ajouter du stock"
                 : "Retirer du stock"}
             </h3>
-            <p className="mt-1 text-sm text-slate-800">{editingStock.nom}</p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-sm text-[var(--ds-text)]">{editingStock.nom}</p>
+            <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
               Stock actuel :{" "}
-              <span className="font-semibold text-slate-700">
+              <span className="font-semibold text-[var(--ds-text)]">
                 {editingStockCurrentQty}
               </span>{" "}
               / {editingStock.quantiteMax}
@@ -1021,7 +1015,7 @@ export default function StocksPage() {
 
             <div className="mt-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   {stockActionType === "add"
                     ? "Quantité à ajouter"
                     : "Quantité à retirer"}
@@ -1039,10 +1033,10 @@ export default function StocksPage() {
                   value={stockAdjustValue}
                   onChange={(e) => setStockAdjustValue(e.target.value)}
                   className={[
-                    "mt-1.5 w-full rounded-2xl border bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20",
+                    "mt-1.5 w-full rounded-2xl border bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20",
                     stockRemoveExceedsAvailable
                       ? "border-red-300"
-                      : "border-slate-200",
+                      : "border-[var(--ds-primary-border)]",
                   ].join(" ")}
                 />
                 {stockRemoveExceedsAvailable ? (
@@ -1054,7 +1048,7 @@ export default function StocksPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Raison (optionnel)
                 </label>
                 <input
@@ -1062,16 +1056,16 @@ export default function StocksPage() {
                   value={stockReason}
                   onChange={(e) => setStockReason(e.target.value)}
                   placeholder="Ex: correction inventaire"
-                  className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 />
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200/60 px-1 pt-4">
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-[var(--ds-primary-border)]/60 px-1 pt-4">
               <button
                 type="button"
                 onClick={() => setEditingStock(null)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+                className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-bg)]"
               >
                 Annuler
               </button>
@@ -1135,7 +1129,7 @@ export default function StocksPage() {
           }}
         >
           <div
-            className="w-full max-w-4xl rounded-3xl bg-white p-6 shadow-xl"
+            className="w-full max-w-4xl rounded-3xl bg-[var(--ds-surface)] p-6 shadow-xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -1143,14 +1137,14 @@ export default function StocksPage() {
                 <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
                   Registre des mouvements de stock
                 </h3>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
                   Ajustements récents enregistrés localement sur cet appareil.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowHistoryModal(false)}
-                className="rounded-2xl p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                className="rounded-2xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text)]"
                 aria-label="Fermer"
               >
                 <X className="h-5 w-5" />
@@ -1159,7 +1153,7 @@ export default function StocksPage() {
 
             <div className="mt-5">
               {stockHistory.length === 0 ? (
-                <div className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-slate-400">
+                <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-8 text-center text-sm text-[var(--ds-text-muted)]">
                   Aucun mouvement récent
                 </div>
               ) : (
@@ -1170,15 +1164,15 @@ export default function StocksPage() {
                     return (
                       <div key={h.id} className="flex gap-4">
                         <div className="relative mt-1 flex w-6 justify-center">
-                          <span className="absolute top-0 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-white ring-4 ring-slate-100" />
+                          <span className="absolute top-0 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-[var(--ds-surface)] ring-4 ring-[var(--ds-primary-border)]" />
                           {!isLast ? (
-                            <span className="absolute top-3 left-1/2 h-full w-px -translate-x-1/2 bg-slate-100" />
+                            <span className="absolute top-3 left-1/2 h-full w-px -translate-x-1/2 bg-[var(--ds-primary-soft)]" />
                           ) : null}
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span className="text-xs font-medium text-slate-500 tabular-nums">
+                            <span className="text-xs font-medium text-[var(--ds-text-muted)] tabular-nums">
                               {h.date}
                             </span>
                             <span className="text-sm font-semibold text-[color:var(--ds-text)]">
@@ -1195,7 +1189,7 @@ export default function StocksPage() {
                               {h.changeAmount}
                             </span>
                           </div>
-                          <p className="mt-2 text-sm italic text-slate-500">
+                          <p className="mt-2 text-sm italic text-[var(--ds-text-muted)]">
                             {h.reason ? h.reason : "—"}
                           </p>
                         </div>
@@ -1206,11 +1200,11 @@ export default function StocksPage() {
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200/60 px-1 pt-4">
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-[var(--ds-primary-border)]/60 px-1 pt-4">
               <button
                 type="button"
                 onClick={() => setShowHistoryModal(false)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+                className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-bg)]"
               >
                 Fermer
               </button>
@@ -1230,7 +1224,7 @@ export default function StocksPage() {
       {stockToast ? (
         <div
           role="status"
-          className="fixed bottom-6 right-6 z-[100] max-w-sm rounded-2xl border border-sky-100 bg-white px-4 py-3 text-sm font-medium text-sky-800 shadow-lg shadow-sky-100/50"
+          className="fixed bottom-6 right-6 z-[100] max-w-sm rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-3 text-sm font-medium text-[var(--ds-primary-hover)] shadow-lg shadow-[var(--ds-primary-border)]/50"
         >
           {stockToast}
         </div>

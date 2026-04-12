@@ -12,6 +12,7 @@ import {
   resteAPayer,
   writeFacturesToStorage,
 } from "@/utils/factureDocuments";
+import { syncPatientToDBAction } from "@/app/actions/patients";
 import {
   createPatientQuick,
   displayPatientName,
@@ -21,8 +22,19 @@ import {
   type DentalPatientRecord,
 } from "@/utils/patientData";
 import { formatPhoneNumber } from "@/utils/formatters";
+import { generateFacturePDF } from "@/utils/generateFacturePDF";
 
 const DOCS_STORAGE_KEY = "dental_dashboard_docs";
+
+function getSettings(): Record<string, unknown> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem("dental_settings");
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 const FACTURES_MOCK: FactureDocument[] = [
   {
@@ -232,6 +244,12 @@ export function FinancesRecettesTab() {
         nom: n,
         telephone: tel,
       });
+      syncPatientToDBAction({
+        id: rec.id,
+        prenom: rec.prenom,
+        nom: rec.nom,
+        telephone: rec.telephone,
+      }).catch(console.error);
       patientLabel = displayPatientName(rec);
       patientId = rec.id;
     } else {
@@ -344,10 +362,10 @@ export function FinancesRecettesTab() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+          <h2 className="text-xl font-semibold tracking-tight text-[var(--ds-text)]">
             Recettes
           </h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
             Suivi des factures, paiements et reste à payer.
           </p>
         </div>
@@ -358,27 +376,27 @@ export function FinancesRecettesTab() {
             refreshPatientDirectory();
             setIsModalOpen(true);
           }}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-indigo-700"
+          className="rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[var(--ds-primary-hover)]"
         >
           + Nouvelle facture
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Rechercher un patient ou n° facture..."
-                className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--ds-text)] placeholder:text-[var(--ds-text-muted)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
               />
             </div>
             <div
-              className="flex shrink-0 rounded-lg border border-slate-200 bg-slate-50 p-0.5"
+              className="flex shrink-0 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] p-0.5"
               role="group"
               aria-label="Filtrer par période"
             >
@@ -388,8 +406,8 @@ export function FinancesRecettesTab() {
                 className={[
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   dateFilter === "today"
-                    ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/80"
-                    : "text-slate-600 hover:text-slate-900",
+                    ? "bg-[var(--ds-surface)] text-[var(--ds-primary)] shadow-sm ring-1 ring-[var(--ds-primary-border)]/80"
+                    : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
                 ].join(" ")}
               >
                 Aujourd&apos;hui
@@ -400,8 +418,8 @@ export function FinancesRecettesTab() {
                 className={[
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   dateFilter === "week"
-                    ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/80"
-                    : "text-slate-600 hover:text-slate-900",
+                    ? "bg-[var(--ds-surface)] text-[var(--ds-primary)] shadow-sm ring-1 ring-[var(--ds-primary-border)]/80"
+                    : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
                 ].join(" ")}
               >
                 Cette semaine
@@ -410,7 +428,7 @@ export function FinancesRecettesTab() {
           </div>
 
           <div className="flex w-full justify-start overflow-x-auto sm:w-auto">
-            <div className="flex min-w-max border-b border-slate-200">
+            <div className="flex min-w-max border-b border-[var(--ds-primary-border)]">
               {TABS.map(({ key, label }) => {
                 const active = activeTab === key;
                 return (
@@ -421,8 +439,8 @@ export function FinancesRecettesTab() {
                     className={[
                       "whitespace-nowrap px-3 pb-3 text-sm font-medium transition-colors sm:px-4",
                       active
-                        ? "border-b-2 border-indigo-500 text-indigo-600"
-                        : "text-slate-500 hover:text-slate-700",
+                        ? "border-b-2 border-[var(--ds-primary)] text-[var(--ds-primary)]"
+                        : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
                     ].join(" ")}
                   >
                     {label}
@@ -436,29 +454,29 @@ export function FinancesRecettesTab() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse">
             <thead>
-              <tr className="bg-slate-50">
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <tr className="bg-[var(--ds-bg)]">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   N° Facture
                 </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Date
                 </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Patient
                 </th>
-                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Montant total
                 </th>
-                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Montant payé
                 </th>
-                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Reste à payer
                 </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Statut
                 </th>
-                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Actions
                 </th>
               </tr>
@@ -470,33 +488,33 @@ export function FinancesRecettesTab() {
                 return (
                   <tr
                     key={doc.id}
-                    className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                    className="border-b border-[var(--ds-primary-border)] transition-colors hover:bg-[var(--ds-bg)]"
                   >
-                    <td className="px-5 py-4 font-mono text-sm text-slate-600">
+                    <td className="px-5 py-4 font-mono text-sm text-[var(--ds-text-muted)]">
                       {doc.id}
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-700">
+                    <td className="px-5 py-4 text-sm text-[var(--ds-text)]">
                       {doc.date}
                     </td>
-                    <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                    <td className="px-5 py-4 text-sm font-medium text-[var(--ds-text)]">
                       <button
                         type="button"
                         onClick={() =>
                           doc.patientId &&
                           router.push("/patients/" + doc.patientId)
                         }
-                        className="text-left transition-colors hover:text-indigo-600"
+                        className="text-left transition-colors hover:text-[var(--ds-primary)]"
                       >
                         {doc.patient}
                       </button>
                     </td>
-                    <td className="px-5 py-4 text-right text-sm font-semibold text-slate-900 tabular-nums">
+                    <td className="px-5 py-4 text-right text-sm font-semibold text-[var(--ds-text)] tabular-nums">
                       {formatMontantDANumber(doc.montantTotal)}
                     </td>
-                    <td className="px-5 py-4 text-right text-sm text-slate-700 tabular-nums">
+                    <td className="px-5 py-4 text-right text-sm text-[var(--ds-text)] tabular-nums">
                       {formatMontantDANumber(doc.montantPaye)}
                     </td>
-                    <td className="px-5 py-4 text-right text-sm font-semibold text-slate-900 tabular-nums">
+                    <td className="px-5 py-4 text-right text-sm font-semibold text-[var(--ds-text)] tabular-nums">
                       {formatMontantDANumber(reste)}
                     </td>
                     <td className="px-5 py-4">
@@ -513,7 +531,7 @@ export function FinancesRecettesTab() {
                             }
                             alert("Aucun patient lié à cette facture.");
                           }}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text)]"
                           aria-label="Voir fiche patient"
                         >
                           <FileText className="h-4 w-4" />
@@ -525,17 +543,17 @@ export function FinancesRecettesTab() {
                               prev === doc.id ? null : doc.id,
                             )
                           }
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text)]"
                           aria-label="Options"
                         >
                           <MoreVertical className="h-4 w-4" />
                         </button>
                         {openMenuId === doc.id && (
-                          <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-lg">
+                          <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-lg">
                             <button
                               type="button"
                               onClick={() => handleOpenEdit(doc)}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
                             >
                               <Pencil className="h-4 w-4" />
                               Modifier
@@ -543,10 +561,36 @@ export function FinancesRecettesTab() {
                             <button
                               type="button"
                               onClick={() => {
-                                setToastMessage("Préparation du PDF en cours...");
+                                const settings = getSettings();
+                                generateFacturePDF({
+                                  id: doc.id,
+                                  date: doc.date,
+                                  patient: doc.patient,
+                                  montantTotal: doc.montantTotal,
+                                  montantPaye: doc.montantPaye,
+                                  statut: st,
+                                  acte: doc.financeLineId
+                                    ? undefined
+                                    : "Soins dentaires",
+                                  cabinetNom:
+                                    (settings.nomCabinet ??
+                                      settings.cabinetNom) as string | undefined,
+                                  cabinetAdresse: settings.adresse as
+                                    | string
+                                    | undefined,
+                                  cabinetTel: settings.telephone as
+                                    | string
+                                    | undefined,
+                                  mentionLegale: settings.mentionLegale as
+                                    | string
+                                    | undefined,
+                                  logoBase64: settings.logoBase64 as
+                                    | string
+                                    | undefined,
+                                });
                                 setOpenMenuId(null);
                               }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
                             >
                               <FileDown className="h-4 w-4" />
                               Générer PDF
@@ -571,7 +615,7 @@ export function FinancesRecettesTab() {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-5 py-10 text-center text-sm text-slate-500"
+                    className="px-5 py-10 text-center text-sm text-[var(--ds-text-muted)]"
                   >
                     Aucune facture ne correspond à votre recherche.
                   </td>
@@ -588,19 +632,19 @@ export function FinancesRecettesTab() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-nouvelle-facture"
-            className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"
+            className="w-full max-w-lg rounded-xl bg-[var(--ds-surface)] p-6 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <h2
                 id="modal-nouvelle-facture"
-                className="text-lg font-semibold text-slate-900"
+                className="text-lg font-semibold text-[var(--ds-text)]"
               >
                 Nouvelle facture
               </h2>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                className="rounded-lg p-1 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
                 aria-label="Fermer"
               >
                 <X className="h-5 w-5" />
@@ -611,7 +655,7 @@ export function FinancesRecettesTab() {
               <div>
                 <label
                   htmlFor="fact-patient"
-                  className="mb-1 block text-sm font-medium text-slate-700"
+                  className="mb-1 block text-sm font-medium text-[var(--ds-text)]"
                 >
                   Patient
                 </label>
@@ -619,7 +663,7 @@ export function FinancesRecettesTab() {
                   id="fact-patient"
                   value={selectedPatientId}
                   onChange={(e) => setSelectedPatientId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                 >
                   <option value="" disabled>
                     Sélectionner un patient…
@@ -634,15 +678,15 @@ export function FinancesRecettesTab() {
               </div>
 
               {selectedPatientId === "__new__" && (
-                <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                  <p className="text-xs font-medium text-slate-600">
+                <div className="space-y-3 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 p-3">
+                  <p className="text-xs font-medium text-[var(--ds-text-muted)]">
                     Nouveau patient (sera ajouté à la liste globale)
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <label
                         htmlFor="fact-np-prenom"
-                        className="mb-1 block text-xs font-medium text-slate-600"
+                        className="mb-1 block text-xs font-medium text-[var(--ds-text-muted)]"
                       >
                         Prénom
                       </label>
@@ -651,13 +695,13 @@ export function FinancesRecettesTab() {
                         type="text"
                         value={newPatientPrenom}
                         onChange={(e) => setNewPatientPrenom(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                       />
                     </div>
                     <div>
                       <label
                         htmlFor="fact-np-nom"
-                        className="mb-1 block text-xs font-medium text-slate-600"
+                        className="mb-1 block text-xs font-medium text-[var(--ds-text-muted)]"
                       >
                         Nom
                       </label>
@@ -666,14 +710,14 @@ export function FinancesRecettesTab() {
                         type="text"
                         value={newPatientNom}
                         onChange={(e) => setNewPatientNom(e.target.value)}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                       />
                     </div>
                   </div>
                   <div>
                     <label
                       htmlFor="fact-np-tel"
-                      className="mb-1 block text-xs font-medium text-slate-600"
+                      className="mb-1 block text-xs font-medium text-[var(--ds-text-muted)]"
                     >
                       Téléphone
                     </label>
@@ -682,7 +726,7 @@ export function FinancesRecettesTab() {
                       type="tel"
                       value={newPatientTel}
                       onChange={(e) => setNewPatientTel(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                     />
                   </div>
                 </div>
@@ -691,7 +735,7 @@ export function FinancesRecettesTab() {
               <div>
                 <label
                   htmlFor="fact-montant"
-                  className="mb-1 block text-sm font-medium text-slate-700"
+                  className="mb-1 block text-sm font-medium text-[var(--ds-text)]"
                 >
                   Montant total (DA)
                 </label>
@@ -702,9 +746,9 @@ export function FinancesRecettesTab() {
                   value={newDocMontant}
                   onChange={(e) => setNewDocMontant(e.target.value)}
                   placeholder="Ex : 45 000"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                 />
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
                   Statut initial : En attente (aucun paiement enregistré).
                 </p>
               </div>
@@ -714,7 +758,7 @@ export function FinancesRecettesTab() {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
               >
                 Annuler
               </button>
@@ -722,7 +766,7 @@ export function FinancesRecettesTab() {
                 type="button"
                 onClick={handleGenerateFacture}
                 disabled={!canCreateFacture}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Créer la facture
               </button>
@@ -733,15 +777,15 @@ export function FinancesRecettesTab() {
 
       {editingDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl bg-[var(--ds-surface)] p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 className="text-lg font-semibold text-[var(--ds-text)]">
                 Modifier {editingDoc.id}
               </h2>
               <button
                 type="button"
                 onClick={() => setEditingDoc(null)}
-                className="rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                className="rounded-lg p-1 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
                 aria-label="Fermer"
               >
                 <X className="h-5 w-5" />
@@ -749,27 +793,27 @@ export function FinancesRecettesTab() {
             </div>
             <div className="mt-4 space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
+                <label className="mb-1 block text-sm font-medium text-[var(--ds-text)]">
                   Montant total (DA)
                 </label>
                 <input
                   type="text"
                   value={editMontantTotal}
                   onChange={(e) => setEditMontantTotal(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
+                <label className="mb-1 block text-sm font-medium text-[var(--ds-text)]">
                   Montant payé (DA)
                 </label>
                 <input
                   type="text"
                   value={editMontantPaye}
                   onChange={(e) => setEditMontantPaye(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
                 />
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
                   Le statut est recalculé automatiquement (Payé / Partiellement
                   Payé / En attente).
                 </p>
@@ -779,14 +823,14 @@ export function FinancesRecettesTab() {
               <button
                 type="button"
                 onClick={() => setEditingDoc(null)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleSaveEditDoc}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                className="rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--ds-primary-hover)]"
               >
                 Enregistrer
               </button>
