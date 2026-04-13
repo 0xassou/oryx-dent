@@ -58,6 +58,14 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
   if (!open) return null;
 
   function handleSave() {
+    if (!nom.trim() || !prenom.trim()) {
+      alert("Le nom et le prénom sont obligatoires");
+      return;
+    }
+    if (!telephone.trim()) {
+      alert("Le numéro de téléphone est obligatoire");
+      return;
+    }
     const payload: AddPatientPayload = {
       nom: nom.trim(),
       prenom: prenom.trim(),

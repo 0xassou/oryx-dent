@@ -17,7 +17,11 @@ export function isReservedDemoPatientId(id: string): boolean {
 export function initializeEmptyDentalChart(patientId: string) {
   if (typeof window === "undefined") return;
   if (isReservedDemoPatientId(patientId)) return;
-  localStorage.setItem(`patient_acts_${patientId}`, JSON.stringify([]));
+  try {
+    localStorage.setItem(`patient_acts_${patientId}`, JSON.stringify([]));
+  } catch (e) {
+    console.error("Storage error:", e);
+  }
 }
 
 export type DentalPatientRecord = {
@@ -102,17 +106,22 @@ export function readPatientsFromStorage(): DentalPatientRecord[] {
       if (r) out.push(r);
     }
     return out;
-  } catch {
+  } catch (e) {
+    console.error("Storage error:", e);
     return [];
   }
 }
 
 export function writePatientsToStorage(patients: DentalPatientRecord[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(
-    DENTAL_PATIENTS_STORAGE_KEY,
-    JSON.stringify(patients),
-  );
+  try {
+    localStorage.setItem(
+      DENTAL_PATIENTS_STORAGE_KEY,
+      JSON.stringify(patients),
+    );
+  } catch (e) {
+    console.error("Storage error:", e);
+  }
 }
 
 /** Si vide : enregistre les patients de démo et les retourne. */
@@ -220,10 +229,14 @@ export type MinimalPatientProfileForLs = {
 
 export function writeMinimalPatientProfile(profile: MinimalPatientProfileForLs) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(
-    `patient_profile_${profile.id}`,
-    JSON.stringify(profile),
-  );
+  try {
+    localStorage.setItem(
+      `patient_profile_${profile.id}`,
+      JSON.stringify(profile),
+    );
+  } catch (e) {
+    console.error("Storage error:", e);
+  }
 }
 
 /** Création rapide (facture / entrée) : enregistre liste + profil minimal pour ouvrir la fiche. */

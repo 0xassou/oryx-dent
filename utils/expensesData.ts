@@ -55,14 +55,19 @@ export function readExpensesFromStorage(): DentalExpense[] {
       if (e) out.push(e);
     }
     return out;
-  } catch {
+  } catch (e) {
+    console.error("Storage error:", e);
     return [];
   }
 }
 
 export function writeExpensesToStorage(items: DentalExpense[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DENTAL_EXPENSES_STORAGE_KEY, JSON.stringify(items));
+  try {
+    localStorage.setItem(DENTAL_EXPENSES_STORAGE_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error("Storage error:", e);
+  }
 }
 
 export function addExpenseToStorage(

@@ -81,7 +81,8 @@ function PatientsPageContent() {
   }
 
   function handleAddPatient(payload: AddPatientPayload) {
-    if (!payload.nom.trim() || !payload.prenom.trim()) return;
+    if (!payload.nom.trim() || !payload.prenom.trim() || !payload.telephone.trim())
+      return;
     const newId = newPatientId();
     const record: DentalPatientRecord = {
       id: newId,

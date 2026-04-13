@@ -11,8 +11,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
-    setLoading(true);
     setError("");
+    if (!email.trim() || !password.trim()) {
+      setError("Veuillez remplir tous les champs");
+      return;
+    }
+    setLoading(true);
     const res = await loginAction(email, password);
     if (res.ok) {
       router.push("/");

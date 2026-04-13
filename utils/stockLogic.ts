@@ -285,7 +285,8 @@ export function loadDentalStock(): StockLine[] {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
     return parsed as StockLine[];
-  } catch {
+  } catch (e) {
+    console.error("Storage error:", e);
     return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
   }
 }
@@ -297,8 +298,8 @@ export function saveDentalStock(stock: StockLine[]): void {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(STOCK_UPDATED_EVENT));
     }
-  } catch {
-    // quota / mode privé
+  } catch (e) {
+    console.error("Storage error:", e);
   }
 }
 
@@ -319,7 +320,8 @@ export function loadProtocols(): ActProtocolMap {
       return { ...DEFAULT_ACT_PROTOCOLS };
     }
     return parsed as ActProtocolMap;
-  } catch {
+  } catch (e) {
+    console.error("Storage error:", e);
     return { ...DEFAULT_ACT_PROTOCOLS };
   }
 }
@@ -331,8 +333,8 @@ export function saveProtocols(protocols: ActProtocolMap): void {
       DENTAL_PROTOCOLS_LS_KEY,
       JSON.stringify(protocols),
     );
-  } catch {
-    // quota / mode privé
+  } catch (e) {
+    console.error("Storage error:", e);
   }
 }
 

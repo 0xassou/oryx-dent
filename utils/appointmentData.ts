@@ -131,14 +131,11 @@ export function readAppointmentsFromStorage(): AppointmentRdv[] {
       if (r) out.push(r);
     }
     if (out.length !== data.length) {
-      try {
-        writeAppointmentsToStorage(out);
-      } catch {
-        /* quota / accès refusé */
-      }
+      writeAppointmentsToStorage(out);
     }
     return out;
-  } catch {
+  } catch (e) {
+    console.error("Storage error:", e);
     return [];
   }
 }
@@ -148,13 +145,16 @@ export function writeAppointmentsToStorage(
   options?: { silent?: boolean },
 ) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(
-    DENTAL_APPOINTMENTS_STORAGE_KEY,
-    JSON.stringify(items),
-  );
-  // Sync PostgreSQL — branché dans les handlers
-  if (!options?.silent) {
-    window.dispatchEvent(new CustomEvent(APPOINTMENTS_UPDATED_EVENT));
+  try {
+    localStorage.setItem(
+      DENTAL_APPOINTMENTS_STORAGE_KEY,
+      JSON.stringify(items),
+    );
+    if (!options?.silent) {
+      window.dispatchEvent(new CustomEvent(APPOINTMENTS_UPDATED_EVENT));
+    }
+  } catch (e) {
+    console.error("Storage error:", e);
   }
 }
 

@@ -7,6 +7,7 @@ import { logoutAction } from "@/app/actions/auth";
 import { ToastProvider } from "@/components/ToastProvider";
 import MobileNav from "@/components/layout/MobileNav";
 import Sidebar from "@/components/layout/Sidebar";
+import VoiceAssistant from "@/components/ui/VoiceAssistant";
 import {
   DENTAL_APPOINTMENTS_STORAGE_KEY,
   formatDateKeyLocal,
@@ -178,6 +179,7 @@ export default function DashboardLayout({
 
               {/* Actions droite */}
               <div className="flex flex-shrink-0 items-center gap-2">
+                <VoiceAssistant />
                 <div className="relative">
                   <button
                     type="button"

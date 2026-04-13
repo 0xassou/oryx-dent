@@ -102,19 +102,29 @@ export function parseFacturesFromLocalStorage(
       if (doc) out.push(doc);
     }
     return out;
-  } catch {
+  } catch (e) {
+    console.error("Storage error:", e);
     return [];
   }
 }
 
 export function readFacturesFromStorage(): FactureDocument[] {
   if (typeof window === "undefined") return [];
-  return parseFacturesFromLocalStorage(localStorage.getItem(LS_KEY));
+  try {
+    return parseFacturesFromLocalStorage(localStorage.getItem(LS_KEY));
+  } catch (e) {
+    console.error("Storage error:", e);
+    return [];
+  }
 }
 
 export function writeFacturesToStorage(docs: FactureDocument[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(LS_KEY, JSON.stringify(docs));
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(docs));
+  } catch (e) {
+    console.error("Storage error:", e);
+  }
 }
 
 export function resteAPayer(doc: FactureDocument): number {

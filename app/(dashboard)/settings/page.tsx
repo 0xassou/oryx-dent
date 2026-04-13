@@ -214,8 +214,12 @@ export default function SettingsPage() {
   }, []);
 
   function handleSaveSettings() {
-    localStorage.setItem("dental_settings", JSON.stringify(settings));
-    alert("Paramètres sauvegardés");
+    try {
+      localStorage.setItem("dental_settings", JSON.stringify(settings));
+      alert("Paramètres sauvegardés");
+    } catch (e) {
+      console.error("Storage error:", e);
+    }
   }
 
   const navItems: {

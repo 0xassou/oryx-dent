@@ -2152,10 +2152,14 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                         const line = finances.find(
                           (f) => f.id === paymentLineId
                         );
-                        if (!line) return;
-
                         const montantVersé = parseMoney(paymentMontant);
-                        if (montantVersé <= 0) return;
+                        if (!line || montantVersé <= 0) {
+                          setToast({
+                            type: "error",
+                            message: "Veuillez entrer un montant valide",
+                          });
+                          return;
+                        }
 
                         const newReste = Math.max(
                           0,

@@ -7,6 +7,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -141,20 +142,39 @@ function timeToGridTop(start: string, workStartMinutes: number): number {
   return (rel / GRID_STEP) * SLOT_HEIGHT_PX;
 }
 
-/** Fond + bordure gauche des blocs RDV (vue calendrier) — rgba pour lisibilité clair / sombre. */
+/** Fond + bordure gauche des blocs RDV (vue calendrier) — contraste renforcé. */
 function calendarRdvSurfaceStyle(rdv: Rdv): {
   backgroundColor: string;
-  borderLeftColor: string;
+  borderLeft: string;
+  patientStyle: CSSProperties;
+  timeStyle: CSSProperties;
+  motifStyle: CSSProperties;
 } {
+  const text = {
+    patientStyle: {
+      color: "#ffffff",
+      fontWeight: 700,
+      textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+    } satisfies CSSProperties,
+    timeStyle: {
+      color: "rgba(255,255,255,0.95)",
+    } satisfies CSSProperties,
+    motifStyle: {
+      color: "rgba(255,255,255,0.9)",
+      fontWeight: 600,
+    } satisfies CSSProperties,
+  };
   if (rdv.urgence) {
     return {
-      backgroundColor: "rgba(239, 68, 68, 0.3)",
-      borderLeftColor: "rgba(239, 68, 68, 0.6)",
+      ...text,
+      backgroundColor: "rgba(239, 68, 68, 0.75)",
+      borderLeft: "3px solid rgba(239, 68, 68, 1)",
     };
   }
   return {
-    backgroundColor: "rgba(124, 58, 237, 0.3)",
-    borderLeftColor: "rgba(124, 58, 237, 0.6)",
+    ...text,
+    backgroundColor: "rgba(124, 58, 237, 0.75)",
+    borderLeft: "3px solid rgba(124, 58, 237, 1)",
   };
 }
 
@@ -442,39 +462,56 @@ function CalendarView({
                     />
                   );
                 })}
-                {dayRdvs.map((rdv) => (
-                  <div
-                    key={rdv.id}
-                    draggable
-                    onDragStart={() => setDragId(rdv.id)}
-                    onDragEnd={() => {
-                      setDragId(null);
-                      setDropKey(null);
-                    }}
-                    style={{
-                      top: timeToGridTop(rdv.start, startMinutes),
-                      height: durationToGridHeight(rdv.durationMinutes),
-                      ...calendarRdvSurfaceStyle(rdv),
-                    }}
-                    className={[
-                      "absolute left-1.5 right-1.5 z-20 overflow-hidden rounded-lg border-l-4 p-1.5 shadow-sm",
-                      "cursor-grab select-none active:cursor-grabbing",
-                    ].join(" ")}
-                  >
-                    <p className="text-xs font-semibold leading-tight text-[#e2d9fa]">
-                      {rdv.patient}
-                      {rdv.rdvType === "direct" ? (
-                        <span className="ml-1 rounded bg-white/15 px-1 text-[9px] font-bold uppercase text-[#e2d9fa]">
-                          Direct
-                        </span>
-                      ) : null}{" "}
-                      — {rdv.soin}
-                    </p>
-                    <p className="mt-0.5 text-[10px] text-[#94a3b8]">
-                      {rdv.start}
-                    </p>
-                  </div>
-                ))}
+                {dayRdvs.map((rdv) => {
+                  const calStyle = calendarRdvSurfaceStyle(rdv);
+                  return (
+                    <div
+                      key={rdv.id}
+                      draggable
+                      onDragStart={() => setDragId(rdv.id)}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDropKey(null);
+                      }}
+                      style={{
+                        top: timeToGridTop(rdv.start, startMinutes),
+                        height: durationToGridHeight(rdv.durationMinutes),
+                        backgroundColor: calStyle.backgroundColor,
+                        borderLeft: calStyle.borderLeft,
+                      }}
+                      className={[
+                        "absolute left-1.5 right-1.5 z-20 overflow-hidden rounded-lg p-1.5 lg:p-2 shadow-sm",
+                        "cursor-grab select-none active:cursor-grabbing",
+                      ].join(" ")}
+                    >
+                      <div className="flex min-w-0 flex-wrap items-baseline gap-1">
+                        <p
+                          className="min-w-0 truncate text-xs leading-tight"
+                          style={calStyle.patientStyle}
+                        >
+                          {rdv.patient}
+                        </p>
+                        {rdv.rdvType === "direct" ? (
+                          <span className="shrink-0 rounded bg-white/15 px-1 text-[9px] font-bold uppercase text-white">
+                            Direct
+                          </span>
+                        ) : null}
+                      </div>
+                      <p
+                        className="mt-0.5 truncate text-[10px] leading-tight"
+                        style={calStyle.motifStyle}
+                      >
+                        {rdv.soin}
+                      </p>
+                      <p
+                        className="mt-0.5 text-[10px] tabular-nums"
+                        style={calStyle.timeStyle}
+                      >
+                        {rdv.start}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
