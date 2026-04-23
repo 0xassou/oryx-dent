@@ -64,13 +64,13 @@ export function PatientCombobox({
     <div ref={rootRef} className="relative">
       <label
         htmlFor={id}
-        className="block text-sm font-medium text-slate-700"
+        className="block text-sm font-medium text-[var(--ds-text)]"
       >
         Patient
       </label>
       <div className="relative mt-1.5">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-subtle)]"
           aria-hidden
         />
         <input
@@ -88,18 +88,18 @@ export function PatientCombobox({
           }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
-          className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+          className="w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
         />
         {open && filtered.length > 0 ? (
           <ul
-            className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+            className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-auto rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-1 shadow-lg"
             role="listbox"
           >
             {filtered.map((p) => (
               <li key={p.id} role="option">
                 <button
                   type="button"
-                  className="flex w-full px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50"
+                  className="flex w-full px-3 py-2 text-left text-sm text-[var(--ds-text)] hover:bg-[var(--ds-primary-soft)]"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     onSelect(p);
@@ -108,7 +108,7 @@ export function PatientCombobox({
                   }}
                 >
                   <span className="font-medium">{displayPatientName(p)}</span>
-                  <span className="ml-2 text-xs text-slate-500">
+                  <span className="ml-2 text-xs text-[var(--ds-text-muted)]">
                     {p.telephone}
                   </span>
                 </button>

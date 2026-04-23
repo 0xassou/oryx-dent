@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Calendar,
-  ChevronLeft,
   CreditCard,
   DownloadCloud,
   MoreVertical,
@@ -15,18 +13,10 @@ import {
   Eye,
   FileImage,
   FileText,
-  Mail,
-  Phone,
   Plus,
-  Pencil,
-  Sparkles,
   UploadCloud,
   X,
-  Loader2,
-  Search,
-  ChevronDown,
   ChevronRight,
-  ClipboardList,
   Trash2,
 } from "lucide-react";
 import { submitClinicalActAction } from "@/app/actions/clinicalAct";
@@ -48,7 +38,8 @@ import {
   PrescriptionModal,
   type PrescriptionItem,
 } from "@/components/patients/PrescriptionModal";
-import { formatDZD, formatDate, formatPhoneNumber } from "@/utils/formatters";
+import { RoleGate } from "@/components/auth/RoleGate";
+import { formatDZD, formatDate } from "@/utils/formatters";
 import { generateOrdonnancePDF } from "@/utils/generateOrdonnancePDF";
 import {
   readFacturesFromStorage,
@@ -64,9 +55,12 @@ import {
   readPatientsFromStorage,
   syncPatientFromProfile,
   touchPatientDerniereVisite,
+  writePatientsToStorage,
+  type DentalPatientRecord,
 } from "@/utils/patientData";
 import {
   addPatientDocument,
+  clearPatientDocuments,
   ensurePatientDocumentsForPatient,
   fileToDataUrl,
   inferDroppedFileKind,
@@ -75,11 +69,17 @@ import {
   defaultCategoryForDropped,
   type PatientDocument,
 } from "@/utils/patientDocuments";
+import type { ToothId, ToothStatus } from "@/components/dentition/DentalChart";
+import PatientFicheView, {
+  PatientSoinsTimeline,
+  type PatientFicheAlerte,
+  type PatientFicheData,
+  type PatientFicheTimelineItem,
+} from "@/components/patients/PatientFicheView";
 import {
-  DentalChart as DentalChartComponent,
-  type ToothId,
-  type ToothStatus,
-} from "@/components/dentition/DentalChart";
+  APPOINTMENTS_UPDATED_EVENT,
+  readAppointmentsFromStorage,
+} from "@/utils/appointmentData";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
@@ -299,6 +299,53 @@ const ALL_TOOTH_IDS: ToothId[] = [
 
 type TabId = "historique" | "radios" | "finances";
 
+const BLOOD_GROUP_OPTIONS = [
+  "A+",
+  "A-",
+  "B+",
+  "B-",
+  "AB+",
+  "AB-",
+  "O+",
+  "O-",
+] as const;
+
+type PatientAlertLevel = "danger" | "warning";
+
+interface PatientAlertItem {
+  label: string;
+  level: PatientAlertLevel;
+}
+
+function normalizePatientAlerts(input: unknown): PatientAlertItem[] {
+  if (!Array.isArray(input)) return [];
+  const out: PatientAlertItem[] = [];
+  for (const item of input) {
+    if (typeof item === "string") {
+      const label = item.trim();
+      if (!label) continue;
+      const low = label.toLowerCase();
+      const level: PatientAlertLevel =
+        low.includes("allergie") ||
+        low.includes("pénicilline") ||
+        low.includes("penicilline") ||
+        low.includes("latex") ||
+        low.includes("anaphyla")
+          ? "danger"
+          : "warning";
+      out.push({ label, level });
+    } else if (item && typeof item === "object" && "label" in item) {
+      const label = String((item as { label: unknown }).label).trim();
+      if (!label) continue;
+      const lv = (item as { level?: unknown }).level;
+      const level: PatientAlertLevel =
+        lv === "danger" || lv === "warning" ? lv : "warning";
+      out.push({ label, level });
+    }
+  }
+  return out;
+}
+
 interface PatientProfile {
   id: string;
   /** Optionnel : utilisé pour les liens (ex. planning) ; sinon seul `nom` suffit. */
@@ -309,9 +356,17 @@ interface PatientProfile {
   profession: string;
   adresse: string;
   telephone: string;
+  /** Téléphone secondaire ou domicile */
+  telephoneSecondaire: string;
   email: string;
   dateNaissance: string;
-  alerts: string[];
+  groupeSanguin: string;
+  mutuelle: string;
+  /** ISO YYYY-MM-DD — affichée en fiche ; si vide, repli sur `patientRecord.createdAt`. */
+  premiereVisite: string;
+  /** Statut administratif affiché sur la fiche (badge). */
+  statut: "actif" | "inactif";
+  alerts: PatientAlertItem[];
 }
 
 const MOCK_PROFILES: Record<string, PatientProfile> = {
@@ -323,9 +378,17 @@ const MOCK_PROFILES: Record<string, PatientProfile> = {
     profession: "Chirurgien-dentiste",
     adresse: "12 rue Didouche Mourad, Alger",
     telephone: "06 12 34 56 78",
+    telephoneSecondaire: "",
     email: "karim.haddad@email.fr",
     dateNaissance: "1982-04-14",
-    alerts: ["Allergie Pénicilline", "Hypertendu"],
+    groupeSanguin: "A+",
+    mutuelle: "CNAS",
+    premiereVisite: "",
+    statut: "actif",
+    alerts: [
+      { label: "Allergie Pénicilline", level: "danger" },
+      { label: "Hypertendu", level: "warning" },
+    ],
   },
   "2": {
     id: "2",
@@ -335,9 +398,14 @@ const MOCK_PROFILES: Record<string, PatientProfile> = {
     profession: "Assistante médicale",
     adresse: "45 avenue Emir Abdelkader, Oran",
     telephone: "06 98 76 54 32",
+    telephoneSecondaire: "",
     email: "sarah.benali@email.fr",
     dateNaissance: "1995-08-03",
-    alerts: ["Allergie Latex"],
+    groupeSanguin: "",
+    mutuelle: "",
+    premiereVisite: "",
+    statut: "actif",
+    alerts: [{ label: "Allergie Latex", level: "danger" }],
   },
   "3": {
     id: "3",
@@ -347,9 +415,14 @@ const MOCK_PROFILES: Record<string, PatientProfile> = {
     profession: "Cadre administratif",
     adresse: "8 boulevard Zighout Youcef, Constantine",
     telephone: "07 11 22 33 44",
+    telephoneSecondaire: "",
     email: "marie.dupont@email.fr",
     dateNaissance: "1984-01-27",
-    alerts: ["Diabète de type 2"],
+    groupeSanguin: "O+",
+    mutuelle: "Privée",
+    premiereVisite: "",
+    statut: "actif",
+    alerts: [{ label: "Diabète de type 2", level: "warning" }],
   },
 };
 
@@ -554,18 +627,36 @@ export default function PatientDetailPage() {
     profession: "—",
     adresse: "—",
     telephone: "—",
+    telephoneSecondaire: "",
     email: "—",
     dateNaissance: "",
+    groupeSanguin: "",
+    mutuelle: "",
+    premiereVisite: "",
+    statut: "actif",
     alerts: [],
   });
+  const [appointmentsTick, setAppointmentsTick] = useState(0);
   const [editPatientName, setEditPatientName] = useState("");
   const [editPatientGender, setEditPatientGender] = useState("");
   const [editPatientProfession, setEditPatientProfession] = useState("");
   const [editPatientAddress, setEditPatientAddress] = useState("");
   const [editPatientPhone, setEditPatientPhone] = useState("");
+  const [editPatientPhoneSecond, setEditPatientPhoneSecond] = useState("");
   const [editPatientEmail, setEditPatientEmail] = useState("");
   const [editPatientDob, setEditPatientDob] = useState("");
-  const [editPatientAlerts, setEditPatientAlerts] = useState("");
+  const [editPatientGroupeSanguin, setEditPatientGroupeSanguin] = useState("");
+  const [editPatientMutuelle, setEditPatientMutuelle] = useState("");
+  const [editPatientPremiereVisite, setEditPatientPremiereVisite] = useState("");
+  const [editAlertInput, setEditAlertInput] = useState("");
+  const [editAlertLevel, setEditAlertLevel] =
+    useState<PatientAlertLevel>("warning");
+  const [editAlertsDraft, setEditAlertsDraft] = useState<PatientAlertItem[]>(
+    [],
+  );
+  const [editPatientStatut, setEditPatientStatut] = useState<
+    "actif" | "inactif"
+  >("actif");
 
   const [tab, setTab] = useState<TabId>("historique");
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
@@ -644,6 +735,14 @@ export default function PatientDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onUp = () => setAppointmentsTick((t) => t + 1);
+    window.addEventListener(APPOINTMENTS_UPDATED_EVENT, onUp);
+    return () =>
+      window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, onUp);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !id) return;
     ensurePatientsHydrated();
     const list = readPatientsFromStorage();
@@ -688,8 +787,13 @@ export default function PatientDetailPage() {
       profession: "—",
       adresse: "—",
       telephone: "—",
+      telephoneSecondaire: "",
       email: "—",
       dateNaissance: "",
+      groupeSanguin: "",
+      mutuelle: "",
+      premiereVisite: "",
+      statut: "actif",
       alerts: [],
     };
     if (typeof window === "undefined") {
@@ -703,7 +807,11 @@ export default function PatientDetailPage() {
     }
     try {
       const saved = JSON.parse(raw) as Partial<PatientProfile>;
-      setPatientProfile({ ...fallback, ...saved, id });
+      const merged: PatientProfile = { ...fallback, ...saved, id };
+      merged.alerts = normalizePatientAlerts(saved.alerts ?? fallback.alerts);
+      merged.statut =
+        saved.statut === "inactif" ? "inactif" : "actif";
+      setPatientProfile(merged);
     } catch {
       setPatientProfile(fallback);
     }
@@ -781,11 +889,7 @@ export default function PatientDetailPage() {
     ProtocolForSettings[]
   >([]);
   const [drawerProtocolId, setDrawerProtocolId] = useState<string>("");
-  const [protocolSearchQuery, setProtocolSearchQuery] = useState("");
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const prevProtocolSearchRef = useRef("");
+  const [drawerMontant, setDrawerMontant] = useState<string>("");
   const [qtyByConsumableId, setQtyByConsumableId] = useState<
     Record<string, number>
   >({});
@@ -807,7 +911,6 @@ export default function PatientDetailPage() {
     message: string;
   } | null>(null);
 
-  const [showTreatmentPlan, setShowTreatmentPlan] = useState(false);
   const [treatmentPlan, setTreatmentPlan] = useState<
     {
       id: string;
@@ -821,28 +924,35 @@ export default function PatientDetailPage() {
   const [newSeanceActe, setNewSeanceActe] = useState("");
   const [newSeanceCout, setNewSeanceCout] = useState("");
 
-  const [timeline, setTimeline] = useState<
-    { date: string; titre: string; note: string }[]
-  >([
-    {
-      date: "2026-03-12T10:00:00Z",
-      titre: "Détartrage et polissage",
-      note: "Contrôle parodontite léger + conseils d’hygiène bucco-dentaire.",
-    },
-    {
-      date: "2026-02-05T10:00:00Z",
-      titre: "Urgence pulpite dent 46",
-      note: "Analgésie, traitement initial et planification du suivi.",
-    },
-    {
-      date: "2026-01-18T10:00:00Z",
-      titre: "Contrôle & radiographie",
-      note: "Bilan périapical et revue du plan de soins.",
-    },
-  ]);
-  const [isAiAssistantModalOpen, setIsAiAssistantModalOpen] = useState(false);
-  const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [aiGeneratedText, setAiGeneratedText] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [patientRecord, setPatientRecord] = useState<DentalPatientRecord | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !id) return;
+    const list = readPatientsFromStorage();
+    setPatientRecord(list.find((p) => p.id === id) ?? null);
+  }, [id, isMounted]);
+
+  const handleConfirmDeletePatient = useCallback(() => {
+    if (!id) return;
+    try {
+      const list = readPatientsFromStorage();
+      writePatientsToStorage(list.filter((p) => p.id !== id));
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`patient_profile_${id}`);
+        localStorage.removeItem(`patient_acts_${id}`);
+        localStorage.removeItem(`patient_finances_${id}`);
+        localStorage.removeItem(`oryx_watched_${id}`);
+        clearPatientDocuments(id);
+      }
+    } catch {
+      /* ignore */
+    }
+    setDeleteConfirmOpen(false);
+    router.push("/patients");
+  }, [id, router]);
 
   useEffect(() => {
     if (!isMounted || !id) return;
@@ -857,6 +967,15 @@ export default function PatientDetailPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [lightboxDocument]);
+
+  useEffect(() => {
+    if (!isEditPatientModalOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setIsEditPatientModalOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isEditPatientModalOpen]);
 
   const handleRadiosFiles = useCallback(
     async (files: FileList | null) => {
@@ -914,6 +1033,7 @@ export default function PatientDetailPage() {
     setDrawerProtocolId("");
     setQtyByConsumableId({});
     setToothNotes("");
+    setDrawerMontant("");
   }, [selectedTooth]);
 
   useEffect(() => {
@@ -950,21 +1070,11 @@ export default function PatientDetailPage() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  useEffect(() => {
-    if (selectedTooth !== null) {
-      setProtocolSearchQuery("");
-      setExpandedCategories(new Set());
-    }
-  }, [selectedTooth]);
-
-  const protocolsByCategory = useMemo(() => {
-    const q = protocolSearchQuery.trim().toLowerCase();
-    const filtered = clinicalProtocolsList.filter((p) =>
-      q === "" ? true : p.nom.toLowerCase().includes(q),
-    );
+  /** Liste groupée par catégorie (sans filtre) pour le `<select>` du cockpit. */
+  const drawerProtocolsGrouped = useMemo(() => {
     const order: string[] = [];
     const map = new Map<string, ProtocolForSettings[]>();
-    for (const p of filtered) {
+    for (const p of clinicalProtocolsList) {
       const cat = p.categorie.trim() || "Autres";
       if (!map.has(cat)) {
         map.set(cat, []);
@@ -976,20 +1086,7 @@ export default function PatientDetailPage() {
       category,
       protocols: map.get(category)!,
     }));
-  }, [clinicalProtocolsList, protocolSearchQuery]);
-
-  /** Recherche active : ouvrir toutes les catégories qui ont des résultats ; effacement : tout replier. */
-  useEffect(() => {
-    const q = protocolSearchQuery.trim();
-    if (q !== "") {
-      setExpandedCategories(
-        new Set(protocolsByCategory.map((x) => x.category)),
-      );
-    } else if (prevProtocolSearchRef.current.trim() !== "") {
-      setExpandedCategories(new Set());
-    }
-    prevProtocolSearchRef.current = protocolSearchQuery;
-  }, [protocolSearchQuery, protocolsByCategory]);
+  }, [clinicalProtocolsList]);
 
   const displayFullName = `${capitalize(patientProfile.prenom ?? "")} ${capitalize(patientProfile.nom ?? "")}`.trim();
 
@@ -999,9 +1096,20 @@ export default function PatientDetailPage() {
     setEditPatientProfession(patientProfile.profession);
     setEditPatientAddress(patientProfile.adresse);
     setEditPatientPhone(patientProfile.telephone);
+    setEditPatientPhoneSecond(patientProfile.telephoneSecondaire);
     setEditPatientEmail(patientProfile.email);
     setEditPatientDob(patientProfile.dateNaissance);
-    setEditPatientAlerts(patientProfile.alerts.join(", "));
+    setEditPatientGroupeSanguin(patientProfile.groupeSanguin);
+    setEditPatientMutuelle(patientProfile.mutuelle);
+    setEditPatientPremiereVisite(patientProfile.premiereVisite?.trim() ?? "");
+    setEditAlertsDraft(
+      normalizePatientAlerts(patientProfile.alerts ?? []),
+    );
+    setEditAlertInput("");
+    setEditAlertLevel("warning");
+    setEditPatientStatut(
+      patientProfile.statut === "inactif" ? "inactif" : "actif",
+    );
     setIsEditPatientModalOpen(true);
   }
 
@@ -1013,13 +1121,18 @@ export default function PatientDetailPage() {
       profession: editPatientProfession.trim() || "—",
       adresse: editPatientAddress.trim() || "—",
       telephone: editPatientPhone.trim() || "—",
+      telephoneSecondaire: editPatientPhoneSecond.trim(),
       email: editPatientEmail.trim() || "—",
       dateNaissance: editPatientDob,
+      groupeSanguin: editPatientGroupeSanguin.trim(),
+      mutuelle: editPatientMutuelle.trim(),
+      premiereVisite: editPatientPremiereVisite.trim(),
       age: editPatientDob ? computeAgeFromDate(editPatientDob) : patientProfile.age,
-      alerts: editPatientAlerts
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
+      alerts: editAlertsDraft.map((a) => ({
+        label: a.label.trim(),
+        level: a.level,
+      })).filter((a) => a.label.length > 0),
+      statut: editPatientStatut === "inactif" ? "inactif" : "actif",
     };
     setPatientProfile(nextProfile);
     localStorage.setItem(`patient_profile_${id}`, JSON.stringify(nextProfile));
@@ -1105,22 +1218,19 @@ export default function PatientDetailPage() {
           }
           return [row, ...prev];
         });
-        setTimeline((prev) => [
-          {
-            date: new Date().toISOString(),
-            titre: protocol.nom,
-            note: `Dent ${toothNum}. ${toothNotes.trim() || "Acte enregistré via protocole."}`,
-          },
-          ...prev,
-        ]);
         touchPatientDerniereVisite(id);
+        const manualMontant = parseMoney(drawerMontant);
+        const montantFinal =
+          manualMontant > 0
+            ? manualMontant
+            : Math.round(res.data.amountCents / 100);
         // Création automatique de la ligne finance
         const autoFinanceLine: FinanceLine = {
           id: res.data.invoiceLineId,
           acteName: protocol.nom,
           date: new Date().toISOString(),
-          montantTotal: Math.round(res.data.amountCents / 100),
-          resteACharge: Math.round(res.data.amountCents / 100),
+          montantTotal: montantFinal,
+          resteACharge: montantFinal,
           statut: "En attente",
           catalogActId: protocol.id,
         };
@@ -1130,8 +1240,8 @@ export default function PatientDetailPage() {
           return [autoFinanceLine, ...prev];
         });
         upsertGlobalFactureFromFinanceLine(autoFinanceLine);
+        setDrawerMontant("");
         setSelectedTooth(null);
-        setShowTreatmentPlan(false);
       } else {
         setToast({ type: "error", message: res.error });
       }
@@ -1182,336 +1292,243 @@ export default function PatientDetailPage() {
     writeFacturesToStorage(docs);
   }
 
-  function openAiAssistantModal() {
-    setIsAiAssistantModalOpen(true);
-    setIsAiGenerating(true);
-    setAiGeneratedText("");
-    window.setTimeout(() => {
-      const latestFinance = finances[0] as
-        | (FinanceLine & { description?: string })
-        | undefined;
-      const motif = latestFinance?.description ?? "Consultation de suivi";
-      const acte = latestFinance?.acteName ?? "Contrôle dentaire";
-      const generated = `Compte-rendu du ${new Date().toLocaleDateString()} :
-Patient(e) ${displayFullName}, ${patientProfile.age} ans.
-Motif : ${motif}.
-Examen clinique : Muqueuses saines, absence d'inflammation notable.
-Acte réalisé : ${acte}.
-Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous de contrôle dans 6 mois.`;
-      setAiGeneratedText(generated);
-      setIsAiGenerating(false);
-    }, 2500);
-  }
+  // ── Construction des données de la fiche (palette Oryx + 2 colonnes) ───────
 
-  function handleInsertAiSummary() {
-    if (!aiGeneratedText.trim()) return;
-    setTimeline((prev) => [
-      {
-        date: new Date().toISOString(),
-        titre: "Compte-rendu IA",
-        note: aiGeneratedText,
-      },
-      ...prev,
-    ]);
-    setIsAiAssistantModalOpen(false);
-    setToast({
-      type: "success",
-      message: "Le compte-rendu IA a été ajouté au dossier médical.",
+  const ficheAlertes = useMemo<PatientFicheAlerte[]>(() => {
+    return (patientProfile.alerts ?? []).map((a, i) => {
+      const low = a.label.toLowerCase();
+      const isAllergy =
+        low.includes("allergie") ||
+        low.includes("pénicilline") ||
+        low.includes("latex") ||
+        low.includes("anaphyla");
+      const isTreatment =
+        low.includes("traitement") ||
+        low.includes("médicament") ||
+        low.includes("metformine");
+      const severite: PatientFicheAlerte["severite"] =
+        a.level === "danger" ? "danger" : "warning";
+      const icon: PatientFicheAlerte["icon"] = isAllergy
+        ? "allergy"
+        : isTreatment
+          ? "pill"
+          : "warning";
+      return {
+        id: `${i}-${a.label}`,
+        severite,
+        titre: a.label,
+        icon,
+      };
     });
-  }
+  }, [patientProfile.alerts]);
+
+  const ficheStats = useMemo(() => {
+    const total = finances.reduce((s, l) => s + l.montantTotal, 0);
+    const consultations = allTreatments.length;
+    let presence = "—";
+    let presenceTooltip: string | undefined = undefined;
+    if (isMounted && typeof window !== "undefined") {
+      const all = readAppointmentsFromStorage();
+      const fullName = `${patientProfile.prenom ?? ""} ${patientProfile.nom}`.trim();
+      const mine = all.filter(
+        (a) =>
+          (a.patientId && a.patientId === id) ||
+          (a.patient ?? "").toLowerCase() === fullName.toLowerCase(),
+      );
+      const totalRdv = mine.length;
+      if (totalRdv === 0) {
+        presence = "—";
+        presenceTooltip = "Aucun rendez-vous enregistré";
+      } else {
+        const honored = mine.filter((a) => a.status === "done").length;
+        if (honored === 0) {
+          presence = "0%";
+          presenceTooltip = undefined;
+        } else {
+          const pct = Math.round((honored / totalRdv) * 100);
+          presence = `${pct}%`;
+          presenceTooltip = undefined;
+        }
+      }
+    }
+    return {
+      consultations,
+      presence,
+      presenceTooltip,
+      totalDA: new Intl.NumberFormat("fr-FR").format(total),
+    };
+  }, [
+    finances,
+    allTreatments,
+    isMounted,
+    id,
+    patientProfile.prenom,
+    patientProfile.nom,
+    appointmentsTick,
+  ]);
+
+  const ficheProchainRdv = useMemo(() => {
+    if (!isMounted || typeof window === "undefined") return undefined;
+    const all = readAppointmentsFromStorage();
+    const fullName = `${patientProfile.prenom ?? ""} ${patientProfile.nom}`.trim();
+    const mine = all
+      .filter(
+        (a) =>
+          (a.patientId && a.patientId === id) ||
+          (a.patient ?? "").toLowerCase() === fullName.toLowerCase(),
+      )
+      .filter((a) => a.dateKey >= new Date().toISOString().slice(0, 10))
+      .sort((a, b) =>
+        a.dateKey === b.dateKey
+          ? a.start.localeCompare(b.start)
+          : a.dateKey.localeCompare(b.dateKey),
+      );
+    const next = mine[0];
+    if (!next) return undefined;
+    const d = new Date(next.dateKey + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return undefined;
+    return {
+      jour: String(d.getDate()).padStart(2, "0"),
+      mois: d
+        .toLocaleDateString("fr-FR", { month: "short" })
+        .replace(".", "")
+        .slice(0, 3),
+      acte: next.soin || "Rendez-vous",
+      detail: `${next.start} — ${next.durationMinutes} min`,
+    };
+  }, [isMounted, id, patientProfile.prenom, patientProfile.nom, appointmentsTick]);
+
+  const ficheTimeline = useMemo<PatientFicheTimelineItem[]>(() => {
+    type Entry = { row: PatientTreatmentRow; src: "acts" };
+    const entries: Entry[] = allTreatments.map((row) => ({ row, src: "acts" }));
+    const normalized: PatientFicheTimelineItem[] = entries.map((e, idx) => {
+      const row = e.row;
+      const cat = row.category as PatientFicheTimelineItem["categorie"];
+      const allowed: PatientFicheTimelineItem["categorie"][] = [
+        "Soins",
+        "Chirurgie",
+        "Orthopédie",
+        "Endodontie",
+        "Autres",
+        "Absente",
+      ];
+      const catFinal: PatientFicheTimelineItem["categorie"] = allowed.includes(cat)
+        ? cat
+        : "Autres";
+      const cout = ACTES_PRIX_DEVIS[row.acte];
+      const fin = finances.find(
+        (f) => f.acteName.toLowerCase() === row.acte.toLowerCase(),
+      );
+      const statut: PatientFicheTimelineItem["statut"] = fin
+        ? fin.resteACharge <= 0
+          ? "paye"
+          : fin.resteACharge < fin.montantTotal
+            ? "partiel"
+            : "attente"
+        : undefined;
+      return {
+        id: `acte-${row.tooth}-${idx}`,
+        date: row.date,
+        acteLabel: row.acte,
+        note: row.notes,
+        categorie: catFinal,
+        praticien: undefined,
+        montant: fin?.montantTotal ?? cout,
+        statut,
+        toothNumber: row.tooth,
+      };
+    });
+    normalized.sort((a, b) => (a.date > b.date ? -1 : 1));
+    return normalized;
+  }, [allTreatments, finances]);
+
+  const ficheData: PatientFicheData = {
+    patient: {
+      id,
+      prenom: capitalize(patientProfile.prenom ?? ""),
+      nom: capitalize(patientProfile.nom ?? ""),
+      genre: patientProfile.genre,
+      age: patientProfile.age,
+      dateNaissance: patientProfile.dateNaissance,
+      profession: patientProfile.profession,
+      adresse: patientProfile.adresse,
+      telephone: patientProfile.telephone,
+      telephoneSecondaire: patientProfile.telephoneSecondaire,
+      email: patientProfile.email,
+      groupeSanguin: patientProfile.groupeSanguin.trim() || undefined,
+      mutuelle: patientProfile.mutuelle.trim() || undefined,
+      premiereVisite:
+        patientProfile.premiereVisite.trim() ||
+        patientRecord?.createdAt ||
+        undefined,
+      derniereVisite: patientRecord?.derniereVisite,
+      publicId: `ORX-${new Date().getFullYear()}-${String(id).slice(-4).padStart(4, "0").toUpperCase()}`,
+    },
+    statut: {
+      actif: patientProfile.statut === "actif",
+      label:
+        patientProfile.statut === "actif"
+          ? "Patient actif"
+          : "Patient inactif",
+    },
+    alertes: ficheAlertes,
+    stats: ficheStats,
+    prochainRdv: ficheProchainRdv,
+    dentsStatus,
+    watchedTeeth,
+    timeline: ficheTimeline,
+  };
+
+  const ficheHandlers = {
+    onEditPatient: openEditPatientModal,
+    onOpenOrdonnance: () => {
+      setIsPrescriptionModalOpen(true);
+    },
+    onNewAppointment: () =>
+      router.push(
+        `/planning?patientId=${id}&patientName=${encodeURIComponent(displayFullName)}`,
+      ),
+    onDeletePatient: () => setDeleteConfirmOpen(true),
+    onToothClick: (tooth: ToothId) => {
+      const existingTreatment = allTreatments.find((t) => t.tooth === tooth);
+      setSelectedTooth(tooth);
+      if (existingTreatment) {
+        setToothNotes(existingTreatment.notes || "");
+        const match = clinicalProtocolsList.find(
+          (p) => p.nom === existingTreatment.acte,
+        );
+        setDrawerProtocolId(match?.id ?? "");
+      } else {
+        setToothNotes("");
+        setDrawerProtocolId("");
+      }
+    },
+    onAddActe: () => {
+      setToast({
+        type: "success",
+        message: "Cliquez sur une dent du schéma pour ajouter un acte.",
+      });
+    },
+    onEditAlertes: openEditPatientModal,
+  };
 
   return (
-    <div className="bg-[var(--ds-bg)] min-h-screen p-6">
-      <div className="flex flex-col gap-6">
-        {/* En-tête */}
-        <div className="flex items-center gap-3">
-          <Link
-            href="/patients"
-            className="inline-flex items-center gap-2 text-xs font-medium text-[var(--ds-text-muted)] hover:text-[color:var(--ds-primary)]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Retour aux patients
-          </Link>
-        </div>
-
-        {/* Section Haut : Profil + Fiche Clinique (gauche) / Schéma Dentaire (droite) */}
-        <div className="grid lg:grid-cols-12 gap-6 items-stretch">
-          {/* Colonne patient (gauche) */}
-          <aside className="lg:col-span-4 flex flex-col gap-4 h-full">
-            {/* Profil Patient */}
-            <section className="rounded-3xl bg-[var(--ds-surface)] p-4 shadow-sm h-full">
-              <div className="flex flex-col gap-3 h-full">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-[var(--ds-primary)] text-white text-lg font-bold">
-                    {capitalize(patientProfile.prenom ?? "").charAt(0)}
-                    {capitalize(patientProfile.nom ?? "").charAt(0)}
-                  </div>
-
-                  <div className="flex flex-col gap-2 min-w-0">
-                    <h1 className="text-xl font-bold text-[var(--ds-text)] leading-tight">
-                      {capitalize(patientProfile.prenom ?? "")}{" "}
-                      {capitalize(patientProfile.nom ?? "")}
-                    </h1>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          router.push(
-                            `/planning?patientId=${id}&patientName=${encodeURIComponent(
-                              `${patientProfile.prenom ?? ""} ${patientProfile.nom}`.trim(),
-                            )}`,
-                          )
-                        }
-                        className="flex items-center gap-2 rounded-xl border border-[var(--ds-primary)]/30 px-4 py-1.5 text-sm font-medium text-[var(--ds-primary)] hover:bg-[var(--ds-primary-soft)] transition-all"
-                      >
-                        <Calendar className="h-4 w-4" />
-                        Planifier un RDV
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={openEditPatientModal}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:text-[var(--ds-primary)]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Modifier
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
-                  {patientProfile.age ? `${patientProfile.age} ans` : "Âge inconnu"} ·{" "}
-                  {patientProfile.profession}
-                </p>
-
-                {/* Contact */}
-                <div className="space-y-2">
-                  <div className="w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2">
-                    <p className="text-xs font-medium text-[var(--ds-text-muted)]">
-                      Numéro de téléphone :
-                    </p>
-                    <div className="mt-1 flex items-center justify-between">
-                      <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-[var(--ds-text)]">
-                        <Phone
-                          className="h-4 w-4 shrink-0 text-[var(--ds-text-muted)]"
-                          aria-hidden
-                        />
-                        <span className="truncate">
-                          {formatPhoneNumber(patientProfile.telephone)}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-shrink-0 items-center gap-1.5">
-                        <a
-                          href={`tel:${patientProfile.telephone.replace(/\s/g, "")}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-all hover:bg-[var(--ds-primary)] hover:text-white"
-                          title="Appeler"
-                        >
-                          <Phone className="h-3.5 w-3.5" />
-                        </a>
-
-                        <a
-                          href={`https://wa.me/${patientProfile.telephone
-                            .replace(/\s/g, "")
-                            .replace(/^0/, "213")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 transition-all hover:bg-emerald-500 hover:text-white"
-                          title="WhatsApp"
-                        >
-                          <svg
-                            className="h-3.5 w-3.5"
-                            viewBox="0 0 16 16"
-                            fill="currentColor"
-                            aria-hidden
-                          >
-                            <path d="M13.601 2.326A7.85 7.85 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.9 7.9 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.9 7.9 0 0 0 13.6 2.326zM7.994 14.521a6.6 6.6 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.56 6.56 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592m3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.73.73 0 0 0-.529.247c-.182.198-.691.677-.691 1.654s.71 1.916.81 2.049c.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232" />
-                          </svg>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2">
-                    <p className="text-xs font-medium text-[var(--ds-text-muted)]">
-                      Adresse email :
-                    </p>
-                    <div className="mt-1 flex items-center gap-2 text-sm text-[var(--ds-text)]">
-                      <Mail className="h-4 w-4 text-[var(--ds-text-muted)]" aria-hidden />
-                      <span className="truncate">{patientProfile.email}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Alertes Médicales (remontées sous l'email) */}
-                <div className="mt-2 w-full">
-                  <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3 w-full">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-red-400">
-                      Alertes Médicales
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {patientProfile.alerts.length === 0 ? (
-                        <span className="text-xs text-red-400/70">Aucune</span>
-                      ) : (
-                        patientProfile.alerts.map((a) => (
-                          <span
-                            key={a}
-                            className="inline-flex rounded-lg bg-red-500/10 px-2.5 py-1 text-[11px] font-semibold text-red-400"
-                          >
-                            {a}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Fiche Clinique Multi-Actes (La Liste) — contenu LS après hydratation */}
-            {allTreatments.length > 0 && (
-              <section className="w-full bg-[var(--ds-surface)] rounded-3xl p-6 shadow-sm">
-                <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
-                  Cockpit Clinique / Actes Enregistrés
-                </h2>
-
-                <div className="mt-4 space-y-4 pr-2 overflow-y-auto max-h-80">
-                  {isMounted ? (
-                    allTreatments.map((acte, idx) => {
-                    const isSoins =
-                      acte.category === "Soins" ||
-                      acte.category === "Endodontie";
-                    const isOrthopedie = acte.category === "Orthopédie";
-                    const isChirurgie = acte.category === "Chirurgie";
-
-                    const bgClass = isSoins
-                      ? "bg-red-500/10"
-                      : isOrthopedie
-                        ? "bg-blue-500/10"
-                        : isChirurgie
-                          ? "bg-yellow-500/10"
-                          : acte.category === "Absente"
-                            ? "bg-[var(--ds-primary-soft)]/40"
-                            : "bg-[var(--ds-primary-soft)]/20";
-
-                    const badgeTextClass = isOrthopedie
-                      ? "text-blue-400"
-                      : isChirurgie
-                        ? "text-yellow-400"
-                        : isSoins
-                          ? "text-red-400"
-                          : "text-[var(--ds-text)]";
-
-                    const badgeBgClass = isOrthopedie
-                      ? "bg-blue-500/10"
-                      : isChirurgie
-                        ? "bg-yellow-500/10"
-                        : isSoins
-                          ? "bg-red-500/10"
-                          : acte.category === "Absente"
-                            ? "bg-[var(--ds-primary-soft)]/40"
-                            : "bg-[var(--ds-primary-soft)]/20";
-
-                    return (
-                      <div
-                        key={`${acte.tooth}-${acte.acte}-${idx}`}
-                        className={`flex items-center gap-3 p-3 ${bgClass} border border-[var(--ds-primary-border)] rounded-xl shadow-sm`}
-                      >
-                        <div
-                          className={[
-                            "size-10 shrink-0 rounded-full flex flex-col items-center justify-center",
-                            badgeBgClass,
-                            badgeTextClass,
-                          ].join(" ")}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-4 w-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M7 3c-2.2 0-4 2.2-3.3 4.5l1.1 3.2c.4 1.3.6 2.5.7 3.9.2 2.6 1.1 6.4 4.5 6.4 1.3 0 2.1-.6 2.6-1.2.5.6 1.3 1.2 2.6 1.2 3.4 0 4.3-3.8 4.5-6.4.1-1.4.3-2.6.7-3.9l1.1-3.2C23 5.2 21.2 3 19 3H7z" />
-                            <path d="M9 12c.5 1 1.5 1.8 3 1.8S14.5 13 15 12" />
-                          </svg>
-                          <span className="mt-0.5 text-sm font-bold leading-none">
-                            {acte.tooth}
-                          </span>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-[var(--ds-text)] truncate">
-                            {acte.acte}
-                          </p>
-                          <p className="text-xs font-medium text-[var(--ds-text-muted)]">
-                            {formatDate(acte.date)}
-                          </p>
-                          <p className="text-xs text-[var(--ds-text-muted)] truncate">
-                            {acte.notes
-                              ? acte.notes.length > 50
-                                ? acte.notes.slice(0, 50) + "…"
-                                : acte.notes
-                              : "—"}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })
-                  ) : (
-                    <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-4 py-6 text-center text-sm text-[var(--ds-text-muted)]">
-                      Chargement des actes…
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
-          </aside>
-
-          {/* Schéma Dentaire (droite) */}
-          <section className="lg:col-span-8 w-full h-full overflow-hidden rounded-3xl bg-[var(--ds-surface)] p-6 shadow-sm">
-            {isMounted ? (
-              <DentalChartComponent
-                value={dentsStatus}
-                watchedTeeth={watchedTeeth}
-                onValueChange={setDentsStatus}
-                onToothClick={(tooth) => {
-                  const existingTreatment = allTreatments.find(
-                    (t) => t.tooth === tooth,
-                  );
-                  setSelectedTooth(tooth);
-                  if (existingTreatment) {
-                    setToothNotes(existingTreatment.notes || "");
-                    const match = clinicalProtocolsList.find(
-                      (p) => p.nom === existingTreatment.acte,
-                    );
-                    setDrawerProtocolId(match?.id ?? "");
-                  } else {
-                    setToothNotes("");
-                    setDrawerProtocolId("");
-                  }
-                }}
-              />
-            ) : (
-              <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-sm text-[var(--ds-text-muted)]">
-                Chargement du schéma dentaire…
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* Section Bas : onglets + contenu pleine largeur */}
-        <section className="w-full bg-[var(--ds-surface)] rounded-3xl p-6 shadow-sm">
+    <div className="min-h-screen bg-[var(--ds-bg)] p-6">
+      <PatientFicheView
+        data={ficheData}
+        handlers={ficheHandlers}
+        footer={<div className="flex flex-col gap-6">
+        {/* Section détaillée : onglets (historique complet / radios / finances) */}
+        <section className="w-full bg-[var(--ds-surface)] rounded-3xl p-6 shadow-sm border border-[var(--ds-primary-border)]">
           {/* Menu des onglets */}
           <div className="w-full overflow-x-auto">
             <div className="flex flex-row flex-nowrap overflow-x-auto gap-2 w-full scrollbar-hide whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <button
                 type="button"
-                onClick={() => setTab("historique")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTab("historique");
+                }}
                 className={[
                   "whitespace-nowrap flex-shrink-0 rounded-2xl px-3 py-2 text-sm font-medium transition-all",
                   tab === "historique"
@@ -1523,7 +1540,10 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
               </button>
               <button
                 type="button"
-                onClick={() => setTab("radios")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTab("radios");
+                }}
                 className={[
                   "whitespace-nowrap flex-shrink-0 rounded-2xl px-3 py-2 text-sm font-medium transition-all",
                   tab === "radios"
@@ -1535,7 +1555,10 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
               </button>
               <button
                 type="button"
-                onClick={() => setTab("finances")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTab("finances");
+                }}
                 className={[
                   "whitespace-nowrap flex-shrink-0 rounded-2xl px-3 py-2 text-sm font-medium transition-all",
                   tab === "finances"
@@ -1551,42 +1574,11 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
           <div className="mt-5">
             {tab === "historique" && (
               <div>
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
-                    Timeline des consultations
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={openAiAssistantModal}
-                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[var(--ds-primary)] to-[var(--ds-primary-hover)] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    Assistant IA
-                  </button>
-                </div>
-                <div className="mt-4 relative pl-6">
-                  <div className="absolute left-2 top-0 bottom-0 w-px bg-[var(--ds-primary-border)]" />
-                  <div className="space-y-4">
-                    {timeline.map((t, idx) => (
-                      <div
-                        key={t.date + idx}
-                        className="relative flex gap-4"
-                      >
-                        <div className="absolute left-[-34px] top-0 h-2 w-2 rounded-full bg-[color:var(--ds-primary)] shadow-[0_0_12px_rgba(8,145,178,0.35)]" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-[var(--ds-text-muted)]">
-                            {formatDate(t.date)}
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-[var(--ds-text)]">
-                            {t.titre}
-                          </p>
-                          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
-                            {t.note}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
+                  Historique des soins
+                </h2>
+                <div className="mt-4">
+                  <PatientSoinsTimeline items={ficheTimeline} />
                 </div>
               </div>
             )}
@@ -1611,14 +1603,6 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                     Imagerie &amp; Documents
                   </h2>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsPrescriptionModalOpen(true)}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-bg)] hover:border-[var(--ds-primary-border)]/80"
-                    >
-                      <FileText className="h-4 w-4" />
-                      Créer une ordonnance
-                    </button>
                     <button
                       type="button"
                       onClick={() => radiosFileInputRef.current?.click()}
@@ -1775,45 +1759,6 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                   )}
                 </div>
 
-                <PrescriptionModal
-                  open={isPrescriptionModalOpen}
-                  patientName={displayFullName}
-                  patientAge={patientProfile.age ? `${patientProfile.age} ans` : "—"}
-                  onClose={() => setIsPrescriptionModalOpen(false)}
-                  onGeneratePdf={(items: PrescriptionItem[]) => {
-                    const settings = getSettings();
-                    const praticienFromSettings =
-                      (typeof settings.praticien === "string" &&
-                        settings.praticien.trim()) ||
-                      `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
-                      undefined;
-                    generateOrdonnancePDF({
-                      patient: patientProfile.prenom
-                        ? `${patientProfile.prenom} ${patientProfile.nom}`
-                        : patientProfile.nom,
-                      age:
-                        patientProfile.age != null && patientProfile.age > 0
-                          ? patientProfile.age
-                          : undefined,
-                      date: new Date().toLocaleDateString("fr-DZ"),
-                      items: items.map(({ medicament, posologie, duree }) => ({
-                        medicament,
-                        posologie,
-                        duree,
-                      })),
-                      cabinetNom:
-                        (settings.nomCabinet ?? settings.cabinetNom) as
-                          | string
-                          | undefined,
-                      cabinetAdresse: settings.adresse as string | undefined,
-                      cabinetTel: settings.telephone as string | undefined,
-                      praticienNom: praticienFromSettings,
-                      mentionLegale: settings.mentionLegale as string | undefined,
-                      logoBase64: settings.logoBase64 as string | undefined,
-                    });
-                  }}
-                />
-
                 {documentPendingDelete ? (
                   <div
                     className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
@@ -1912,7 +1857,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                           <iframe
                             title={lightboxDocument.nom}
                             src={lightboxDocument.url}
-                            className="h-[min(85vh,900px)] w-[min(96vw,720px)] rounded-lg bg-white shadow-xl"
+                            className="h-[min(85vh,900px)] w-[min(96vw,720px)] rounded-lg bg-[var(--ds-surface)] shadow-xl"
                           />
                         ) : (
                           <img
@@ -2422,7 +2367,90 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
             )}
           </div>
         </section>
-      </div>
+      </div>}
+      />
+
+      <RoleGate role={["admin", "replacant"]}>
+      <PrescriptionModal
+        open={isPrescriptionModalOpen}
+        patientName={displayFullName}
+        patientAge={patientProfile.age ? `${patientProfile.age} ans` : "—"}
+        onClose={() => setIsPrescriptionModalOpen(false)}
+        onGeneratePdf={(items: PrescriptionItem[]) => {
+          const settings = getSettings();
+          const praticienFromSettings =
+            (typeof settings.praticien === "string" &&
+              settings.praticien.trim()) ||
+            `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
+            undefined;
+          generateOrdonnancePDF({
+            patient: patientProfile.prenom
+              ? `${patientProfile.prenom} ${patientProfile.nom}`
+              : patientProfile.nom,
+            age:
+              patientProfile.age != null && patientProfile.age > 0
+                ? patientProfile.age
+                : undefined,
+            date: new Date().toLocaleDateString("fr-DZ"),
+            items: items.map(({ medicament, posologie, duree }) => ({
+              medicament,
+              posologie,
+              duree,
+            })),
+            cabinetNom:
+              (settings.nomCabinet ?? settings.cabinetNom) as
+                | string
+                | undefined,
+            cabinetAdresse: settings.adresse as string | undefined,
+            cabinetTel: settings.telephone as string | undefined,
+            praticienNom: praticienFromSettings,
+            mentionLegale: settings.mentionLegale as string | undefined,
+            logoBase64: settings.logoBase64 as string | undefined,
+          });
+        }}
+      />
+      </RoleGate>
+
+      {deleteConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-patient-title"
+          onClick={() => setDeleteConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="delete-patient-title"
+              className="text-lg font-semibold text-[var(--ds-text)]"
+            >
+              Supprimer ce patient ?
+            </h2>
+            <p className="mt-2 text-sm text-[var(--ds-text-muted)]">
+              {displayFullName} — toutes les données locales associées seront supprimées (actes, finances, documents…). Cette action est irréversible.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeletePatient}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
+              >
+                Supprimer le patient
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editingFinance && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm p-4">
@@ -2585,82 +2613,31 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
         </div>
       )}
 
-      {isAiAssistantModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl bg-[var(--ds-surface)] p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
-                  ✨ Assistant IA
-                </h3>
-                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
-                  Analyse des dernières interventions pour {displayFullName}...
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAiAssistantModalOpen(false)}
-                className="rounded-2xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text)]"
-                aria-label="Fermer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {isAiGenerating ? (
-              <div className="mt-6 space-y-3">
-                <div className="flex items-center gap-3 text-sm text-[var(--ds-text-muted)]">
-                  <Loader2 className="h-4 w-4 animate-spin text-[var(--ds-primary)]" />
-                  Analyse en cours...
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--ds-primary-soft)]">
-                  <div className="h-2 w-1/2 animate-pulse rounded-full bg-[var(--ds-primary)]" />
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6">
-                <textarea
-                  value={aiGeneratedText}
-                  onChange={(e) => setAiGeneratedText(e.target.value)}
-                  rows={9}
-                  className="w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)]/50 px-4 py-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
-                />
-              </div>
-            )}
-
-            <div className="mt-6 flex items-center justify-end gap-3 border-t border-[var(--ds-primary-border)]/60 pt-4">
-              <button
-                type="button"
-                onClick={() => setIsAiAssistantModalOpen(false)}
-                className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                disabled={isAiGenerating || !aiGeneratedText.trim()}
-                onClick={handleInsertAiSummary}
-                className="rounded-2xl bg-[var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Insérer dans le dossier
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isEditPatientModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditPatientModalOpen(false);
+          }}
+        >
           <form
-            className="w-full max-w-xl rounded-2xl bg-[var(--ds-surface)] p-6 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-patient-modal-title"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-[var(--ds-surface)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => {
               e.preventDefault();
               handleUpdatePatient();
             }}
           >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
+            <header className="sticky top-0 z-10 flex shrink-0 items-start justify-between gap-3 border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6 pt-6 pb-4">
+              <div className="min-w-0 flex-1 pr-2">
+                <h3
+                  id="edit-patient-modal-title"
+                  className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]"
+                >
                   Modifier les informations du patient
                 </h3>
                 <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
@@ -2670,14 +2647,15 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
               <button
                 type="button"
                 onClick={() => setIsEditPatientModalOpen(false)}
-                className="rounded-2xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text)]"
+                className="shrink-0 rounded-2xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text)]"
                 aria-label="Fermer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-5 w-5" aria-hidden />
               </button>
-            </div>
+            </header>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Nom complet
@@ -2688,6 +2666,23 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                   onChange={(e) => setEditPatientName(e.target.value)}
                   className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
+                  Statut patient
+                </label>
+                <select
+                  value={editPatientStatut}
+                  onChange={(e) =>
+                    setEditPatientStatut(
+                      e.target.value === "inactif" ? "inactif" : "actif",
+                    )
+                  }
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                >
+                  <option value="actif">Actif</option>
+                  <option value="inactif">Inactif</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--ds-text)]">
@@ -2715,9 +2710,38 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                   className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
+                  Groupe sanguin
+                </label>
+                <select
+                  value={editPatientGroupeSanguin}
+                  onChange={(e) => setEditPatientGroupeSanguin(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                >
+                  <option value="">Non renseigné</option>
+                  {BLOOD_GROUP_OPTIONS.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
+                  Mutuelle
+                </label>
+                <input
+                  type="text"
+                  value={editPatientMutuelle}
+                  onChange={(e) => setEditPatientMutuelle(e.target.value)}
+                  placeholder="Ex. CNAS, CASNOS, Privée…"
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)]/60 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-[var(--ds-text)]">
-                  Adresse physique
+                  Adresse complète
                 </label>
                 <input
                   type="text"
@@ -2727,7 +2751,9 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[var(--ds-text)]">Telephone</label>
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
+                  Téléphone principal
+                </label>
                 <input
                   type="text"
                   value={editPatientPhone}
@@ -2736,6 +2762,17 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
+                  Téléphone secondaire / domicile
+                </label>
+                <input
+                  type="text"
+                  value={editPatientPhoneSecond}
+                  onChange={(e) => setEditPatientPhoneSecond(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
+              </div>
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-[var(--ds-text)]">Email</label>
                 <input
                   type="email"
@@ -2744,7 +2781,7 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                   className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-[var(--ds-text)]">
                   Date de naissance
                 </label>
@@ -2755,706 +2792,640 @@ Recommandations : Poursuite du protocole d'hygiène actuel. Prochain rendez-vous
                   className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-sm font-medium text-[var(--ds-text)]">
-                  Alertes Medicales (separees par des virgules)
+                  Date de première visite
                 </label>
-                <textarea
-                  rows={3}
-                  value={editPatientAlerts}
-                  onChange={(e) => setEditPatientAlerts(e.target.value)}
-                  className="mt-1.5 w-full resize-none rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                <input
+                  type="date"
+                  value={editPatientPremiereVisite}
+                  onChange={(e) => setEditPatientPremiereVisite(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
                 />
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-[var(--ds-text)]">
+                  Alertes médicales
+                </label>
+                <div className="mt-1.5 flex min-h-[2.5rem] flex-wrap gap-2 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/40 px-3 py-2.5">
+                  {editAlertsDraft.length === 0 ? (
+                    <span className="text-sm text-[var(--ds-text-muted)]">
+                      Aucune alerte — ajoutez-en ci-dessous.
+                    </span>
+                  ) : (
+                    editAlertsDraft.map((a, idx) => (
+                      <span
+                        key={`${idx}-${a.label}`}
+                        className={[
+                          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium",
+                          a.level === "danger"
+                            ? "border-red-200 bg-red-50 text-red-800"
+                            : "border-amber-200 bg-amber-50 text-amber-900",
+                        ].join(" ")}
+                      >
+                        {a.label}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditAlertsDraft((prev) =>
+                              prev.filter((_, i) => i !== idx),
+                            )
+                          }
+                          className="ml-0.5 rounded-full p-0.5 leading-none hover:bg-black/10"
+                          aria-label={`Retirer ${a.label}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="sm:w-44">
+                    <label className="block text-[11px] font-medium text-[var(--ds-text-muted)]">
+                      Niveau
+                    </label>
+                    <select
+                      value={editAlertLevel}
+                      onChange={(e) =>
+                        setEditAlertLevel(e.target.value as PatientAlertLevel)
+                      }
+                      className="mt-1 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                    >
+                      <option value="danger">Danger (rouge)</option>
+                      <option value="warning">Attention (orange)</option>
+                    </select>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <label className="block text-[11px] font-medium text-[var(--ds-text-muted)]">
+                      Libellé
+                    </label>
+                    <input
+                      type="text"
+                      value={editAlertInput}
+                      onChange={(e) => setEditAlertInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const label = editAlertInput.trim();
+                          if (!label) return;
+                          setEditAlertsDraft((prev) => [
+                            ...prev,
+                            { label, level: editAlertLevel },
+                          ]);
+                          setEditAlertInput("");
+                        }
+                      }}
+                      placeholder="Ex. Allergie pénicilline"
+                      className="mt-1 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)]/60 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const label = editAlertInput.trim();
+                      if (!label) return;
+                      setEditAlertsDraft((prev) => [
+                        ...prev,
+                        { label, level: editAlertLevel },
+                      ]);
+                      setEditAlertInput("");
+                    }}
+                    className="shrink-0 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-4 py-2 text-sm font-medium text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary)]/15"
+                  >
+                    Ajouter
+                  </button>
+                </div>
+              </div>
+            </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-3 border-t border-[var(--ds-primary-border)]/60 pt-4">
+            <footer className="sticky bottom-0 z-10 flex shrink-0 items-center justify-end gap-3 border-t border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6 py-4">
               <button
                 type="button"
                 onClick={() => setIsEditPatientModalOpen(false)}
-                className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
+                className="rounded-2xl px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                className="rounded-2xl bg-[var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--ds-primary-hover)]"
+                className="rounded-2xl bg-[var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--ds-primary-hover)]"
               >
                 Enregistrer
               </button>
-            </div>
+            </footer>
           </form>
         </div>
       )}
 
-      {/* ── Tiroir Cockpit — protocole + consommables (override ponctuel) ── */}
+      {/* ── Tiroir Cockpit — protocole + consommables (un seul panneau) ── */}
       <>
         <div
           className={[
             "fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm transition-opacity duration-300",
             selectedTooth !== null ? "opacity-100" : "pointer-events-none opacity-0",
           ].join(" ")}
-          onClick={() => {
-            setSelectedTooth(null);
-            setShowTreatmentPlan(false);
-          }}
+          onClick={() => setSelectedTooth(null)}
         />
 
-        {/* Panel Plan de traitement — à gauche du cockpit */}
-        <div
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cockpit-title"
           className={[
-            "fixed top-4 bottom-4 w-full max-w-md",
-            "bg-[var(--ds-surface)] rounded-2xl",
-            "border border-[var(--ds-primary-border)]",
-            "flex flex-col overflow-hidden",
-            "transform transition-all duration-300 ease-out",
-            showTreatmentPlan && selectedTooth !== null
-              ? "right-[460px] opacity-100 scale-100 z-[55] shadow-2xl"
-              : "right-4 opacity-0 scale-95 z-[45] shadow-none pointer-events-none",
-          ].join(" ")}
-        >
-          <div className="flex-shrink-0 p-5 border-b border-[var(--ds-primary-border)] bg-gradient-to-r from-[var(--ds-primary-soft)] to-[var(--ds-surface)]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowTreatmentPlan(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)] transition-all"
-                  aria-label="Retour"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-                <div>
-                  <h3 className="text-base font-bold text-[var(--ds-text)]">
-                    Plan de traitement
-                  </h3>
-                  <p className="text-xs text-[var(--ds-text-muted)]">Dent {selectedTooth}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTreatmentPlan(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)] transition-all"
-                aria-label="Fermer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {treatmentPlan.length > 0 && (
-              <div className="flex gap-3">
-                <div className="flex-1 rounded-xl bg-[var(--ds-surface)] border border-[var(--ds-primary-border)] p-3 text-center">
-                  <p className="text-xs text-[var(--ds-text-muted)]">Total estimé</p>
-                  <p className="text-sm font-bold text-[var(--ds-text)] tabular-nums">
-                    {treatmentPlan
-                      .reduce((s, x) => s + x.cout, 0)
-                      .toLocaleString("fr-DZ")}{" "}
-                    DA
-                  </p>
-                </div>
-                <div className="flex-1 rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-center">
-                  <p className="text-xs text-emerald-600">Terminées</p>
-                  <p className="text-sm font-bold text-emerald-700 tabular-nums">
-                    {treatmentPlan.filter((s) => s.done).length}/
-                    {treatmentPlan.length}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 space-y-3 min-h-0">
-            {treatmentPlan.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <ClipboardList className="mb-3 h-10 w-10 text-[var(--ds-primary-border)]" />
-                <p className="text-sm text-[var(--ds-text-muted)] font-medium">
-                  Aucune séance planifiée
-                </p>
-                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
-                  Ajoutez les étapes ci-dessous
-                </p>
-              </div>
-            ) : (
-              treatmentPlan.map((s, i) => (
-                <div
-                  key={s.id}
-                  className={`rounded-xl border p-4 transition-all ${
-                    s.done
-                      ? "border-emerald-100 bg-emerald-50"
-                      : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={s.done}
-                      onChange={() =>
-                        setTreatmentPlan((prev) =>
-                          prev.map((x) =>
-                            x.id === s.id ? { ...x, done: !x.done } : x,
-                          ),
-                        )
-                      }
-                      className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer accent-[var(--ds-primary)]"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={`text-sm font-semibold ${
-                            s.done
-                              ? "line-through text-[var(--ds-text-muted)]"
-                              : "text-[var(--ds-text)]"
-                          }`}
-                        >
-                          Séance {i + 1} — {s.label}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setTreatmentPlan((prev) =>
-                              prev.filter((x) => x.id !== s.id),
-                            )
-                          }
-                          className="flex-shrink-0 text-[var(--ds-text-muted)] transition-all hover:text-red-400"
-                          aria-label="Supprimer"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {s.acte && (
-                        <p className="text-xs text-[var(--ds-text-muted)] mt-0.5">{s.acte}</p>
-                      )}
-                      <p className="text-xs font-bold text-[var(--ds-primary)] mt-1.5 tabular-nums">
-                        {s.cout.toLocaleString("fr-DZ")} DA
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="flex-shrink-0 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 p-5 space-y-3">
-            <p className="text-xs font-semibold text-[var(--ds-text-muted)] uppercase tracking-wide">
-              Nouvelle séance
-            </p>
-            <input
-              type="text"
-              value={newSeanceLabel}
-              onChange={(e) => setNewSeanceLabel(e.target.value)}
-              placeholder="Ex: Détartrage, Composite..."
-              className="w-full h-9 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm outline-none focus:border-[var(--ds-primary)] focus:shadow-[0_0_0_3px_var(--ds-primary-soft)]"
-            />
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newSeanceActe}
-                onChange={(e) => setNewSeanceActe(e.target.value)}
-                placeholder="Protocole prévu"
-                className="flex-1 h-9 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm outline-none focus:border-[var(--ds-primary)]"
-              />
-              <input
-                type="number"
-                value={newSeanceCout}
-                onChange={(e) => setNewSeanceCout(e.target.value)}
-                placeholder="DA"
-                className="w-20 h-9 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm outline-none focus:border-[var(--ds-primary)]"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (!newSeanceLabel.trim()) return;
-                setTreatmentPlan((prev) => [
-                  ...prev,
-                  {
-                    id: Date.now().toString(),
-                    label: newSeanceLabel.trim(),
-                    acte: newSeanceActe.trim(),
-                    cout: parseInt(newSeanceCout, 10) || 0,
-                    done: false,
-                  },
-                ]);
-                setNewSeanceLabel("");
-                setNewSeanceActe("");
-                setNewSeanceCout("");
-              }}
-              disabled={!newSeanceLabel.trim()}
-              className="w-full h-10 rounded-xl bg-[var(--ds-primary)] text-white text-sm font-semibold hover:bg-[var(--ds-primary-hover)] disabled:opacity-40 transition-all"
-            >
-              + Ajouter cette séance
-            </button>
-          </div>
-        </div>
-
-        <div
-          className={[
-            "fixed top-4 right-4 bottom-4 w-full max-w-md",
-            "bg-[var(--ds-surface)] rounded-2xl shadow-2xl",
-            "border border-[var(--ds-primary-border)]",
-            "transform transition-all duration-300 ease-in-out z-50",
-            "flex flex-col overflow-hidden",
+            "fixed right-4 top-[5vh] z-50 flex w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out",
             selectedTooth !== null
               ? "translate-x-0 opacity-100"
-              : "translate-x-[110%] opacity-0",
+              : "pointer-events-none translate-x-[110%] opacity-0",
           ].join(" ")}
+          style={{ maxHeight: "90vh" }}
         >
-          {/* EN-TÊTE AMÉLIORÉ */}
-          <div className="flex-shrink-0 p-5 border-b border-[var(--ds-primary-border)] bg-gradient-to-r from-[var(--ds-primary-soft)] to-[var(--ds-surface)]">
-            <div className="flex items-center justify-between mb-3">
+          {/* HEADER */}
+          <header className="shrink-0 border-b border-[var(--ds-primary-border)] bg-gradient-to-r from-[var(--ds-primary-soft)] to-[var(--ds-surface)] px-5 py-4">
+            <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-primary)] text-white font-bold text-sm shadow-md shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)]">
-                  {selectedTooth}
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-primary)] text-sm font-bold text-white shadow-md shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)]">
+                  {selectedTooth ?? "—"}
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-[var(--ds-text)]">
-                    Dent {selectedTooth}
+                <div className="min-w-0">
+                  <h3
+                    id="cockpit-title"
+                    className="truncate text-[15px] font-bold text-[var(--ds-text)]"
+                  >
+                    🦷 Dent {selectedTooth ?? "—"} · Cockpit clinique
                   </h3>
-                  <p className="text-xs text-[var(--ds-text-muted)]">Cockpit clinique</p>
+                  {selectedTooth !== null && dentsStatus[selectedTooth as ToothId] && (
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--ds-text-muted)]">
+                      <span>État actuel :</span>
+                      <span
+                        className={[
+                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                          dentsStatus[selectedTooth as ToothId] === "healthy"
+                            ? "bg-green-50 text-green-700"
+                            : dentsStatus[selectedTooth as ToothId] === "chirurgie"
+                              ? "bg-orange-50 text-orange-700"
+                              : dentsStatus[selectedTooth as ToothId] === "absente"
+                                ? "bg-[var(--ds-primary-soft)] text-[var(--ds-text-muted)]"
+                                : "bg-cyan-50 text-cyan-700"
+                        ].join(" ")}
+                      >
+                        ●{" "}
+                        {dentsStatus[selectedTooth as ToothId] === "healthy" && "Saine"}
+                        {dentsStatus[selectedTooth as ToothId] === "carie" && "Soins"}
+                        {dentsStatus[selectedTooth as ToothId] === "couronne" && "Prothèse"}
+                        {dentsStatus[selectedTooth as ToothId] === "chirurgie" && "Chirurgie"}
+                        {dentsStatus[selectedTooth as ToothId] === "absente" && "Absente"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedTooth(null);
-                  setShowTreatmentPlan(false);
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text-muted)] transition-all"
+                onClick={() => setSelectedTooth(null)}
                 aria-label="Fermer"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
 
-            {selectedTooth !== null &&
-              dentsStatus[selectedTooth as ToothId] && (
-                <>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs text-[var(--ds-text-muted)]">État actuel :</span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        dentsStatus[selectedTooth as ToothId] === "healthy"
-                          ? "bg-green-50 text-green-700"
-                          : dentsStatus[selectedTooth as ToothId] === "chirurgie"
-                            ? "bg-orange-50 text-orange-700"
-                            : dentsStatus[selectedTooth as ToothId] === "absente"
-                              ? "bg-[var(--ds-primary-soft)] text-[var(--ds-text-muted)]"
-                              : "bg-cyan-50 text-cyan-700"
-                      }`}
-                    >
-                      {dentsStatus[selectedTooth as ToothId] === "healthy" &&
-                        "✓ Saine"}
-                      {dentsStatus[selectedTooth as ToothId] === "carie" &&
-                        "⚠ Soins requis"}
-                      {dentsStatus[selectedTooth as ToothId] === "couronne" &&
-                        "◈ Prothèse"}
-                      {dentsStatus[selectedTooth as ToothId] === "chirurgie" &&
-                        "✦ Chirurgie"}
-                      {dentsStatus[selectedTooth as ToothId] === "absente" &&
-                        "○ Absente"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {(
-                      [
-                        ["healthy", "✓ Saine", "green"],
-                        ["carie", "⚠ Soins", "cyan"],
-                        ["couronne", "◈ Prothèse", "purple"],
-                        ["chirurgie", "✦ Chirurgie", "orange"],
-                      ] as const
-                    ).map(([status, label, color]) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => {
-                          if (selectedTooth !== null) {
-                            setDentsStatus((prev) => ({
-                              ...prev,
-                              [selectedTooth as ToothId]: status,
-                            }));
-                          }
-                        }}
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-all ${
-                          dentsStatus[selectedTooth as ToothId] === status
-                            ? color === "green"
-                              ? "bg-green-100 border-green-300 text-green-700"
-                              : color === "cyan"
-                                ? "bg-cyan-100 border-cyan-300 text-cyan-700"
-                                : color === "purple"
-                                  ? "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)]"
-                                  : "bg-orange-100 border-orange-300 text-orange-700"
-                            : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-[var(--ds-primary-border)]"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 gap-5">
-            <div className="space-y-5">
-                {/* Historique de cette dent */}
-                {selectedTooth !== null && (() => {
-                  const toothHistory = allTreatments.filter(
-                    (t) => t.tooth === selectedTooth
-                  );
-                  return toothHistory.length > 0 ? (
-                    <div className="rounded-xl border border-[var(--ds-primary-border)] 
-      bg-[var(--ds-bg)] p-4 space-y-2">
-                      <p className="text-xs font-semibold text-[var(--ds-text-muted)] 
-        uppercase tracking-wide">
-                        Historique de cette dent
-                      </p>
-                      {toothHistory.slice(0, 3).map((t, i) => (
-                        <div key={i} className="flex items-center 
-          justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 rounded-full 
-              bg-[var(--ds-primary)]" />
-                            <span className="text-xs text-[var(--ds-text)] 
-              font-medium">
-                              {t.acte}
-                            </span>
-                          </div>
-                          <span className="text-xs text-[var(--ds-text-muted)]">
-                            {new Date(t.date).toLocaleDateString("fr-DZ")}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed 
-      border-[var(--ds-primary-border)] p-4 text-center">
-                      <p className="text-xs text-[var(--ds-text-muted)]">
-                        Aucun acte enregistré sur cette dent
-                      </p>
-                    </div>
-                  );
-                })()}
-
-                {selectedTooth !== null && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTreatmentPlan(true)}
-                    className="w-full flex items-center justify-between rounded-xl border-2 border-[var(--ds-primary)]/30 px-4 py-3.5 text-sm font-semibold text-[var(--ds-text-muted)] bg-[var(--ds-primary-soft)] hover:bg-[var(--ds-primary)] hover:text-white hover:border-[var(--ds-primary)] hover:shadow-xl hover:shadow-[color-mix(in_srgb,var(--ds-primary)_35%,transparent)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-[var(--ds-text-muted)] group-hover:text-white group-hover:scale-110 transition-all duration-200" />
-                      Plan de traitement
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {treatmentPlan.length > 0 && (
-                        <span className="text-xs bg-[var(--ds-primary)] text-white rounded-full px-2 py-0.5">
-                          {treatmentPlan.filter((s) => s.done).length}/
-                          {treatmentPlan.length}
-                        </span>
-                      )}
-                      <ChevronRight className="h-4 w-4 text-[var(--ds-text-muted)] group-hover:text-white group-hover:translate-x-1.5 transition-all duration-200" />
-                    </div>
-                  </button>
-                )}
-
-                {/* Séparateur */}
-                <div className="h-px bg-[var(--ds-primary-soft)]" />
-
-                {selectedTooth !== null && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-[var(--ds-text-muted)] uppercase tracking-wide">
-                      Note rapide
-                    </p>
-                    <textarea
-                      value={toothNotes}
-                      onChange={(e) => setToothNotes(e.target.value)}
-                      placeholder="Observation, remarque sur cette dent..."
-                      rows={2}
-                      className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none resize-none transition-all placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:bg-[var(--ds-surface)] focus:shadow-[0_0_0_3px_var(--ds-primary-soft)]"
-                    />
-                  </div>
-                )}
-
-                {selectedTooth !== null && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setWatchedTeeth((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(selectedTooth)) {
-                          next.delete(selectedTooth);
-                        } else {
-                          next.add(selectedTooth);
-                        }
-                        if (typeof window !== "undefined") {
-                          localStorage.setItem(
-                            WATCHED_KEY,
-                            JSON.stringify([...next]),
-                          );
-                        }
-                        return next;
-                      })
-                    }
-                    className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
-                      watchedTeeth.has(selectedTooth)
-                        ? "border-amber-200 bg-amber-50 text-amber-700"
-                        : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
-                    }`}
-                  >
-                    <span>
-                      {watchedTeeth.has(selectedTooth)
-                        ? "⚠ Dent surveillée"
-                        : "Marquer à surveiller"}
-                    </span>
-                  </button>
-                )}
-
-                {selectedTooth !== null &&
-                  dentsStatus[selectedTooth as ToothId] !== "absente" &&
-                  (confirmAbsent === selectedTooth ? (
-                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
-                      <p className="text-xs text-red-700 font-medium text-center">
-                        Confirmer que la dent {selectedTooth} est absente ?
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDentsStatus((prev) => ({
-                              ...prev,
-                              [selectedTooth as ToothId]: "absente",
-                            }));
-                            setConfirmAbsent(null);
-                            setSelectedTooth(null);
-                            setShowTreatmentPlan(false);
-                          }}
-                          className="flex-1 rounded-lg bg-red-600 text-white text-xs font-semibold py-2 hover:bg-red-700 transition-all"
-                        >
-                          Confirmer
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmAbsent(null)}
-                          className="flex-1 rounded-lg border border-[var(--ds-primary-border)] text-[var(--ds-text-muted)] text-xs font-semibold py-2 hover:bg-[var(--ds-primary-soft)] transition-all"
-                        >
-                          Annuler
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
+            {/* Tabs état dent */}
+            {selectedTooth !== null && (
+              <div className="mt-3 grid grid-cols-4 gap-1.5">
+                {(
+                  [
+                    ["healthy", "Saine"],
+                    ["carie", "Soins"],
+                    ["couronne", "Prothèse"],
+                    ["chirurgie", "Chirurgie"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const active = dentsStatus[selectedTooth as ToothId] === key;
+                  return (
                     <button
+                      key={key}
                       type="button"
-                      onClick={() => setConfirmAbsent(selectedTooth)}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                    >
-                      ○ Marquer comme absente
-                    </button>
-                  ))}
-
-                {selectedTooth !== null &&
-                  dentsStatus[selectedTooth as ToothId] === "absente" && (
-                    <button
-                      type="button"
-                      onClick={() => {
+                      onClick={() =>
                         setDentsStatus((prev) => ({
                           ...prev,
-                          [selectedTooth as ToothId]: "healthy",
-                        }));
-                        setSelectedTooth(null);
-                        setShowTreatmentPlan(false);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition-all hover:bg-emerald-100"
+                          [selectedTooth as ToothId]: key as ToothStatus,
+                        }))
+                      }
+                      className={[
+                        "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+                        active
+                          ? "border-[var(--ds-primary)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)]"
+                          : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+                      ].join(" ")}
                     >
-                      ✓ Restaurer cette dent
+                      {label}
                     </button>
-                  )}
+                  );
+                })}
+              </div>
+            )}
+          </header>
 
-                <div className="space-y-2">
-                  <label
-                    className="text-xs font-semibold text-[var(--ds-text-muted)]"
-                    htmlFor="cockpit-protocol-search"
-                  >
-                    Rechercher un protocole
-                  </label>
-                  <div className="relative">
-                    <Search
-                      className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]"
-                      aria-hidden
-                    />
-                    <input
-                      id="cockpit-protocol-search"
-                      type="search"
-                      value={protocolSearchQuery}
-                      onChange={(e) => setProtocolSearchQuery(e.target.value)}
-                      placeholder="Filtrer par nom…"
-                      autoComplete="off"
-                      className="w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--ds-text)] transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
-                    />
-                  </div>
-                </div>
-
-                {protocolsByCategory.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-4 py-6 text-center text-sm text-[var(--ds-text-muted)]">
-                    Aucun protocole ne correspond à votre recherche.
-                  </p>
-                ) : (
-                  protocolsByCategory.map(({ category, protocols }) => {
-                    const isOpen = expandedCategories.has(category);
-                    return (
-                      <section
-                        key={category}
-                        className="overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]"
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedCategories((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(category)) next.delete(category);
-                              else next.add(category);
-                              return next;
-                            })
-                          }
-                          aria-expanded={isOpen}
-                          className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-[var(--ds-bg)]"
-                        >
-                          <span className="text-xs font-bold uppercase tracking-wide text-[var(--ds-text)]">
-                            {category}
-                          </span>
-                          <ChevronDown
-                            className={[
-                              "h-4 w-4 shrink-0 text-[var(--ds-text-muted)] transition-transform duration-300 ease-out",
-                              isOpen ? "rotate-180" : "rotate-0",
-                            ].join(" ")}
-                            aria-hidden
-                          />
-                        </button>
-                        <div
-                          className={[
-                            "grid transition-[grid-template-rows] duration-300 ease-out",
-                            isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                          ].join(" ")}
-                        >
-                          <div className="min-h-0 overflow-hidden">
-                            <div className="space-y-2 border-t border-[var(--ds-primary-border)] px-3.5 pb-3 pt-2">
-                              {protocols.map((p) => {
-                                const isSelected = drawerProtocolId === p.id;
-                                return (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    onClick={() => setDrawerProtocolId(p.id)}
-                                    className={[
-                                      "w-full rounded-2xl border px-3.5 py-3 text-left text-sm leading-snug transition-colors",
-                                      isSelected
-                                        ? "border-[color:var(--ds-primary)] bg-[color:var(--ds-primary)]/8 text-[color:var(--ds-text)] shadow-sm ring-1 ring-[color:var(--ds-primary)]/25"
-                                        : "border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-[var(--ds-text)] hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)]",
-                                    ].join(" ")}
-                                  >
-                                    <span className="font-medium">{p.nom}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </section>
+          {/* CORPS scrollable (overflow uniquement si dépassement) */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            {selectedTooth !== null && (
+              <>
+                {/* Actes enregistrés */}
+                <section>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    Actes enregistrés
+                  </h4>
+                  {(() => {
+                    const toothHistory = allTreatments.filter(
+                      (t) => t.tooth === selectedTooth,
                     );
-                  })
-                )}
-
-                {selectedDrawerProtocol && (
-                  <>
-                  <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                      Consommables (défaut ±)
-                    </p>
-                    <ul className="mt-3 space-y-2">
-                      {selectedDrawerProtocol.consommables.map((c) => {
-                        const q = qtyByConsumableId[c.id] ?? c.quantite;
-                        return (
+                    if (toothHistory.length === 0) {
+                      return (
+                        <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
+                          Aucun acte
+                        </p>
+                      );
+                    }
+                    return (
+                      <ul className="space-y-1.5">
+                        {toothHistory.slice(0, 4).map((t, i) => (
                           <li
-                            key={c.id}
-                            className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2"
+                            key={i}
+                            className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-2"
                           >
-                            <span className="min-w-0 flex-1 text-sm text-[var(--ds-text)]">
-                              {c.nom}
-                            </span>
-                            <div className="flex shrink-0 items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setQtyByConsumableId((prev) => ({
-                                    ...prev,
-                                    [c.id]: Math.max(0, (prev[c.id] ?? c.quantite) - 1),
-                                  }))
-                                }
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-sm font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-                                aria-label="Diminuer"
-                              >
-                                −
-                              </button>
-                              <span className="w-8 text-center text-sm font-semibold tabular-nums text-[var(--ds-text)]">
-                                {q}
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-primary)]"
+                                aria-hidden
+                              />
+                              <span className="truncate text-xs font-medium text-[var(--ds-text)]">
+                                {t.acte}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setQtyByConsumableId((prev) => ({
-                                    ...prev,
-                                    [c.id]: (prev[c.id] ?? c.quantite) + 1,
-                                  }))
-                                }
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-sm font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-                                aria-label="Augmenter"
-                              >
-                                +
-                              </button>
                             </div>
+                            <span className="shrink-0 font-mono text-[10.5px] text-[var(--ds-text-muted)]">
+                              {new Date(t.date).toLocaleDateString("fr-DZ")}
+                            </span>
                           </li>
-                        );
-                      })}
-                    </ul>
+                        ))}
+                      </ul>
+                    );
+                  })()}
+                </section>
+
+                {/* Ajouter un acte */}
+                <section className="space-y-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    Ajouter un acte
+                  </h4>
+
+                  <div>
+                    <label
+                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                      htmlFor="cockpit-protocol-select"
+                    >
+                      Protocole
+                    </label>
+                    <select
+                      id="cockpit-protocol-select"
+                      value={drawerProtocolId}
+                      onChange={(e) => setDrawerProtocolId(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                    >
+                      <option value="">— Sélectionner un protocole —</option>
+                      {drawerProtocolsGrouped.map(({ category, protocols }) => (
+                        <optgroup key={category} label={category}>
+                          {protocols.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nom}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-[var(--ds-text-muted)]">
-                      Notes cliniques
+                  <div>
+                    <label
+                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                      htmlFor="cockpit-note"
+                    >
+                      Note rapide
                     </label>
                     <textarea
+                      id="cockpit-note"
                       value={toothNotes}
                       onChange={(e) => setToothNotes(e.target.value)}
-                      rows={4}
-                      placeholder="Observations, complications, plan de suivi…"
-                      className="w-full resize-none rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-3 text-sm text-[var(--ds-text)] transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                      rows={2}
+                      placeholder="Observation, remarque…"
+                      className="mt-1 w-full resize-none rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
                     />
                   </div>
-                  </>
-                )}
-              </div>
-            </div>
 
-          <div className="flex-shrink-0 p-5 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 backdrop-blur-sm space-y-2">
-            <button
-              type="button"
-              disabled={!selectedDrawerProtocol || validateSoinLoading}
-              onClick={() => void handleValidateClinicalAct()}
-              className="w-full h-11 rounded-xl bg-[var(--ds-primary)] text-white text-sm font-semibold transition-all hover:bg-[var(--ds-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)]"
+                  <div>
+                    <label
+                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                      htmlFor="cockpit-montant"
+                    >
+                      Montant
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        id="cockpit-montant"
+                        type="text"
+                        inputMode="decimal"
+                        value={drawerMontant}
+                        onChange={(e) => setDrawerMontant(e.target.value)}
+                        placeholder="Automatique"
+                        className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 pr-12 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10.5px] uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        DA
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedDrawerProtocol && selectedDrawerProtocol.consommables.length > 0 && (
+                    <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 text-xs">
+                      <summary className="cursor-pointer select-none px-3 py-2 font-medium text-[var(--ds-text)]">
+                        Consommables ({selectedDrawerProtocol.consommables.length})
+                      </summary>
+                      <ul className="space-y-1.5 border-t border-[var(--ds-primary-border)] px-3 py-2">
+                        {selectedDrawerProtocol.consommables.map((c) => {
+                          const q = qtyByConsumableId[c.id] ?? c.quantite;
+                          return (
+                            <li
+                              key={c.id}
+                              className="flex items-center justify-between gap-2"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[var(--ds-text)]">
+                                {c.nom}
+                              </span>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setQtyByConsumableId((prev) => ({
+                                      ...prev,
+                                      [c.id]: Math.max(
+                                        0,
+                                        (prev[c.id] ?? c.quantite) - 1,
+                                      ),
+                                    }))
+                                  }
+                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                                  aria-label="Diminuer"
+                                >
+                                  −
+                                </button>
+                                <span className="w-6 text-center font-semibold tabular-nums text-[var(--ds-text)]">
+                                  {q}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setQtyByConsumableId((prev) => ({
+                                      ...prev,
+                                      [c.id]: (prev[c.id] ?? c.quantite) + 1,
+                                    }))
+                                  }
+                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                                  aria-label="Augmenter"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </details>
+                  )}
+                </section>
+
+                {/* Plan de traitement (inline) */}
+                <section className="space-y-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    Plan de traitement
+                  </h4>
+
+                  {treatmentPlan.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
+                      Aucune séance planifiée
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {treatmentPlan.map((s, i) => (
+                        <li
+                          key={s.id}
+                          className={[
+                            "flex items-center gap-2 rounded-xl border px-3 py-2",
+                            s.done
+                              ? "border-emerald-100 bg-emerald-50"
+                              : "border-[var(--ds-primary-border)] bg-[var(--ds-bg)]",
+                          ].join(" ")}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={s.done}
+                            onChange={() =>
+                              setTreatmentPlan((prev) =>
+                                prev.map((x) =>
+                                  x.id === s.id ? { ...x, done: !x.done } : x,
+                                ),
+                              )
+                            }
+                            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-[var(--ds-primary)]"
+                          />
+                          <span
+                            className={[
+                              "min-w-0 flex-1 truncate text-xs",
+                              s.done
+                                ? "text-[var(--ds-text-muted)] line-through"
+                                : "text-[var(--ds-text)]",
+                            ].join(" ")}
+                          >
+                            Séance {i + 1} — {s.label}
+                          </span>
+                          {s.cout > 0 && (
+                            <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-[var(--ds-primary)]">
+                              {s.cout.toLocaleString("fr-DZ")} DA
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTreatmentPlan((prev) =>
+                                prev.filter((x) => x.id !== s.id),
+                              )
+                            }
+                            aria-label="Supprimer"
+                            className="shrink-0 text-[var(--ds-text-muted)] transition-colors hover:text-red-500"
+                          >
+                            <X className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newSeanceLabel}
+                      onChange={(e) => setNewSeanceLabel(e.target.value)}
+                      placeholder="Nouvelle séance"
+                      className="h-9 min-w-0 flex-1 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                    />
+                    <input
+                      type="number"
+                      value={newSeanceCout}
+                      onChange={(e) => setNewSeanceCout(e.target.value)}
+                      placeholder="DA"
+                      className="h-9 w-24 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newSeanceLabel.trim()) return;
+                      setTreatmentPlan((prev) => [
+                        ...prev,
+                        {
+                          id: Date.now().toString(),
+                          label: newSeanceLabel.trim(),
+                          acte: newSeanceActe.trim(),
+                          cout: parseInt(newSeanceCout, 10) || 0,
+                          done: false,
+                        },
+                      ]);
+                      setNewSeanceLabel("");
+                      setNewSeanceActe("");
+                      setNewSeanceCout("");
+                    }}
+                    disabled={!newSeanceLabel.trim()}
+                    className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-xs font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    + Ajouter cette séance
+                  </button>
+                </section>
+
+                {/* Actions secondaires : Marquer absente + Surveiller */}
+                {confirmAbsent === selectedTooth ? (
+                  <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                    <p className="text-center text-xs font-medium text-red-700">
+                      Confirmer que la dent {selectedTooth} est absente ?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDentsStatus((prev) => ({
+                            ...prev,
+                            [selectedTooth as ToothId]: "absente",
+                          }));
+                          setConfirmAbsent(null);
+                          setSelectedTooth(null);
+                        }}
+                        className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
+                      >
+                        Confirmer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAbsent(null)}
+                        className="flex-1 rounded-lg border border-[var(--ds-primary-border)] px-2 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    {dentsStatus[selectedTooth as ToothId] !== "absente" ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAbsent(selectedTooth)}
+                        className="flex-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                      >
+                        ○ Marquer absente
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDentsStatus((prev) => ({
+                            ...prev,
+                            [selectedTooth as ToothId]: "healthy",
+                          }));
+                          setSelectedTooth(null);
+                        }}
+                        className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                      >
+                        ✓ Restaurer
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWatchedTeeth((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(selectedTooth)) next.delete(selectedTooth);
+                          else next.add(selectedTooth);
+                          if (typeof window !== "undefined") {
+                            localStorage.setItem(
+                              WATCHED_KEY,
+                              JSON.stringify([...next]),
+                            );
+                          }
+                          return next;
+                        })
+                      }
+                      className={[
+                        "flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+                        watchedTeeth.has(selectedTooth)
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
+                      ].join(" ")}
+                    >
+                      ◎{" "}
+                      {watchedTeeth.has(selectedTooth) ? "Surveillée" : "Surveiller"}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* FOOTER */}
+          <footer className="shrink-0 space-y-1.5 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-5 py-3 backdrop-blur-sm">
+            <RoleGate
+              role={["admin", "replacant"]}
+              fallback={
+                <div className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)]/40 px-3 py-2 text-center text-xs text-[var(--ds-text-muted)]">
+                  Odontogramme en lecture seule pour votre rôle
+                </div>
+              }
             >
-              {validateSoinLoading ? "Enregistrement..." : "✓ Valider le soin"}
-            </button>
+              <button
+                type="button"
+                disabled={!selectedDrawerProtocol || validateSoinLoading}
+                onClick={() => void handleValidateClinicalAct()}
+                className="h-11 w-full rounded-xl bg-[var(--ds-primary)] text-sm font-semibold text-white shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)] transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+              >
+                {validateSoinLoading ? "Enregistrement…" : "✓ Valider le soin"}
+              </button>
+            </RoleGate>
             <button
               type="button"
-              onClick={() => {
-                setSelectedTooth(null);
-                setShowTreatmentPlan(false);
-              }}
-              className="w-full h-9 rounded-xl text-sm text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)] transition-all"
+              onClick={() => setSelectedTooth(null)}
+              className="h-8 w-full rounded-xl text-xs text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
             >
               Annuler
             </button>
-          </div>
-        </div>
+          </footer>
+        </aside>
       </>
 
       {toast ? (

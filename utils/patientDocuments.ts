@@ -176,6 +176,15 @@ export function removePatientDocument(
   return true;
 }
 
+/** Retire toutes les entrées `dental_patient_documents` pour ce patient (ex. suppression patient). */
+export function clearPatientDocuments(patientId: string): void {
+  if (!patientId || typeof window === "undefined") return;
+  const store = readStore();
+  if (!(patientId in store)) return;
+  delete store[patientId];
+  writeStore(store);
+}
+
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export function fileToDataUrl(file: File): Promise<string> {

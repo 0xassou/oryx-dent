@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -10,7 +11,6 @@ import {
 } from "react";
 import {
   AlertTriangle,
-  ArrowRight,
   Calendar,
   Check,
   FlaskConical,
@@ -49,6 +49,13 @@ import {
   readAppointmentsFromStorage,
 } from "@/utils/appointmentData";
 import { StatusBadge } from "@/components/laboratoire/StatusBadge";
+import { KpiCard } from "@/components/dashboard/KpiCard";
+import { WeeklyRevenueChart } from "@/components/dashboard/WeeklyRevenueChart";
+import {
+  QuickStats,
+  RecentPatients,
+} from "@/components/dashboard/QuickStatsAndPatients";
+import { RecentActivityWidget } from "@/components/dashboard/RecentActivityWidget";
 import {
   LAB_COMMANDES_UPDATED_EVENT,
   listLogisticsAlerts,
@@ -825,6 +832,8 @@ function getDoctorName() {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const annulationsCount = 0;
   const [mounted, setMounted] = useState(false);
   const [doctorInfo, setDoctorInfo] = useState({
     nom: "Assil",
@@ -1085,7 +1094,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen space-y-6 bg-[var(--ds-bg)] p-4 sm:p-6">
+    <div className="flex min-h-screen flex-col gap-4 bg-[#faf9ff] p-6">
       {/* ── En-tête ───────────────────────────────────────────────────── */}
       <div className="rounded-3xl border border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)] p-4 shadow-sm lg:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1107,110 +1116,47 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── KPI 4 colonnes ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
-          <div className="flex flex-col gap-2 p-3 lg:p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
-                RDV du jour
-              </p>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] lg:h-10 lg:w-10">
-                <Calendar className="h-4 w-4 lg:h-5 lg:w-5" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--ds-text)]">
-              {rdvCount}
-            </p>
-            <div>
-              <span className="inline-flex max-w-full truncate rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-100 lg:px-3 lg:text-xs">
-                {rdvToConfirmCount} à confirmer
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
-          <div className="flex flex-col gap-2 p-3 lg:p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
-                Nouveaux patients
-              </p>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-600 lg:h-10 lg:w-10">
-                <UserPlus className="h-4 w-4 lg:h-5 lg:w-5" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--ds-text)]">
-              {patientCount}
-            </p>
-            <div>
-              <span className="inline-flex max-w-full truncate rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-800 ring-1 ring-emerald-100 lg:px-3 lg:text-xs">
-                +{patientsThisMonthCount} ce mois-ci
-              </span>
-            </div>
-          </div>
-        </div>
-
+      {/* ── KPI 4 colonnes (KpiCard design system) ───────────────────── */}
+      <div className="grid grid-cols-4 gap-3">
+        <KpiCard
+          kpi="rdv"
+          label="RDV du jour"
+          value={rdvCount}
+          change={`${rdvToConfirmCount} à confirmer`}
+          icon={<Calendar />}
+        />
+        <KpiCard
+          kpi="patients"
+          label="Nouveaux patients"
+          value={patientCount}
+          change={`+${patientsThisMonthCount} ce mois-ci`}
+          icon={<UserPlus />}
+        />
         <Link
           href="/sterilisation"
-          className="kpi-card group flex flex-col rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm transition-all hover:border-[var(--ds-primary-border)] hover:shadow-md"
+          className="block rounded-xl transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed] focus-visible:ring-offset-2"
         >
-          <div className="flex flex-col gap-2 p-3 lg:p-5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <p className="min-w-0 truncate text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
-                  Kits stériles
-                </p>
-                <PremiumBadge className="shrink-0" />
-              </div>
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-600 lg:h-10 lg:w-10">
-                <ShieldCheck className="h-4 w-4 lg:h-5 lg:w-5" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tabular-nums tracking-tight text-[var(--ds-text)]">
-              {sterileTotal}
-            </p>
-            <div>
-              <p className="text-[11px] text-[var(--ds-text-muted)]">
-                Module stérilisation
-              </p>
-            </div>
-          </div>
-          <p className="flex items-center gap-1 px-3 pb-3 pt-0 text-xs font-medium text-[var(--ds-text-muted)] group-hover:text-[var(--ds-primary)] lg:px-5 lg:pb-5">
-            Ouvrir
-            <ArrowRight className="h-3.5 w-3.5" />
-          </p>
+          <KpiCard
+            kpi="kits"
+            label="Kits stériles"
+            value={sterileTotal}
+            change="Module stérilisation"
+            icon={<ShieldCheck />}
+          />
         </Link>
-
         <Link
           href="/stocks"
-          className="kpi-card group flex flex-col rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm transition-all hover:border-[var(--ds-primary-border)] hover:shadow-md"
+          className="block rounded-xl transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed] focus-visible:ring-offset-2"
         >
-          <div className="flex flex-col gap-2 p-3 lg:p-5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <p className="min-w-0 truncate text-xs font-medium text-[var(--ds-text-muted)] lg:text-sm">
-                  Stock faible
-                </p>
-                <PremiumBadge className="shrink-0" />
-              </div>
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 lg:h-10 lg:w-10">
-                <PackageSearch className="h-4 w-4 lg:h-5 lg:w-5" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tabular-nums text-red-600">
-              {stockCriticalCount}
-            </p>
-            <div>
-              <p className="text-[11px] text-[var(--ds-text-muted)]">
-                Sous le seuil de sécurité
-              </p>
-            </div>
-          </div>
-          <p className="flex items-center gap-1 px-3 pb-3 pt-0 text-xs font-medium text-[var(--ds-text-muted)] group-hover:text-[var(--ds-primary)] lg:px-5 lg:pb-5">
-            Ouvrir
-            <ArrowRight className="h-3.5 w-3.5" />
-          </p>
+          <KpiCard
+            kpi="stock"
+            stockAlertCount={stockCriticalCount}
+            label="Stock faible"
+            value={stockCriticalCount}
+            unit="alertes"
+            change="Sous le seuil sécurité"
+            icon={<PackageSearch />}
+          />
         </Link>
       </div>
 
@@ -1255,11 +1201,8 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {/* ── Layout principal 2/3 + 1/3 ───────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Flux — col 2 */}
-        <div className="lg:col-span-2">
-          <div className="h-full rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
+      {/* ── Flux de la journée — pleine largeur ───────────────────────── */}
+      <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
             <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
@@ -1409,12 +1352,16 @@ export default function DashboardPage() {
               </p>
             )}
 
-            <div className="mt-8 hidden border-t border-[var(--ds-primary-border)] pt-8 lg:block">
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm">
-                  <h3 className="text-sm font-semibold text-[var(--ds-text)]">
-                    📝 Actions Prioritaires
-                  </h3>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[1fr_380px]">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="text-[13px] font-semibold text-[var(--ds-text)]">
+                      📝 Actions Prioritaires
+                    </span>
+                  </div>
                   <div className="mt-4 flex items-center gap-2 rounded-lg bg-[var(--ds-bg)] px-3 py-2.5">
                     <input
                       type="text"
@@ -1460,7 +1407,7 @@ export default function DashboardPage() {
                             >
                               {t.isDone ? (
                                 <Check
-                                  className="h-3 w-3 text-white"
+                                  className="h-3 w-3 text-[var(--ds-bg)]"
                                   strokeWidth={3}
                                 />
                               ) : null}
@@ -1480,15 +1427,17 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--ds-text)]">
-                    🔔 À recontacter
-                  </h3>
+                <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="text-[13px] font-semibold text-[var(--ds-text)]">
+                      🔔 À recontacter
+                    </span>
+                  </div>
                   <div className="mt-4 space-y-3">
                     {RELANCE_PATIENTS.map((r) => (
                       <div
                         key={r.id}
-                        className="flex items-center gap-3 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3 shadow-sm"
+                        className="flex items-center gap-3 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-[var(--ds-text)]">
@@ -1500,7 +1449,7 @@ export default function DashboardPage() {
                         </div>
                         <button
                           type="button"
-                          className="shrink-0 rounded-full border border-amber-500 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50"
+                          className="shrink-0 rounded-full border border-[var(--ds-border-strong)] bg-[var(--ds-primary-soft)] px-4 py-1.5 text-[12px] font-semibold text-[var(--ds-primary-hover)] transition-colors hover:bg-[var(--ds-bg)]"
                         >
                           {r.actionLabel}
                         </button>
@@ -1508,13 +1457,11 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
+
+          <RecentActivityWidget />
         </div>
 
-        {/* Widgets — col 1 (desktop uniquement : graphique + labo) */}
-        <div className="hidden flex-col gap-6 lg:col-span-1 lg:flex">
+        <div className="flex flex-col gap-4">
           <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
             <h3 className="text-sm font-semibold text-[color:var(--ds-text)]">
               Répartition des actes
@@ -1525,7 +1472,25 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
+          <WeeklyRevenueChart badgeLabel="▲ 12%" />
+          <QuickStats
+            stats={[
+              { value: "98%", label: "Satisfaction", colorVar: "var(--ds-primary)" },
+              { value: "24 min", label: "Durée moy.", colorVar: "var(--ds-primary-hover)" },
+              {
+                value: annulationsCount.toString(),
+                label: "Annulations",
+                colorVar: "var(--ds-text-muted)",
+              },
+            ]}
+          />
+          <RecentPatients
+            onViewAll={() => {
+              router.push("/patients");
+            }}
+          />
+
+          <div className="flex-1 rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-[color:var(--ds-text)]">
                 Suivi laboratoire

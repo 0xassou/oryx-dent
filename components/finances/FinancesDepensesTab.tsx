@@ -5,12 +5,21 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   addExpenseToStorage,
   type DentalExpense,
+  type ExpenseCategory,
   EXPENSE_CATEGORIES,
   readExpensesFromStorage,
 } from "@/utils/expensesData";
 import { formatDZD, formatDate } from "@/utils/formatters";
 
 const JUSTIF_MAX_BYTES = 5 * 1024 * 1024;
+
+const CATEGORY_OPTION_LABEL: Record<ExpenseCategory, string> = {
+  "Produits & Stock": "Produits & Stock 📦",
+  "Prothésiste / Labo": "Prothésiste / Labo 🦷",
+  Stock: "Stock",
+  Labo: "Labo",
+  Frais: "Frais",
+};
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -266,7 +275,7 @@ export function FinancesDepensesTab() {
                 >
                   {EXPENSE_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
-                      {c}
+                      {CATEGORY_OPTION_LABEL[c]}
                     </option>
                   ))}
                 </select>

@@ -3,10 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Check,
+  Calendar,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
   FileText,
+  FlaskConical,
+  Package,
+  Pencil,
   Plus,
   Search,
+  Send,
+  Trash2,
   X,
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
@@ -41,6 +49,7 @@ import {
   laboratoireStatutLabel,
   laboratoireStatutToastPhrase,
   type LaboratoireCommande,
+  type LaboratoireStatut,
   readLabCommandesFromStorage,
   todayIsoLocal,
   writeLabCommandesToStorage,
@@ -115,19 +124,50 @@ function labDatesDiffer(
 const inputSubtle =
   "w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-xs font-normal text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary-border)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/60";
 
+/** Extrait la ou les dents d'un libellé "Couronne … sur 46" ou "Bridge 24-25-26". */
+function parseDentFromTravail(travail: string): string | null {
+  const m = travail.match(/\b(\d{1,2}(?:\s*[-,]\s*\d{1,2}){0,4})\b/g);
+  if (!m || m.length === 0) return null;
+  return m[m.length - 1].replace(/\s+/g, "");
+}
+
+/** Libellé sans la dent (ex. "Couronne Céramo-Métallique sur 46" → "Couronne Céramo-Métallique"). */
+function travailWithoutDent(travail: string): string {
+  return travail
+    .replace(/\s*(?:sur\s+)?\d{1,2}(?:\s*[-,]\s*\d{1,2}){0,4}\s*$/i, "")
+    .trim();
+}
+
+/** Jour au format court FR (ex. "14 avr."). */
+function formatDayShortFR(iso: string | undefined): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt
+    .toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })
+    .replace(".", "");
+}
+
+function isPastIso(iso: string | undefined): boolean {
+  if (!iso) return false;
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59);
+  if (Number.isNaN(dt.getTime())) return false;
+  return dt.getTime() < Date.now();
+}
+
+type ActiveTab = "all" | "urgent" | "fabrication" | "ready" | "pose";
+
 export default function LaboratoirePage() {
-  const [activeTab, setActiveTab] = useState<
-    "all" | "urgent" | "fabrication" | "ready"
-  >("all");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("all");
 
   const [commandes, setCommandes] = useState<LaboratoireCommande[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [patients, setPatients] = useState<DentalPatientRecord[]>([]);
   const [labs, setLabs] = useState<DentalLabPartner[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRdv[]>([]);
-  const [expandedCommandId, setExpandedCommandId] = useState<string | null>(
-    null,
-  );
+  const [drawerCommandId, setDrawerCommandId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -251,16 +291,45 @@ export default function LaboratoirePage() {
     [],
   );
 
+  const urgentCommandes = useMemo(
+    () =>
+      commandes.filter(
+        (c) =>
+          c.statut !== "POSE" &&
+          isRdvPatientBeforeRetourLabo(c.rdvPatientIso, c.retourIso),
+      ),
+    [commandes],
+  );
+
+  const fabricationCommandes = useMemo(
+    () => commandes.filter((c) => c.statut === "EN_FABRICATION"),
+    [commandes],
+  );
+
+  const recuCommandes = useMemo(
+    () => commandes.filter((c) => c.statut === "RECU_CABINET"),
+    [commandes],
+  );
+
+  const poseCommandes = useMemo(
+    () => commandes.filter((c) => c.statut === "POSE"),
+    [commandes],
+  );
+
   const tabFiltered = useMemo(() => {
     if (activeTab === "all") return commandes;
-    if (activeTab === "fabrication")
-      return commandes.filter((c) => c.statut === "EN_FABRICATION");
-    if (activeTab === "ready")
-      return commandes.filter((c) => c.statut === "RECU_CABINET");
-    return commandes.filter(
-      (c) => c.statut !== "POSE" && isRetourUrgent(c.retourIso),
-    );
-  }, [activeTab, commandes]);
+    if (activeTab === "fabrication") return fabricationCommandes;
+    if (activeTab === "ready") return recuCommandes;
+    if (activeTab === "pose") return poseCommandes;
+    return urgentCommandes;
+  }, [
+    activeTab,
+    commandes,
+    fabricationCommandes,
+    poseCommandes,
+    recuCommandes,
+    urgentCommandes,
+  ]);
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -283,129 +352,254 @@ export default function LaboratoirePage() {
     );
   }
 
+  const changeStatut = useCallback(
+    (cmd: LaboratoireCommande, s: LaboratoireStatut) => {
+      if (s === cmd.statut) return;
+      setCommandes((prev) =>
+        prev.map((c) => {
+          if (c.id !== cmd.id) return c;
+          let next: LaboratoireCommande = { ...c, statut: s };
+          if (s === "RECU_CABINET") next = maybeCreateLabExpense(next);
+          return next;
+        }),
+      );
+      showAppToast(
+        `Statut mis à jour : ${capitalizeToastPhrase(
+          laboratoireStatutToastPhrase(s),
+        )}`,
+      );
+    },
+    [],
+  );
+
+  const deleteCommande = useCallback((cmd: LaboratoireCommande) => {
+    if (
+      !window.confirm(
+        `Supprimer la commande de « ${cmd.patient} » ? Cette action est irréversible.`,
+      )
+    ) {
+      return;
+    }
+    setCommandes((prev) => prev.filter((c) => c.id !== cmd.id));
+    setDrawerCommandId(null);
+    showAppToast("Commande supprimée");
+  }, []);
+
+  const drawerCommand = useMemo(
+    () => commandes.find((c) => c.id === drawerCommandId) ?? null,
+    [commandes, drawerCommandId],
+  );
+
+  useEffect(() => {
+    if (!drawerCommandId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setDrawerCommandId(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [drawerCommandId]);
+
+  const tabCounts: Record<ActiveTab, number> = {
+    all: commandes.length,
+    urgent: urgentCommandes.length,
+    fabrication: fabricationCommandes.length,
+    ready: recuCommandes.length,
+    pose: poseCommandes.length,
+  };
+
   return (
-    <div className="space-y-10 pb-8">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-medium tracking-tight text-[color:var(--ds-text)]">
-            Laboratoire & Prothèses
+    <div className="space-y-6 pb-8">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
+            Laboratoire &amp; Prothèses
           </h1>
-          <p className="max-w-xl text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
-            Commandes compactes : ouvrez une fiche pour ajuster les dates, les
-            liens agenda et le coût.
+          <p className="text-sm font-light text-[var(--ds-text-muted)]">
+            Suivi des commandes prothétiques et des délais laboratoire.
           </p>
         </div>
-
-        <AnimatedButton
-          onClick={() => setIsModalOpen(true)}
-          className="self-start py-3"
-        >
+        <AnimatedButton onClick={() => setIsModalOpen(true)}>
           <Plus className="h-4 w-4" strokeWidth={2} />
           Nouvelle commande labo
         </AnimatedButton>
-      </div>
+      </header>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--ds-primary-border)]/90 bg-[var(--ds-surface)]/95 p-2 shadow-[0_2px_16px_rgba(15,23,42,0.04)]">
-        {(
-          [
-            ["all", "Toutes"],
-            ["urgent", "Urgences"],
-            ["fabrication", "En fabrication"],
-            ["ready", "Prêtes à poser"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={[
-              "rounded-xl px-4 py-2 text-sm font-normal transition-all",
-              activeTab === id
-                ? id === "urgent"
-                  ? "bg-red-500/95 font-medium text-white shadow-sm"
-                  : "bg-[color:var(--ds-primary)] font-medium text-white shadow-[0_2px_12px_rgba(8,145,178,0.25)]"
-                : "text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]/80 hover:text-[var(--ds-text)]",
-            ].join(" ")}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]"
-          strokeWidth={2}
-          aria-hidden
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiCard
+          icon={<FlaskConical className="h-4 w-4" />}
+          iconClass="bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)]"
+          valueClass="text-[color:var(--ds-primary)]"
+          value={commandes.length}
+          label="Total commandes"
         />
-        <input
-          type="search"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Rechercher un patient, un acte ou un laboratoire…"
-          aria-label="Rechercher dans les commandes laboratoire"
-          autoComplete="off"
-          className="w-full rounded-xl border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)] py-2.5 pl-10 pr-10 text-sm font-normal text-[var(--ds-text)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-shadow placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary-border)]/80 focus:ring-2 focus:ring-[var(--ds-primary-soft)]"
+        <KpiCard
+          icon={<AlertTriangle className="h-4 w-4" />}
+          iconClass="bg-red-50 text-red-600"
+          valueClass="text-red-600"
+          value={urgentCommandes.length}
+          label="Poses avant retour labo"
         />
-        {searchTerm ? (
-          <button
-            type="button"
-            onClick={() => setSearchTerm("")}
-            className="absolute right-2 top-1/2 z-[1] flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)] hover:text-[var(--ds-text-muted)]"
-            aria-label="Effacer la recherche"
-          >
-            <X className="h-4 w-4" strokeWidth={2} />
-          </button>
-        ) : null}
+        <KpiCard
+          icon={<Clock className="h-4 w-4" />}
+          iconClass="bg-indigo-50 text-indigo-600"
+          valueClass="text-indigo-600"
+          value={fabricationCommandes.length}
+          label="En fabrication"
+        />
+        <KpiCard
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          iconClass="bg-emerald-50 text-emerald-600"
+          valueClass="text-emerald-600"
+          value={recuCommandes.length}
+          label="Reçu au cabinet"
+        />
       </div>
 
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm font-medium tracking-tight text-[var(--ds-text)]">
-            {filtered.length === 1 ? (
-              <>
-                <span className="tabular-nums text-[var(--ds-text)]">1</span> commande
-                trouvée
-              </>
-            ) : (
-              <>
-                <span className="tabular-nums text-[var(--ds-text)]">
-                  {filtered.length}
-                </span>{" "}
-                commandes trouvées
-              </>
-            )}
+      {/* Alerte orange */}
+      {urgentCommandes.length > 0 ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300"
+        >
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4" />
+          </span>
+          <p className="font-light">
+            <strong className="font-semibold">
+              {urgentCommandes.length} commande
+              {urgentCommandes.length > 1 ? "s" : ""}
+            </strong>{" "}
+            {urgentCommandes.length > 1
+              ? "ont une date de pose prévue avant le retour du labo"
+              : "a une date de pose prévue avant le retour du labo"}{" "}
+            — action requise.
           </p>
         </div>
+      ) : null}
 
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-[0_2px_12px_rgba(15,23,42,0.03)]">
-            {searchTerm.trim() && tabFiltered.length > 0 ? (
-              <div className="mx-auto max-w-md space-y-3">
-                <div
-                  className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--ds-bg)] text-[var(--ds-text-muted)]/60"
-                  aria-hidden
-                >
-                  <Search className="h-6 w-6" strokeWidth={1.5} />
-                </div>
-                <p className="text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
-                  Aucun résultat pour &quot;{searchTerm.trim()}&quot; dans le
-                  Laboratoire.
-                </p>
+      {/* Filters + search */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              ["all", "Toutes", null],
+              ["urgent", "🚨 Urgences", "urgent"],
+              ["fabrication", "⚙️ En fabrication", null],
+              ["ready", "📦 Reçu", null],
+              ["pose", "✅ Posé", null],
+            ] as const
+          ).map(([id, label, variant]) => {
+            const active = activeTab === id;
+            const count = tabCounts[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={[
+                  "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all",
+                  active
+                    ? variant === "urgent"
+                      ? "border-red-500 bg-red-500 text-white shadow-[0_2px_10px_rgba(220,38,38,0.22)]"
+                      : "border-[color:var(--ds-primary)] bg-[color:var(--ds-primary)] text-white shadow-[0_2px_10px_rgba(124,58,237,0.22)]"
+                    : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]",
+                ].join(" ")}
+              >
+                <span>{label}</span>
+                {count > 0 ? (
+                  <span
+                    className={[
+                      "text-[11px] font-semibold tabular-nums",
+                      active ? "opacity-85" : "opacity-70",
+                    ].join(" ")}
+                  >
+                    {count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="relative lg:w-[320px]">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Rechercher un patient, un acte…"
+            aria-label="Rechercher dans les commandes laboratoire"
+            autoComplete="off"
+            className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2 pl-10 pr-10 text-sm font-normal text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-soft)]"
+          />
+          {searchTerm ? (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-2 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
+              aria-label="Effacer la recherche"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Result count */}
+      <p className="text-[13px] font-light text-[var(--ds-text-muted)]">
+        <span className="tabular-nums">{filtered.length}</span> commande
+        {filtered.length > 1 ? "s" : ""} trouvée
+        {filtered.length > 1 ? "s" : ""}
+      </p>
+
+      {/* Liste commandes */}
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-[0_2px_12px_rgba(15,23,42,0.03)]">
+          {searchTerm.trim() && tabFiltered.length > 0 ? (
+            <div className="mx-auto max-w-md space-y-3">
+              <div
+                className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--ds-bg)] text-[var(--ds-text-muted)]/60"
+                aria-hidden
+              >
+                <Search className="h-6 w-6" strokeWidth={1.5} />
               </div>
-            ) : (
-              <p className="text-sm font-light text-[var(--ds-text-muted)]">
-                Aucune commande dans ce filtre.
+              <p className="text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
+                Aucun résultat pour &quot;{searchTerm.trim()}&quot; dans le
+                Laboratoire.
               </p>
-            )}
-          </div>
-        ) : (
-          filtered.map((cmd) => {
+            </div>
+          ) : (
+            <p className="text-sm font-light text-[var(--ds-text-muted)]">
+              Aucune commande dans ce filtre.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {filtered.map((cmd) => {
             const critical = isRetourUrgent(cmd.retourIso);
-            const conflitDate = isRdvPatientBeforeRetourLabo(
+            const conflit = isRdvPatientBeforeRetourLabo(
               cmd.rdvPatientIso,
               cmd.retourIso,
             );
+            const retourPast =
+              isPastIso(cmd.retourIso) &&
+              cmd.statut !== "RECU_CABINET" &&
+              cmd.statut !== "POSE";
+            const retourOk = cmd.statut === "RECU_CABINET" || cmd.statut === "POSE";
+            const posePast = isPastIso(cmd.rdvPatientIso);
+
+            const borderVariant: "urgent" | "warning" | null = conflit
+              ? "urgent"
+              : critical || retourPast
+                ? "warning"
+                : null;
+
             const labPartner: DentalLabPartner =
               findLabByName(cmd.labo, labs) ?? {
                 id: "",
@@ -413,334 +607,209 @@ export default function LaboratoirePage() {
                 telephones: [],
                 adresse: "",
               };
-            const rowAppts = apptsForCommand(cmd);
-            const expanded = expandedCommandId === cmd.id;
+
+            const dent = parseDentFromTravail(cmd.travail);
+            const acte = travailWithoutDent(cmd.travail);
+
+            const retourColor =
+              cmd.statut === "POSE"
+                ? "text-emerald-600"
+                : retourPast
+                  ? "text-red-600"
+                  : critical
+                    ? "text-amber-600"
+                    : "text-[var(--ds-text-muted)]";
+            const poseColor = conflit
+              ? "text-red-600"
+              : posePast && cmd.statut === "POSE"
+                ? "text-emerald-600"
+                : "text-[var(--ds-text-muted)]";
 
             return (
-              <div
+              <article
                 key={cmd.id}
-                className="overflow-hidden rounded-2xl border border-[var(--ds-primary-border)]/90 bg-[var(--ds-surface)] shadow-[0_2px_24px_rgba(15,23,42,0.045)] transition-shadow duration-300 hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)]"
-              >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setExpandedCommandId((x) =>
-                        x === cmd.id ? null : cmd.id,
-                      );
-                    }
-                  }}
-                  onClick={() =>
-                    setExpandedCommandId((x) => (x === cmd.id ? null : cmd.id))
+                role="button"
+                tabIndex={0}
+                onClick={() => setDrawerCommandId(cmd.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setDrawerCommandId(cmd.id);
                   }
-                  className="w-full cursor-pointer p-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-primary-border)]/80"
-                >
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <p className="flex items-center gap-2 text-[15px] font-medium tracking-tight text-[var(--ds-text)]">
-                        {cmd.statut === "POSE" ? (
-                          <span
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"
-                            title="Travail posé"
-                            aria-hidden
-                          >
-                            <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                          </span>
-                        ) : null}
-                        <span>{cmd.patient}</span>
-                      </p>
-                      <p className="text-sm font-light leading-relaxed text-[var(--ds-text-muted)]">
-                        {cmd.travail}
-                      </p>
-                      <p className="text-sm font-light tracking-wide text-[var(--ds-text-muted)]">
-                        Retour :{" "}
+                }}
+                className={[
+                  "oryx-fade-up group grid cursor-pointer grid-cols-1 items-center gap-4 rounded-2xl border bg-[var(--ds-surface)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-all focus-visible:ring-2 focus-visible:ring-[var(--ds-primary-soft)] hover:-translate-y-[1px] hover:border-[var(--ds-primary-border)] hover:shadow-[0_6px_24px_rgba(124,58,237,0.10)] lg:grid-cols-[1fr_auto]",
+                  borderVariant === "urgent"
+                    ? "border-l-[3px] border-l-red-500 border-[var(--ds-primary-border)]"
+                    : borderVariant === "warning"
+                      ? "border-l-[3px] border-l-amber-500 border-[var(--ds-primary-border)]"
+                      : "border-[var(--ds-primary-border)]",
+                ].join(" ")}
+              >
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[15px] font-semibold text-[var(--ds-text)]">
+                      {cmd.patient}
+                    </span>
+                    <StatusBadge statut={cmd.statut} />
+                    {conflit ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                        🚨 Pose avant retour
+                      </span>
+                    ) : null}
+                    {!conflit && critical ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                        ⏰ Retour imminent
+                      </span>
+                    ) : null}
+                    {retourOk && cmd.statut === "RECU_CABINET" ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        📦 Prêt à poser
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-[13px] font-light text-[var(--ds-text-muted)]">
+                    {acte}
+                    {dent ? (
+                      <>
+                        <span className="opacity-50"> · </span>
+                        <span>Dent {dent}</span>
+                      </>
+                    ) : null}
+                    {cmd.teinte ? (
+                      <>
+                        <span className="opacity-50"> · </span>
+                        <span>Teinte {cmd.teinte}</span>
+                      </>
+                    ) : null}
+                    {cmd.materiau ? (
+                      <>
+                        <span className="opacity-50"> · </span>
+                        <span>{cmd.materiau}</span>
+                      </>
+                    ) : null}
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--ds-text-muted)]">
+                    <span className={"inline-flex items-center gap-1 " + retourColor}>
+                      <Calendar className="h-3.5 w-3.5" />
+                      Retour{" "}
+                      <strong className="font-mono font-semibold">
+                        {formatDayShortFR(cmd.retourIso)}
+                      </strong>
+                      {retourPast ? " ⚠️" : ""}
+                    </span>
+                    {cmd.rdvPatientIso ? (
+                      <>
+                        <span className="opacity-40">·</span>
                         <span
                           className={
-                            critical && cmd.statut !== "POSE"
-                              ? "font-normal text-red-600"
-                              : "font-normal text-[var(--ds-text)]"
+                            "inline-flex items-center gap-1 " + poseColor
                           }
                         >
-                          {formatDatePretty(cmd.retourIso)}
+                          <Package className="h-3.5 w-3.5" />
+                          Pose{" "}
+                          <strong className="font-mono font-semibold">
+                            {formatDayShortFR(cmd.rdvPatientIso)}
+                          </strong>
                         </span>
-                        <span className="text-[var(--ds-text-muted)]/60"> | </span>
-                        Pose :{" "}
-                        <span className="font-normal text-[var(--ds-text)]">
-                          {cmd.rdvPatientIso
-                            ? formatDatePretty(cmd.rdvPatientIso)
-                            : "—"}
-                        </span>
-                      </p>
-                      {cmd.teinte && cmd.materiau ? (
-                        <p className="text-xs font-light text-[var(--ds-text-muted)]">
-                          Teinte {cmd.teinte} · {cmd.materiau}
-                        </p>
-                      ) : null}
-                      {conflitDate ? (
-                        <p className="flex items-center gap-1.5 text-xs font-light text-red-600">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 animate-blink-red-alert" />
-                          Pose avant retour labo
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 lg:flex-col lg:items-end lg:gap-3">
-                      <StatusBadge statut={cmd.statut} />
-                      <span className="max-w-[14rem] truncate text-sm font-light text-[var(--ds-text-muted)]">
-                        {cmd.labo}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <LabWhatsAppButton
-                          patientName={cmd.patient}
-                          telephones={labPartner.telephones}
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedCommandId((x) =>
-                              x === cmd.id ? null : cmd.id,
-                            );
-                          }}
-                          className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-3 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)]"
-                        >
-                          {expanded ? "Fermer" : "Modifier"}
-                        </button>
-                      </div>
-                    </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
-                {expanded ? (
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <span className="hidden truncate text-right text-[12px] font-light text-[var(--ds-text-muted)] sm:inline-block sm:max-w-[14rem]">
+                    🏥 {cmd.labo}
+                  </span>
                   <div
-                    className="border-t border-[var(--ds-primary-border)]/90 bg-[var(--ds-bg)]/30 px-6 pb-8 pt-6"
+                    className="flex items-center gap-1.5"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <p className="mb-6 text-xs font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                      Détail & liaison agenda
-                    </p>
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                      <div>
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                          Retour labo
-                        </label>
-                        <input
-                          type="date"
-                          value={cmd.retourIso}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            patchCommand(cmd.id, { ...cmd, retourIso: v });
-                          }}
-                          className={inputSubtle + " mt-2"}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                          Date de pose
-                        </label>
-                        <input
-                          type="date"
-                          value={cmd.rdvPatientIso ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            patchCommand(cmd.id, {
-                              ...cmd,
-                              rdvPatientIso: v || undefined,
-                            });
-                          }}
-                          className={inputSubtle + " mt-2"}
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                          Lien agenda — pose
-                        </label>
-                        <select
-                          value={cmd.linkedPoseAppointmentId ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (!v) {
-                              patchCommand(cmd.id, {
-                                ...cmd,
-                                linkedPoseAppointmentId: undefined,
-                              });
-                              return;
-                            }
-                            const a = appointments.find((x) => x.id === v);
-                            patchCommand(cmd.id, {
-                              ...cmd,
-                              linkedPoseAppointmentId: v,
-                              rdvPatientIso: a?.dateKey ?? cmd.rdvPatientIso,
-                            });
-                          }}
-                          className={inputSubtle + " mt-2"}
-                        >
-                          <option value="">— Aucun —</option>
-                          {rowAppts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.dateKey} {a.start} — {a.soin}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                          Lien agenda — retour labo
-                        </label>
-                        <select
-                          value={cmd.linkedRetourAppointmentId ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            if (!v) {
-                              patchCommand(cmd.id, {
-                                ...cmd,
-                                linkedRetourAppointmentId: undefined,
-                              });
-                              return;
-                            }
-                            const a = appointments.find((x) => x.id === v);
-                            patchCommand(cmd.id, {
-                              ...cmd,
-                              linkedRetourAppointmentId: v,
-                              retourIso: a?.dateKey ?? cmd.retourIso,
-                            });
-                          }}
-                          className={inputSubtle + " mt-2"}
-                        >
-                          <option value="">— Aucun —</option>
-                          {rowAppts.map((a) => (
-                            <option key={`r-${a.id}`} value={a.id}>
-                              {a.dateKey} {a.start} — {a.soin}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 flex flex-col gap-6 border-t border-[var(--ds-primary-border)]/80 pt-8 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <label className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                          Coût labo (DA)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step={100}
-                          inputMode="numeric"
-                          value={cmd.coutLaboDa ?? ""}
-                          placeholder="—"
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            setCommandes((prev) =>
-                              prev.map((c) => {
-                                if (c.id !== cmd.id) return c;
-                                if (raw === "")
-                                  return { ...c, coutLaboDa: undefined };
-                                const n = Number(raw);
-                                return {
-                                  ...c,
-                                  coutLaboDa: Number.isFinite(n)
-                                    ? Math.max(0, n)
-                                    : c.coutLaboDa,
-                                };
-                              }),
-                            );
-                          }}
-                          onBlur={() => {
-                            setCommandes((prev) =>
-                              prev.map((c) =>
-                                c.id === cmd.id
-                                  ? maybeCreateLabExpense(c)
-                                  : c,
-                              ),
-                            );
-                          }}
-                          className={
-                            inputSubtle + " mt-2 max-w-[10rem] tabular-nums"
-                          }
-                        />
-                      </div>
-                      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                        <div className="min-w-0 flex-1 sm:min-w-[min(100%,20rem)] sm:flex-none">
-                          <p className="text-[11px] font-normal uppercase tracking-wider text-[var(--ds-text-muted)]">
-                            Statut
-                          </p>
-                          <div
-                            className="mt-2 flex flex-wrap gap-2"
-                            role="group"
-                            aria-label={`Statut de ${cmd.patient}`}
-                          >
-                            {LAB_STATUT_ORDER.map((s) => {
-                              const active = cmd.statut === s;
-                              return (
-                                <button
-                                  key={s}
-                                  type="button"
-                                  onClick={() => {
-                                    if (s === cmd.statut) return;
-                                    setCommandes((prev) =>
-                                      prev.map((c) => {
-                                        if (c.id !== cmd.id) return c;
-                                        let next: LaboratoireCommande = {
-                                          ...c,
-                                          statut: s,
-                                        };
-                                        if (s === "RECU_CABINET") {
-                                          next = maybeCreateLabExpense(next);
-                                        }
-                                        return next;
-                                      }),
-                                    );
-                                    showAppToast(
-                                      `Statut mis à jour : ${capitalizeToastPhrase(
-                                        laboratoireStatutToastPhrase(s),
-                                      )}`,
-                                    );
-                                  }}
-                                  className={[
-                                    "rounded-full px-3.5 py-1.5 text-[11px] font-medium tracking-wide transition-all",
-                                    active
-                                      ? "bg-slate-900 text-white shadow-[0_2px_8px_rgba(15,23,42,0.12)]"
-                                      : "bg-[var(--ds-surface)] text-[var(--ds-text-muted)] shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-[var(--ds-primary-border)]/70 hover:bg-[var(--ds-bg)]/90",
-                                  ].join(" ")}
-                                >
-                                  {laboratoireStatutLabel(s)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            generateLabBonPDF({
-                              patient: cmd.patient,
-                              acte: cmd.travail,
-                              laboratoire: cmd.labo,
-                              dateRetour: formatDatePretty(cmd.retourIso),
-                              notes: [cmd.teinte, cmd.materiau]
-                                .filter(Boolean)
-                                .join(" · ") || undefined,
-                              id: cmd.id,
-                            })
-                          }
-                          title="Bon de commande PDF"
-                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-xl border border-[var(--ds-primary-border)] text-[var(--ds-text-muted)] transition-colors hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)] hover:text-[color:var(--ds-primary)] sm:self-center"
-                          aria-label="PDF"
-                        >
-                          <FileText className="h-4 w-4" strokeWidth={1.75} />
-                        </button>
-                      </div>
-                    </div>
+                    {cmd.statut === "RECU_CABINET" ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          changeStatut(cmd, "POSE");
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-[color:var(--ds-primary)] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                        title="Marquer comme posé"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Poser
+                      </button>
+                    ) : null}
+                    <LabWhatsAppButton
+                      patientName={cmd.patient}
+                      telephones={labPartner.telephones}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDrawerCommandId(cmd.id);
+                      }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:border-[color:var(--ds-primary)] hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
+                      title="Modifier"
+                      aria-label={`Modifier la commande de ${cmd.patient}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              </article>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
+
+      {/* Drawer latéral */}
+      {drawerCommand ? (
+        <CommandeDrawer
+          cmd={drawerCommand}
+          appointments={appointments}
+          labs={labs}
+          onClose={() => setDrawerCommandId(null)}
+          onPatch={(next) => patchCommand(drawerCommand.id, next)}
+          onChangeStatut={(s) => changeStatut(drawerCommand, s)}
+          onDelete={() => deleteCommande(drawerCommand)}
+          onGeneratePdf={() =>
+            generateLabBonPDF({
+              patient: drawerCommand.patient,
+              acte: drawerCommand.travail,
+              laboratoire: drawerCommand.labo,
+              dateRetour: formatDatePretty(drawerCommand.retourIso),
+              notes:
+                [drawerCommand.teinte, drawerCommand.materiau]
+                  .filter(Boolean)
+                  .join(" · ") || undefined,
+              id: drawerCommand.id,
+            })
+          }
+          onCoutChange={(raw) =>
+            setCommandes((prev) =>
+              prev.map((c) => {
+                if (c.id !== drawerCommand.id) return c;
+                if (raw === "") return { ...c, coutLaboDa: undefined };
+                const n = Number(raw);
+                return {
+                  ...c,
+                  coutLaboDa: Number.isFinite(n)
+                    ? Math.max(0, n)
+                    : c.coutLaboDa,
+                };
+              }),
+            )
+          }
+          onCoutCommit={() =>
+            setCommandes((prev) =>
+              prev.map((c) =>
+                c.id === drawerCommand.id ? maybeCreateLabExpense(c) : c,
+              ),
+            )
+          }
+        />
+      ) : null}
 
       {isModalOpen && (
         <div
@@ -964,6 +1033,538 @@ export default function LaboratoirePage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function KpiCard({
+  icon,
+  iconClass,
+  valueClass,
+  value,
+  label,
+}: {
+  icon: React.ReactNode;
+  iconClass: string;
+  valueClass: string;
+  value: number | string;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_2px_16px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-[0_6px_24px_rgba(124,58,237,0.08)]">
+      <span
+        className={[
+          "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+          iconClass,
+        ].join(" ")}
+        aria-hidden
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p
+          className={[
+            "text-2xl font-semibold leading-none tracking-tight tabular-nums",
+            valueClass,
+          ].join(" ")}
+        >
+          {value}
+        </p>
+        <p className="mt-1 text-[11.5px] font-light text-[var(--ds-text-muted)]">
+          {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function formatDatePrettyLocal(iso: string | undefined): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0);
+  if (Number.isNaN(dt.getTime())) return "—";
+  const s = dt.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const parts = s.split(" ");
+  if (parts.length >= 2) {
+    parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+  }
+  return parts.join(" ");
+}
+
+function CommandeDrawer({
+  cmd,
+  appointments,
+  labs,
+  onClose,
+  onPatch,
+  onChangeStatut,
+  onDelete,
+  onGeneratePdf,
+  onCoutChange,
+  onCoutCommit,
+}: {
+  cmd: LaboratoireCommande;
+  appointments: AppointmentRdv[];
+  labs: DentalLabPartner[];
+  onClose: () => void;
+  onPatch: (next: LaboratoireCommande) => void;
+  onChangeStatut: (s: LaboratoireStatut) => void;
+  onDelete: () => void;
+  onGeneratePdf: () => void;
+  onCoutChange: (raw: string) => void;
+  onCoutCommit: () => void;
+}) {
+  const rowAppts = filterAppointmentsForPatient(
+    appointments,
+    cmd.patientId,
+    cmd.patient,
+  );
+  const labPartner: DentalLabPartner =
+    findLabByName(cmd.labo, labs) ?? {
+      id: "",
+      nom: cmd.labo,
+      telephones: [],
+      adresse: "",
+    };
+  const dent = parseDentFromTravail(cmd.travail);
+  const acte = travailWithoutDent(cmd.travail);
+  const conflit = isRdvPatientBeforeRetourLabo(
+    cmd.rdvPatientIso,
+    cmd.retourIso,
+  );
+  const retourPast =
+    isPastIso(cmd.retourIso) &&
+    cmd.statut !== "RECU_CABINET" &&
+    cmd.statut !== "POSE";
+
+  type TimelineEvent = {
+    key: string;
+    icon: React.ReactNode;
+    dotClass: string;
+    title: string;
+    date: string;
+  };
+
+  const timeline: TimelineEvent[] = [];
+  if (cmd.statut !== "EN_ATTENTE") {
+    timeline.push({
+      key: "sent",
+      icon: <Send className="h-3.5 w-3.5" />,
+      dotClass: "bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)] ring-[color:var(--ds-primary)]/40",
+      title: "Commande envoyée au labo",
+      date: formatDatePrettyLocal(cmd.retourIso),
+    });
+  } else {
+    timeline.push({
+      key: "created",
+      icon: <ClipboardList className="h-3.5 w-3.5" />,
+      dotClass: "bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)] ring-[color:var(--ds-primary)]/40",
+      title: "Commande créée",
+      date: "Aujourd’hui",
+    });
+  }
+  if (
+    cmd.statut === "EN_FABRICATION" ||
+    cmd.statut === "EXPEDIE_CABINET" ||
+    cmd.statut === "RECU_CABINET" ||
+    cmd.statut === "POSE"
+  ) {
+    timeline.push({
+      key: "fab",
+      icon: <Clock className="h-3.5 w-3.5" />,
+      dotClass:
+        "bg-indigo-50 text-indigo-600 ring-indigo-300",
+      title: "En fabrication",
+      date: "Laboratoire",
+    });
+  }
+  if (cmd.statut === "RECU_CABINET" || cmd.statut === "POSE") {
+    timeline.push({
+      key: "recu",
+      icon: <Package className="h-3.5 w-3.5" />,
+      dotClass:
+        "bg-emerald-50 text-emerald-600 ring-emerald-300",
+      title: "Reçu au cabinet",
+      date: formatDatePrettyLocal(cmd.retourIso),
+    });
+  }
+  if (cmd.statut === "POSE") {
+    timeline.push({
+      key: "pose",
+      icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+      dotClass: "bg-emerald-50 text-emerald-600 ring-emerald-300",
+      title: "Prothèse posée",
+      date: formatDatePrettyLocal(cmd.rdvPatientIso),
+    });
+  }
+  if (retourPast) {
+    timeline.push({
+      key: "alert",
+      icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      dotClass: "bg-red-50 text-red-600 ring-red-300",
+      title: "Retour labo dépassé",
+      date: formatDatePrettyLocal(cmd.retourIso),
+    });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-slate-900/30 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <aside
+        className="oryx-fade-up h-full w-full max-w-[440px] overflow-y-auto bg-[var(--ds-surface)] shadow-[-8px_0_40px_rgba(0,0,0,0.12)]"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+              Commande labo
+            </p>
+            <h3 className="mt-1 truncate text-[18px] font-semibold tracking-tight text-[var(--ds-text)]">
+              {acte}
+              {dent ? (
+                <span className="text-[var(--ds-text-muted)]"> · {dent}</span>
+              ) : null}
+            </h3>
+            <p className="mt-0.5 truncate text-[12px] font-light text-[var(--ds-text-muted)]">
+              {cmd.patient} · {cmd.labo}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
+            aria-label="Fermer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-6">
+          {/* Statut */}
+          <section className="mb-6">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+              Statut actuel
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge statut={cmd.statut} />
+              {conflit ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                  🚨 Pose avant retour
+                </span>
+              ) : null}
+              {cmd.statut === "RECU_CABINET" ? (
+                <button
+                  type="button"
+                  onClick={() => onChangeStatut("POSE")}
+                  className="inline-flex items-center gap-1 rounded-lg bg-[color:var(--ds-primary)] px-3 py-1 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Poser
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          {/* Détails */}
+          <section className="mb-6">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+              Détails de la commande
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <DetailItem label="Patient" value={cmd.patient} />
+              <DetailItem label="Dent" value={dent ?? "—"} />
+              <DetailItem label="Type" value={acte} full />
+              <DetailItem label="Matériau" value={cmd.materiau ?? "—"} />
+              <DetailItem label="Teinte" value={cmd.teinte ?? "—"} />
+              <DetailItem label="Laboratoire" value={cmd.labo} full />
+              <DetailItem
+                label="Retour prévu"
+                value={formatDatePrettyLocal(cmd.retourIso)}
+                valueClass={retourPast ? "text-red-600" : undefined}
+              />
+              <DetailItem
+                label="Pose prévue"
+                value={formatDatePrettyLocal(cmd.rdvPatientIso)}
+                valueClass={conflit ? "text-red-600" : undefined}
+              />
+            </div>
+          </section>
+
+          {/* Édition dates & liens */}
+          <section className="mb-6">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+              Modifier dates & liaison agenda
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                  Retour labo
+                </label>
+                <input
+                  type="date"
+                  value={cmd.retourIso}
+                  onChange={(e) =>
+                    onPatch({ ...cmd, retourIso: e.target.value })
+                  }
+                  className={inputSubtle + " mt-1.5"}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                  Date de pose
+                </label>
+                <input
+                  type="date"
+                  value={cmd.rdvPatientIso ?? ""}
+                  onChange={(e) =>
+                    onPatch({
+                      ...cmd,
+                      rdvPatientIso: e.target.value || undefined,
+                    })
+                  }
+                  className={inputSubtle + " mt-1.5"}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                  Lien agenda — pose
+                </label>
+                <select
+                  value={cmd.linkedPoseAppointmentId ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) {
+                      onPatch({
+                        ...cmd,
+                        linkedPoseAppointmentId: undefined,
+                      });
+                      return;
+                    }
+                    const a = appointments.find((x) => x.id === v);
+                    onPatch({
+                      ...cmd,
+                      linkedPoseAppointmentId: v,
+                      rdvPatientIso: a?.dateKey ?? cmd.rdvPatientIso,
+                    });
+                  }}
+                  className={inputSubtle + " mt-1.5"}
+                >
+                  <option value="">— Aucun —</option>
+                  {rowAppts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.dateKey} {a.start} — {a.soin}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                  Lien agenda — retour labo
+                </label>
+                <select
+                  value={cmd.linkedRetourAppointmentId ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) {
+                      onPatch({
+                        ...cmd,
+                        linkedRetourAppointmentId: undefined,
+                      });
+                      return;
+                    }
+                    const a = appointments.find((x) => x.id === v);
+                    onPatch({
+                      ...cmd,
+                      linkedRetourAppointmentId: v,
+                      retourIso: a?.dateKey ?? cmd.retourIso,
+                    });
+                  }}
+                  className={inputSubtle + " mt-1.5"}
+                >
+                  <option value="">— Aucun —</option>
+                  {rowAppts.map((a) => (
+                    <option key={`r-${a.id}`} value={a.id}>
+                      {a.dateKey} {a.start} — {a.soin}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                  Coût labo (DA)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  inputMode="numeric"
+                  value={cmd.coutLaboDa ?? ""}
+                  placeholder="—"
+                  onChange={(e) => onCoutChange(e.target.value)}
+                  onBlur={onCoutCommit}
+                  className={inputSubtle + " mt-1.5 tabular-nums"}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Changer statut */}
+          <section className="mb-6">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+              Changer le statut
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {LAB_STATUT_ORDER.map((s) => {
+                const active = cmd.statut === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onChangeStatut(s)}
+                    className={[
+                      "rounded-full px-3 py-1 text-[11px] font-medium tracking-wide transition-all",
+                      active
+                        ? "bg-[color:var(--ds-primary)] text-white shadow-[0_2px_8px_rgba(124,58,237,0.25)]"
+                        : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]",
+                    ].join(" ")}
+                  >
+                    {laboratoireStatutLabel(s)}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Timeline */}
+          <section className="mb-6">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+              Historique
+            </p>
+            <ol className="relative space-y-3 pl-0">
+              {timeline.map((ev, i) => {
+                const isLast = i === timeline.length - 1;
+                return (
+                  <li key={ev.key} className="flex items-start gap-3">
+                    <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
+                      <span
+                        className={[
+                          "relative z-10 flex h-7 w-7 items-center justify-center rounded-full ring-2",
+                          ev.dotClass,
+                        ].join(" ")}
+                      >
+                        {ev.icon}
+                      </span>
+                      {!isLast ? (
+                        <span className="absolute left-1/2 top-7 h-[calc(100%+0.75rem)] w-px -translate-x-1/2 bg-[var(--ds-primary-border)]" />
+                      ) : null}
+                    </span>
+                    <div className="min-w-0 flex-1 pb-1">
+                      <p className="text-[13px] font-semibold text-[var(--ds-text)]">
+                        {ev.title}
+                      </p>
+                      <p className="font-mono text-[11px] text-[var(--ds-text-muted)]">
+                        {ev.date}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        </div>
+
+        {/* Footer actions */}
+        <div className="sticky bottom-0 flex items-center gap-2 border-t border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6 py-4">
+          {cmd.statut === "RECU_CABINET" ? (
+            <button
+              type="button"
+              onClick={() => onChangeStatut("POSE")}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Marquer posé
+            </button>
+          ) : cmd.statut === "POSE" ? (
+            <span className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-[13px] font-semibold text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" /> Travail posé
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onChangeStatut("RECU_CABINET")}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+            >
+              <Package className="h-4 w-4" />
+              Marquer reçu
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onGeneratePdf}
+            title="Bon de commande PDF"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:border-[color:var(--ds-primary)] hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
+            aria-label="PDF"
+          >
+            <FileText className="h-4 w-4" />
+          </button>
+          <LabWhatsAppButton
+            patientName={cmd.patient}
+            telephones={labPartner.telephones}
+          />
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Supprimer la commande"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface-2)] hover:text-[var(--ds-text)]"
+            aria-label="Supprimer"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+  full,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  full?: boolean;
+  valueClass?: string;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-xl bg-[var(--ds-bg)] px-3 py-2.5",
+        full ? "col-span-2" : "",
+      ].join(" ")}
+    >
+      <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--ds-text-muted)]">
+        {label}
+      </p>
+      <p
+        className={[
+          "mt-1 text-[13px] font-semibold text-[var(--ds-text)]",
+          valueClass ?? "",
+        ].join(" ")}
+      >
+        {value}
+      </p>
     </div>
   );
 }

@@ -8,6 +8,9 @@ import { ToastProvider } from "@/components/ToastProvider";
 import MobileNav from "@/components/layout/MobileNav";
 import Sidebar from "@/components/layout/Sidebar";
 import VoiceAssistant from "@/components/ui/VoiceAssistant";
+import { RouteGuard } from "@/components/auth/RouteGuard";
+import { useRole } from "@/hooks/useRole";
+import { clearSession, getInitials, ROLE_LABEL } from "@/utils/roles";
 import {
   DENTAL_APPOINTMENTS_STORAGE_KEY,
   formatDateKeyLocal,
@@ -109,12 +112,17 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { role, user } = useRole();
   const [searchQuery, setSearchQuery] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<LayoutNotification[]>([]);
   const isPlanning = pathname === "/planning";
+
+  const displayName = user?.nom ?? (role === "admin" ? "Dr. Assil" : ROLE_LABEL[role]);
+  const displayInitials = getInitials(user?.nom ?? (role === "admin" ? "Dr Assil" : ROLE_LABEL[role]));
+  const roleLabel = ROLE_LABEL[role];
 
   useEffect(() => {
     const theme = getStoredTheme();
@@ -279,18 +287,21 @@ export default function DashboardLayout({
                     className="group flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-all hover:bg-[var(--ds-primary-soft)]"
                   >
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--ds-primary)] text-[11px] font-bold text-white">
-                      AM
+                      {displayInitials}
                     </div>
                     <div className="hidden text-left sm:block">
-                      <div className="text-xs font-semibold leading-tight text-[var(--ds-text)]">Dr. Assil</div>
-                      <div className="text-[10px] leading-tight text-[var(--ds-text-muted)]">Administrateur</div>
+                      <div className="text-xs font-semibold leading-tight text-[var(--ds-text)]">{displayName}</div>
+                      <div className="text-[10px] leading-tight text-[var(--ds-text-muted)]">{roleLabel}</div>
                     </div>
                     <ChevronDown className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" strokeWidth={2.5} />
                   </button>
                   {profileOpen && (
                     <div className="absolute right-4 top-14 z-50 w-48 overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-lg">
                       <button
-                        onClick={() => logoutAction()}
+                        onClick={() => {
+                          clearSession();
+                          logoutAction();
+                        }}
                         className="w-full flex items-center gap-2 
            px-4 py-3 text-sm text-red-600
            hover:bg-red-50 transition-all">
@@ -311,7 +322,7 @@ export default function DashboardLayout({
                     : "p-6"
                 }
               >
-                {children}
+                <RouteGuard>{children}</RouteGuard>
               </div>
             </main>
           </div>

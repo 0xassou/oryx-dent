@@ -30,7 +30,7 @@ interface PrescriptionModalProps {
 }
 
 const inputBase =
-  "w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+  "w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
 
 export function PrescriptionModal({
   open,
@@ -87,7 +87,7 @@ export function PrescriptionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--ds-text)_30%,transparent)] p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="prescription-modal-title"
@@ -96,10 +96,10 @@ export function PrescriptionModal({
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-3xl bg-white/95 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/98 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/60 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--ds-primary-border)] px-6 py-4">
           <h2
             id="prescription-modal-title"
             className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]"
@@ -109,7 +109,7 @@ export function PrescriptionModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -118,9 +118,9 @@ export function PrescriptionModal({
 
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden lg:flex-row">
           {/* Colonne gauche - Sélection rapide */}
-          <div className="flex flex-col gap-4 border-b border-slate-200/60 p-6 lg:max-w-[320px] lg:border-b-0 lg:border-r">
+          <div className="flex flex-col gap-4 border-b border-[var(--ds-primary-border)] p-6 lg:max-w-[320px] lg:border-b-0 lg:border-r">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-subtle)]" />
               <input
                 type="text"
                 value={search}
@@ -130,7 +130,7 @@ export function PrescriptionModal({
               />
             </div>
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
                 Prescriptions courantes
               </p>
               <div className="flex flex-wrap gap-2">
@@ -139,7 +139,7 @@ export function PrescriptionModal({
                     key={tag}
                     type="button"
                     onClick={() => addFromTag(tag)}
-                    className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200/80"
+                    className="rounded-xl bg-[var(--ds-primary-soft)] px-3 py-2 text-xs font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
                   >
                     {tag}
                   </button>
@@ -148,16 +148,16 @@ export function PrescriptionModal({
             </div>
             {items.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Ligne à modifier
                 </p>
                 <div className="space-y-2 max-h-[200px] overflow-y-auto">
                   {items.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-xl border border-slate-200 bg-white p-2 space-y-1.5"
+                      className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-2 space-y-1.5"
                     >
-                      <p className="text-xs font-medium text-slate-700 truncate">
+                      <p className="text-xs font-medium text-[var(--ds-text)] truncate">
                         {item.medicament}
                       </p>
                       <input
@@ -179,7 +179,7 @@ export function PrescriptionModal({
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
-                        className="text-xs text-red-500 hover:text-red-700"
+                        className="text-xs text-[var(--ds-primary-hover)] hover:text-[var(--ds-text)]"
                       >
                         Retirer
                       </button>
@@ -191,12 +191,12 @@ export function PrescriptionModal({
           </div>
 
           {/* Colonne droite - Aperçu A4 */}
-          <div className="flex flex-1 flex-col overflow-hidden bg-slate-50 p-6">
+          <div className="flex flex-1 flex-col overflow-hidden bg-[var(--ds-bg)] p-6">
             <div className="flex flex-1 items-center justify-center">
-              <div className="w-full max-w-[400px] aspect-[210/297] rounded-lg border border-slate-200 bg-white p-8 shadow-lg">
-                <div className="mb-4 border-b border-slate-200 pb-4 text-center">
-                  <p className="text-sm text-slate-500">
-                    <span className="font-bold text-slate-800">
+              <div className="w-full max-w-[400px] aspect-[210/297] rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-8 shadow-lg">
+                <div className="mb-4 border-b border-[var(--ds-primary-border)] pb-4 text-center">
+                  <p className="text-sm text-[var(--ds-text-muted)]">
+                    <span className="font-bold text-[var(--ds-text)]">
                       Dr. Assil Messaoudi
                     </span>{" "}
                     - Chirurgien Dentiste
@@ -204,12 +204,12 @@ export function PrescriptionModal({
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-x-10 gap-y-4 text-sm">
                   <div className="space-y-3">
-                    <p className="text-slate-800">
-                      <span className="font-semibold text-slate-500">Nom :</span>{" "}
+                    <p className="text-[var(--ds-text)]">
+                      <span className="font-semibold text-[var(--ds-text-muted)]">Nom :</span>{" "}
                       {nom || "—"}
                     </p>
-                    <p className="text-slate-800">
-                      <span className="font-semibold text-slate-500">
+                    <p className="text-[var(--ds-text)]">
+                      <span className="font-semibold text-[var(--ds-text-muted)]">
                         Âge :
                       </span>{" "}
                       {patientAge || "—"}
@@ -217,24 +217,24 @@ export function PrescriptionModal({
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-slate-800">
-                      <span className="font-semibold text-slate-500">
+                    <p className="text-[var(--ds-text)]">
+                      <span className="font-semibold text-[var(--ds-text-muted)]">
                         Prénom :
                       </span>{" "}
                       {prenom || "—"}
                     </p>
-                    <p className="text-slate-800">
-                      <span className="font-semibold text-slate-500">Le</span>{" "}
+                    <p className="text-[var(--ds-text)]">
+                      <span className="font-semibold text-[var(--ds-text-muted)]">Le</span>{" "}
                       {today}
                     </p>
                   </div>
                 </div>
-                <div className="mt-6 border-t border-slate-200 pt-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <div className="mt-6 border-t border-[var(--ds-primary-border)] pt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                     Ordonnance
                   </p>
                   {items.length === 0 ? (
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-[var(--ds-text-subtle)]">
                       Aucun médicament ajouté. Cliquez sur un tag à gauche.
                     </p>
                   ) : (
@@ -242,7 +242,7 @@ export function PrescriptionModal({
                       {items.map((item) => (
                         <li
                           key={item.id}
-                          className="flex flex-wrap gap-x-2 text-sm text-slate-800"
+                          className="flex flex-wrap gap-x-2 text-sm text-[var(--ds-text)]"
                         >
                           <span className="font-medium">
                             {item.medicament}
@@ -261,18 +261,18 @@ export function PrescriptionModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200/60 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-[var(--ds-primary-border)] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+            className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
           >
             Annuler
           </button>
           <button
             type="button"
             onClick={handleGenerate}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
+            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-[var(--ds-bg)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
           >
             Générer le PDF
           </button>

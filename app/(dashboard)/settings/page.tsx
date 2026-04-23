@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { ActesTarifsSection } from "@/components/settings/ActesTarifsSection";
 import { LabsPartnersSection } from "@/components/settings/LabsPartnersSection";
+import { TeamSection } from "@/components/settings/TeamSection";
 import {
   THEMES,
   applyTheme,
@@ -633,126 +634,7 @@ export default function SettingsPage() {
 
             {activeTab === "equipe" && (
               <div className={panelClass}>
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold tracking-tight text-[var(--ds-text)]">
-                    Équipe &amp; accès
-                  </h2>
-                  <button
-                    type="button"
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                  >
-                    + Ajouter un membre
-                  </button>
-                </div>
-
-                <div className="mt-8 space-y-4">
-                  <div className="flex items-center justify-between rounded-xl border border-[var(--ds-primary-border)] px-5 py-4">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--ds-text)]">Dr. Assil</p>
-                      <p className="text-xs text-[var(--ds-text-muted)]">
-                        Rôle : Administrateur / Praticien
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      Actif
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-[var(--ds-primary-border)] px-5 py-4">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--ds-text)]">Sofia</p>
-                      <p className="text-xs text-[var(--ds-text-muted)]">Rôle : Assistante</p>
-                      <div className="mt-2 rounded-xl bg-[var(--ds-bg)] p-3 text-sm text-[var(--ds-text)]">
-                        <p className="mb-2 font-medium">Permissions accordées :</p>
-                        <label className="mt-1 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-[var(--ds-primary-border)] text-[var(--ds-text)] focus:ring-slate-400"
-                            checked={
-                              (
-                                settings.assistantPermissions ?? {
-                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
-                                }
-                              ).stats
-                            }
-                            onChange={(e) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                assistantPermissions: {
-                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
-                                  ...prev.assistantPermissions,
-                                  stats: e.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          Voir le chiffre d&apos;affaires et les statistiques
-                        </label>
-                        <label className="mt-1 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-[var(--ds-primary-border)] text-[var(--ds-text)] focus:ring-slate-400"
-                            checked={
-                              (
-                                settings.assistantPermissions ?? {
-                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
-                                }
-                              ).factures
-                            }
-                            onChange={(e) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                assistantPermissions: {
-                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
-                                  ...prev.assistantPermissions,
-                                  factures: e.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          Créer / modifier des factures
-                        </label>
-                        <label className="mt-1 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-[var(--ds-primary-border)] text-[var(--ds-text)] focus:ring-slate-400"
-                            checked={
-                              (
-                                settings.assistantPermissions ?? {
-                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
-                                }
-                              ).parametres
-                            }
-                            onChange={(e) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                assistantPermissions: {
-                                  ...DEFAULT_ASSISTANT_PERMISSIONS,
-                                  ...prev.assistantPermissions,
-                                  parametres: e.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          Gérer les paramètres du cabinet
-                        </label>
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-[var(--ds-primary-border)] px-3 py-1 text-xs font-semibold text-[var(--ds-primary)]">
-                      Actif
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-10 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSaveSettings}
-                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                  >
-                    Sauvegarder
-                  </button>
-                </div>
+                <TeamSection />
               </div>
             )}
 

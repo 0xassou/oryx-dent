@@ -275,6 +275,16 @@ export function FinancesDashboardTab() {
     const imp = factures.reduce((s, f) => s + resteAPayer(f), 0);
     const byCat = sumExpensesByCategory(list);
     const slices = [
+      {
+        name: "Produits & Stock",
+        value: byCat["Produits & Stock"],
+        color: "#14b8a6",
+      },
+      {
+        name: "Prothésiste / Labo",
+        value: byCat["Prothésiste / Labo"],
+        color: "#a855f7",
+      },
       { name: "Stock", value: byCat.Stock, color: "#06b6d4" },
       { name: "Labo", value: byCat.Labo, color: "#6366f1" },
       { name: "Frais", value: byCat.Frais, color: "#f43f5e" },

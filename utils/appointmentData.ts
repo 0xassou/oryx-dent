@@ -115,6 +115,14 @@ function parseRdv(raw: unknown): AppointmentRdv | null {
           ? "planned"
           : undefined,
     patientId: typeof o.patientId === "string" ? o.patientId : undefined,
+    status:
+      o.status === "done"
+        ? "done"
+        : o.status === "confirmed"
+          ? "confirmed"
+          : o.status === "pending"
+            ? "pending"
+            : undefined,
   };
 }
 

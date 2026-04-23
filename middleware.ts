@@ -5,7 +5,7 @@ const SECRET = new TextEncoder().encode(
   process.env.AUTH_SECRET ?? "oryx-secret-change-me"
 );
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/invitation"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

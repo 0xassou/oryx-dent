@@ -49,14 +49,14 @@ export function NotificationsPopover() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-white/70 hover:text-slate-900"
+        className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
         aria-label="Notifications"
         aria-expanded={open}
       >
         <Bell className="h-5 w-5" />
         {hasUnread && (
           <span
-            className="absolute right-1 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-slate-50"
+            className="absolute right-1 top-1.5 h-2 w-2 rounded-full bg-[var(--ds-primary-hover)] ring-2 ring-[var(--ds-surface)]"
             aria-hidden
           />
         )}
@@ -77,15 +77,15 @@ export function NotificationsPopover() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.92 }}
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              className="absolute right-0 top-full z-50 mt-2 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/20 bg-white/60 shadow-2xl backdrop-blur-xl"
+              className="absolute right-0 top-full z-50 mt-2 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/95 shadow-2xl backdrop-blur-xl"
             >
-              <div className="flex items-start justify-between gap-3 border-b border-slate-200/50 px-4 py-3">
+              <div className="flex items-start justify-between gap-3 border-b border-[var(--ds-primary-border)] px-4 py-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">
+                  <p className="text-sm font-semibold text-[var(--ds-text)]">
                     Notifications
                   </p>
                   {hasUnread && (
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                       {alerts.length} non lue{alerts.length > 1 ? "s" : ""}
                     </p>
                   )}
@@ -104,7 +104,7 @@ export function NotificationsPopover() {
 
               <div className="max-h-[300px] overflow-y-auto">
                 {alerts.length === 0 ? (
-                  <p className="px-4 py-8 text-center text-sm text-slate-500">
+                  <p className="px-4 py-8 text-center text-sm text-[var(--ds-text-muted)]">
                     Aucune notification
                   </p>
                 ) : (
@@ -114,11 +114,11 @@ export function NotificationsPopover() {
                         NOTIFICATION_ICONS[item.type] ?? Bell;
                       return (
                         <li key={item.id ?? `notification-${index}`}>
-                          <div className="flex cursor-default items-start gap-3 px-4 py-2.5 transition-colors hover:bg-white/10">
-                            <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100/80 text-slate-600">
+                          <div className="flex cursor-default items-start gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--ds-primary-soft)]">
+                            <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--ds-primary-soft)] text-[var(--ds-primary)]">
                               <Icon className="h-4 w-4" />
                             </span>
-                            <span className="text-sm text-slate-700">
+                            <span className="text-sm text-[var(--ds-text)]">
                               {item.message}
                             </span>
                           </div>

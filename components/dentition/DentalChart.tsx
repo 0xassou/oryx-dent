@@ -60,11 +60,11 @@ const STATUS_LABELS: Record<ToothStatus, string> = {
 function toothClasses(status: ToothStatus) {
   switch (status) {
     case "carie":
-      return "bg-[#06b6d4]/20 ring-[#06b6d4]/50 text-[#0891b2]";
+      return "bg-[var(--tooth-soin-crown)] ring-[color-mix(in_srgb,var(--tooth-soin-stroke)_45%,transparent)] text-[var(--tooth-soin-stroke)]";
     case "couronne":
-      return "bg-[#10b981]/20 ring-[#10b981]/50 text-[#059669]";
+      return "bg-[var(--tooth-couronne-crown)] ring-[color-mix(in_srgb,var(--tooth-couronne-stroke)_45%,transparent)] text-[var(--tooth-couronne-stroke)]";
     case "chirurgie":
-      return "bg-[#f97316]/20 ring-[#f97316]/60 text-[#ea580c]";
+      return "bg-[var(--tooth-chirurgie-crown)] ring-[color-mix(in_srgb,var(--tooth-chirurgie-stroke)_45%,transparent)] text-[var(--tooth-chirurgie-stroke)]";
     case "absente":
       return "bg-[var(--ds-primary-soft)]/40 ring-[var(--ds-primary-border)]/40 text-[var(--ds-text-muted)]";
     default:
@@ -378,11 +378,11 @@ export function DentalChart({
                               "flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-xs font-medium transition-colors",
                               status === s
                                 ? s === "carie"
-                                  ? "bg-[#ecfeff] text-[#0891b2]"
+                                  ? "bg-[var(--tooth-soin-crown)] text-[var(--tooth-soin-stroke)]"
                                   : s === "couronne"
-                                    ? "bg-[#f0fdf4] text-[#059669]"
+                                    ? "bg-[var(--tooth-couronne-crown)] text-[var(--tooth-couronne-stroke)]"
                                     : s === "chirurgie"
-                                      ? "bg-[#fff7ed] text-[#ea580c]"
+                                      ? "bg-[var(--tooth-chirurgie-crown)] text-[var(--tooth-chirurgie-stroke)]"
                                       : s === "absente"
                                         ? "bg-[var(--ds-primary-soft)] text-[var(--ds-text)]"
                                         : "bg-[var(--ds-bg)] text-[var(--ds-text)]"
@@ -394,11 +394,11 @@ export function DentalChart({
                                 s === "healthy"
                                   ? "bg-[var(--ds-primary-border)]"
                                   : s === "carie"
-                                    ? "bg-[#06b6d4]"
+                                    ? "bg-[var(--tooth-soin-stroke)]"
                                     : s === "couronne"
-                                      ? "bg-[#10b981]"
+                                      ? "bg-[var(--tooth-couronne-stroke)]"
                                       : s === "chirurgie"
-                                        ? "bg-[#f97316]"
+                                        ? "bg-[var(--tooth-chirurgie-stroke)]"
                                         : "bg-[var(--ds-text-muted)]"
                               }`}
                             />
@@ -465,24 +465,24 @@ export function DentalChart({
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-primary-border)]" />
             <span className="text-[var(--ds-text)]">Saine</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-cyan-200/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#06b6d4]" />
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tooth-soin-stroke)]" />
             <span className="text-[var(--ds-text)]">Soins</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-emerald-200/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tooth-couronne-stroke)]" />
             <span className="text-[var(--ds-text)]">Orthopédie</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-orange-200/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#f97316]" />
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tooth-chirurgie-stroke)]" />
             <span className="text-[var(--ds-text)]">Chirurgie</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-slate-200/40">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-text-muted)]" />
             <span className="text-[var(--ds-text)]">Absente</span>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-amber-200/60">
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-white" />
+          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-border-strong)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-primary)] ring-2 ring-[var(--ds-surface)]" />
             <span className="text-[var(--ds-text)]">À surveiller</span>
           </div>
         </div>

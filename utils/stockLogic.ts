@@ -326,6 +326,18 @@ export function loadProtocols(): ActProtocolMap {
   }
 }
 
+/** Indique si un produit apparaît dans au moins un protocole d’acte (consommations fauteuil). */
+export function isProductLinkedToProtocol(
+  productId: string,
+  protocols: ActProtocolMap,
+): boolean {
+  for (const items of Object.values(protocols)) {
+    if (!Array.isArray(items)) continue;
+    if (items.some((i) => i.productId === productId)) return true;
+  }
+  return false;
+}
+
 export function saveProtocols(protocols: ActProtocolMap): void {
   if (typeof window === "undefined") return;
   try {

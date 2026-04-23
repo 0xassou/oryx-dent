@@ -59,13 +59,13 @@ export function CatalogActCombobox({
     <div ref={rootRef} className="relative">
       <label
         htmlFor={id}
-        className="block text-sm font-medium text-slate-700"
+        className="block text-sm font-medium text-[var(--ds-text)]"
       >
         {label}
       </label>
       <div className="relative mt-1">
         <Search
-          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-subtle)]"
           aria-hidden
         />
         <input
@@ -94,7 +94,7 @@ export function CatalogActCombobox({
         <ul
           id={`${id}-listbox`}
           role="listbox"
-          className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-1 shadow-lg"
         >
           {filtered.map((act) => (
             <li key={act.id} role="presentation">
@@ -108,10 +108,10 @@ export function CatalogActCombobox({
                   setQuery(act.nom);
                   setOpen(false);
                 }}
-                className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left text-sm transition-colors hover:bg-slate-50"
+                className="flex w-full flex-col gap-0.5 px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--ds-primary-soft)]"
               >
-                <span className="font-medium text-slate-800">{act.nom}</span>
-                <span className="text-xs text-slate-500">
+                <span className="font-medium text-[var(--ds-text)]">{act.nom}</span>
+                <span className="text-xs text-[var(--ds-text-muted)]">
                   {act.categorie} · {act.prix_par_defaut.toLocaleString("fr-DZ")}{" "}
                   DA
                 </span>
@@ -121,7 +121,7 @@ export function CatalogActCombobox({
         </ul>
       ) : null}
       {open && filtered.length === 0 && query.trim() ? (
-        <p className="absolute z-30 mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500 shadow-lg">
+        <p className="absolute z-30 mt-1 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3 text-sm text-[var(--ds-text-muted)] shadow-lg">
           Aucun acte ne correspond à « {query.trim()} ».
         </p>
       ) : null}

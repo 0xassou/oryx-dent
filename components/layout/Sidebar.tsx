@@ -14,12 +14,16 @@ import {
   Truck,
   Settings,
   Lock,
+  Wallet,
 } from "lucide-react";
+import { useRole } from "@/hooks/useRole";
+import { canAccessNav, type NavKey } from "@/utils/roles";
 
 /** Largeur fixe alignée sur `w-64` (16rem) — utilisée si besoin ailleurs. */
 export const SIDEBAR_WIDTH_PX = 256;
 
 type NavItem = {
+  key: NavKey;
   href: string;
   label: string;
   icon: ComponentType<{ className?: string }>;
@@ -27,22 +31,38 @@ type NavItem = {
 };
 
 const NAV_PRINCIPAL: readonly NavItem[] = [
-  { href: "/", label: "Tableau de bord", icon: LayoutDashboard, locked: false },
-  { href: "/patients", label: "Patients", icon: Users, locked: false },
-  { href: "/planning", label: "Planning", icon: Calendar, locked: false },
-  { href: "/finances", label: "Finances", icon: Banknote, locked: false },
-  { href: "/statistiques", label: "Statistiques", icon: BarChart2, locked: false },
+  { key: "dashboard", href: "/", label: "Tableau de bord", icon: LayoutDashboard, locked: false },
+  { key: "patients", href: "/patients", label: "Patients", icon: Users, locked: false },
+  { key: "planning", href: "/planning", label: "Planning", icon: Calendar, locked: false },
+  { key: "finances", href: "/finances", label: "Finances", icon: Banknote, locked: false },
+  { key: "statistiques", href: "/statistiques", label: "Statistiques", icon: BarChart2, locked: false },
 ];
 
 const NAV_GESTION: readonly NavItem[] = [
-  { href: "/stocks", label: "Stocks", icon: Package, locked: false },
-  { href: "/sterilisation", label: "Stérilisation", icon: ShieldCheck, locked: false },
-  { href: "/laboratoire", label: "Laboratoire", icon: Truck, locked: false },
-  { href: "/settings", label: "Paramètres", icon: Settings, locked: false },
+  { key: "financesDepenses", href: "/finances/depenses", label: "Dépenses", icon: Wallet, locked: false },
+  { key: "stocks", href: "/stocks", label: "Stocks", icon: Package, locked: false },
+  { key: "sterilisation", href: "/sterilisation", label: "Stérilisation", icon: ShieldCheck, locked: false },
+  { key: "laboratoire", href: "/laboratoire", label: "Laboratoire", icon: Truck, locked: false },
+  { key: "settings", href: "/settings", label: "Paramètres", icon: Settings, locked: false },
 ];
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
+  if (href === "/finances") {
+    if (
+      pathname === "/finances/depenses" ||
+      pathname.startsWith("/finances/depenses/")
+    ) {
+      return false;
+    }
+    return pathname === "/finances" || pathname.startsWith("/finances/");
+  }
+  if (href === "/finances/depenses") {
+    return (
+      pathname === "/finances/depenses" ||
+      pathname.startsWith("/finances/depenses/")
+    );
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -103,6 +123,17 @@ export default function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { role, ready } = useRole();
+
+  const navPrincipal = NAV_PRINCIPAL.filter(
+    (i) => !ready || canAccessNav(role, i.key),
+  );
+  const navGestion = NAV_GESTION.filter((i) => {
+    if (i.key === "financesDepenses" && role === "admin") {
+      return false;
+    }
+    return !ready || canAccessNav(role, i.key);
+  });
 
   return (
     <>
@@ -145,31 +176,41 @@ export default function Sidebar({
           className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-2 pb-3 pt-3"
           aria-label="Navigation principale"
         >
-          <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
-            Principal
-          </p>
-          {NAV_PRINCIPAL.map((item) => (
-            <NavLinkRow
-              key={item.href}
-              item={item}
-              pathname={pathname}
-              onNavigate={onMobileClose}
-            />
-          ))}
+          {navPrincipal.length > 0 && (
+            <>
+              <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                Principal
+              </p>
+              {navPrincipal.map((item) => (
+                <NavLinkRow
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  onNavigate={onMobileClose}
+                />
+              ))}
+            </>
+          )}
 
-          <div className="mx-3 my-2 h-px bg-white/10" />
+          {navPrincipal.length > 0 && navGestion.length > 0 && (
+            <div className="mx-3 my-2 h-px bg-white/10" />
+          )}
 
-          <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-white/40">
-            Gestion
-          </p>
-          {NAV_GESTION.map((item) => (
-            <NavLinkRow
-              key={item.href}
-              item={item}
-              pathname={pathname}
-              onNavigate={onMobileClose}
-            />
-          ))}
+          {navGestion.length > 0 && (
+            <>
+              <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                Gestion
+              </p>
+              {navGestion.map((item) => (
+                <NavLinkRow
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  onNavigate={onMobileClose}
+                />
+              ))}
+            </>
+          )}
         </nav>
       </div>
     </>

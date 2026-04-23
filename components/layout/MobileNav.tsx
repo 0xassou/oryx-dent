@@ -8,16 +8,22 @@ import {
   Plus,
   Settings,
 } from "lucide-react";
+import { useRole } from "@/hooks/useRole";
+import { canAccessNav, type NavKey } from "@/utils/roles";
 
-const NAV_ITEMS = [
-  { href: "/", icon: LayoutDashboard, label: "Accueil" },
-  { href: "/patients", icon: Users, label: "Patients" },
-  { href: "/planning", icon: Calendar, label: "Planning" },
-  { href: "/settings", icon: Settings, label: "Réglages" },
+const NAV_ITEMS: { key: NavKey; href: string; icon: typeof LayoutDashboard; label: string }[] = [
+  { key: "dashboard", href: "/", icon: LayoutDashboard, label: "Accueil" },
+  { key: "patients", href: "/patients", icon: Users, label: "Patients" },
+  { key: "planning", href: "/planning", icon: Calendar, label: "Planning" },
+  { key: "settings", href: "/settings", icon: Settings, label: "Réglages" },
 ];
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const { role, ready } = useRole();
+  const items = NAV_ITEMS.filter((i) => !ready || canAccessNav(role, i.key));
+  const leftItems = items.slice(0, Math.min(2, items.length));
+  const rightItems = items.slice(Math.min(2, items.length));
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 lg:hidden">
@@ -37,7 +43,7 @@ export default function MobileNav() {
         }}
       >
         {/* Items gauche — Accueil + Patients */}
-        {NAV_ITEMS.slice(0, 2).map((item) => {
+        {leftItems.map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/"
@@ -154,7 +160,7 @@ export default function MobileNav() {
         </button>
 
         {/* Items droite — Planning + Réglages */}
-        {NAV_ITEMS.slice(2).map((item) => {
+        {rightItems.map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/"

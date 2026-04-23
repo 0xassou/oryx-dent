@@ -4,9 +4,18 @@
 
 export const DENTAL_EXPENSES_STORAGE_KEY = "dental_expenses_data";
 
-export const EXPENSE_CATEGORIES = ["Stock", "Labo", "Frais"] as const;
+/** Affichage dans le select : en tête, puis catégories historiques. */
+export const EXPENSE_CATEGORIES = [
+  "Produits & Stock",
+  "Prothésiste / Labo",
+  "Stock",
+  "Labo",
+  "Frais",
+] as const;
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+const CATEGORY_SET: ReadonlySet<string> = new Set(EXPENSE_CATEGORIES);
 
 export type DentalExpense = {
   id: string;
@@ -29,7 +38,7 @@ function parseExpense(raw: unknown): DentalExpense | null {
       : Number(o.montant);
   if (!Number.isFinite(montant) || montant < 0) return null;
   const cat = o.categorie;
-  if (cat !== "Stock" && cat !== "Labo" && cat !== "Frais") return null;
+  if (typeof cat !== "string" || !CATEGORY_SET.has(cat)) return null;
   const just =
     typeof o.justificatif_url === "string" ? o.justificatif_url : "";
   return {
@@ -37,7 +46,7 @@ function parseExpense(raw: unknown): DentalExpense | null {
     date: o.date,
     libelle: o.libelle,
     montant,
-    categorie: cat,
+    categorie: cat as ExpenseCategory,
     justificatif_url: just,
   };
 }
@@ -84,13 +93,14 @@ export function addExpenseToStorage(
 export function sumExpensesByCategory(
   items: DentalExpense[],
 ): Record<ExpenseCategory, number> {
-  const acc: Record<ExpenseCategory, number> = {
-    Stock: 0,
-    Labo: 0,
-    Frais: 0,
-  };
+  const acc = {} as Record<ExpenseCategory, number>;
+  for (const c of EXPENSE_CATEGORIES) {
+    acc[c] = 0;
+  }
   for (const e of items) {
-    acc[e.categorie] += e.montant;
+    if (e.categorie in acc) {
+      acc[e.categorie] += e.montant;
+    }
   }
   return acc;
 }

@@ -30,15 +30,15 @@ interface AddPatientModalProps {
 }
 
 const inputBase =
-  "mt-1.5 w-full rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+  "mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
 
-const labelBase = "block text-sm font-medium text-slate-700";
+const labelBase = "block text-sm font-medium text-[var(--ds-text)]";
 
 const sectionTitle =
-  "text-xs font-semibold uppercase tracking-wider text-slate-500";
+  "text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]";
 
 const checkboxBase =
-  "h-4 w-4 rounded-lg border border-slate-200 text-[color:var(--ds-primary)] transition-colors focus:ring-2 focus:ring-[color:var(--ds-primary)]/20 focus:ring-offset-0";
+  "h-4 w-4 rounded-lg border border-[var(--ds-primary-border)] text-[color:var(--ds-primary)] transition-colors focus:ring-2 focus:ring-[color:var(--ds-primary)]/20 focus:ring-offset-0";
 
 export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps) {
   const [nom, setNom] = useState("");
@@ -83,7 +83,7 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[color-mix(in_srgb,var(--ds-text)_30%,transparent)] p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="add-patient-title"
@@ -92,11 +92,11 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
       }}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-3xl bg-white/90 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/98 shadow-[0_8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/60 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--ds-primary-border)] px-6 py-4">
           <div>
             <h2
               id="add-patient-title"
@@ -104,14 +104,14 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
             >
               Nouveau patient
             </h2>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-[var(--ds-text-muted)]">
               Identité, contact et anamnèse
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-xl p-2 text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -245,7 +245,7 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                   />
                 </div>
                 <div>
-                  <p className="mb-2 text-sm font-medium text-slate-700">
+                  <p className="mb-2 text-sm font-medium text-[var(--ds-text)]">
                     Antécédents
                   </p>
                   <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -256,7 +256,7 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                         onChange={(e) => setDiabete(e.target.checked)}
                         className={checkboxBase}
                       />
-                      <span className="text-sm text-slate-700">Diabète</span>
+                      <span className="text-sm text-[var(--ds-text)]">Diabète</span>
                     </label>
                     <label className="inline-flex cursor-pointer items-center gap-2">
                       <input
@@ -265,7 +265,7 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                         onChange={(e) => setHta(e.target.checked)}
                         className={checkboxBase}
                       />
-                      <span className="text-sm text-slate-700">
+                      <span className="text-sm text-[var(--ds-text)]">
                         Hypertension (HTA)
                       </span>
                     </label>
@@ -278,7 +278,7 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                         }
                         className={checkboxBase}
                       />
-                      <span className="text-sm text-slate-700">
+                      <span className="text-sm text-[var(--ds-text)]">
                         Problèmes cardiaques
                       </span>
                     </label>
@@ -289,7 +289,7 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                         onChange={(e) => setEnceinte(e.target.checked)}
                         className={checkboxBase}
                       />
-                      <span className="text-sm text-slate-700">Enceinte</span>
+                      <span className="text-sm text-[var(--ds-text)]">Enceinte</span>
                     </label>
                   </div>
                 </div>
@@ -315,18 +315,18 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-200/60 px-6 py-4">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-[var(--ds-primary-border)] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-slate-50"
+            className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 text-sm font-medium text-[var(--ds-text)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-primary-soft)]"
           >
             Annuler
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
+            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-[var(--ds-bg)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
           >
             Enregistrer
           </button>

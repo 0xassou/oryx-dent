@@ -9,31 +9,31 @@ const STYLES: Record<
 > = {
   EN_ATTENTE: {
     className:
-      "bg-blue-100 text-blue-700 border-blue-200/50",
+      "bg-[var(--ds-primary-soft)] text-[var(--ds-text-muted)] border-[var(--ds-primary-border)]",
   },
   ENVOYE_LABO: {
     className:
-      "bg-blue-100 text-blue-700 border-blue-200/50",
+      "bg-[var(--ds-bg)] text-[var(--ds-text)] border-[var(--ds-primary-border)]",
   },
   EN_FABRICATION: {
     className:
-      "bg-indigo-100 text-indigo-700 border-indigo-200/50",
+      "bg-[var(--ds-surface-2)] text-[var(--ds-primary-hover)] border-[var(--ds-border-strong)]",
   },
   EXPEDIE_CABINET: {
     className:
-      "bg-cyan-100 text-cyan-700 border-cyan-200/50",
+      "bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] border-[var(--ds-primary-border)]",
   },
   RECU_CABINET: {
     className:
-      "bg-emerald-100 text-emerald-700 border-emerald-200/50",
+      "bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] border-[var(--ds-border-strong)]",
   },
   POSE: {
     className:
-      "bg-slate-100 text-slate-600 border-slate-200/50",
+      "bg-[var(--ds-surface-2)] text-[var(--ds-text-subtle)] border-[var(--ds-primary-border)]",
   },
   RETOUCHE: {
     className:
-      "bg-rose-100 text-rose-700 border-rose-200/50",
+      "bg-[var(--ds-surface-2)] text-[var(--ds-primary-hover)] border-[var(--ds-border-strong)]",
     blink: true,
   },
 };

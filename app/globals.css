@@ -1,18 +1,46 @@
 @import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
+/* dark: — aligné sur le thème app ([data-theme="dark"] sur <html>), pas sur prefers-color-scheme */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --ds-bg: #faf9ff;
+  --ds-surface: #ffffff;
+  --ds-surface-2: #f8f7fc;
+  --ds-border: #ede9fe;
+  --ds-border-strong: #c4b5fd;
   --ds-text: #0f172a;
+  --ds-text-muted: #64748b;
+  --ds-text-subtle: #94a3b8;
   --ds-primary: #7c3aed;
+  --ds-primary-hover: #6d28d9;
   --ds-primary-soft: #f5f3ff;
   --ds-primary-border: #ede9fe;
+
+  /* Odontogramme — palette light par défaut */
+  --tooth-sain-crown: #dcfce7;
+  --tooth-sain-stroke: #22c55e;
+  --tooth-sain-root: #bbf7d0;
+  --tooth-soin-crown: var(--ds-primary-soft);
+  --tooth-soin-stroke: color-mix(in srgb, var(--ds-primary) 55%, transparent);
+  --tooth-soin-root: color-mix(in srgb, var(--ds-primary) 14%, #ffffff);
+  --tooth-chirurgie-crown: #ffedd5;
+  --tooth-chirurgie-stroke: #f97316;
+  --tooth-chirurgie-root: #fbd9ae;
+  --tooth-couronne-crown: #fff5d9;
+  --tooth-couronne-stroke: #d4a820;
+  --tooth-couronne-root: #f0dfa0;
+  --tooth-absente-crown: #f1f5f9;
+  --tooth-absente-stroke: #94a3b8;
+  --tooth-absente-root: #e2e8f0;
 }
 
 /* ── Thème Violet (défaut) ── */
 [data-theme="violet"] {
   --ds-bg: #faf9ff;
   --ds-surface: #ffffff;
+  --ds-surface-2: #f8f7fc;
   --ds-text: #0f172a;
   --ds-text-muted: #64748b;
   --ds-primary: #7c3aed;
@@ -53,16 +81,60 @@
 
 /* ── Dark Mode ── */
 [data-theme="dark"] {
-  --ds-bg: #0f0f13;
-  --ds-surface: #1a1a24;
-  --ds-text: #f1f5f9;
-  --ds-text-muted: #94a3b8;
-  --ds-primary: #a78bfa;
-  --ds-primary-hover: #8b5cf6;
-  --ds-primary-soft: #1e1a2e;
-  --ds-primary-border: #312e5a;
+  /* Hiérarchie 3 niveaux */
+  --ds-bg: #0f0d1a;
+  --ds-surface: #1a1726;
+  --ds-surface-2: #231f32;
+
+  /* Bordures */
+  --ds-border: rgba(255, 255, 255, 0.08);
+  --ds-border-strong: rgba(255, 255, 255, 0.14);
+
+  /* Textes (F0EDF8 primaire, 9B95B0 secondaire, 6B647A tertiaire) */
+  --ds-text: #f0edf8;
+  --ds-text-muted: #9b95b0;
+  --ds-text-subtle: #6b647a;
+
+  /* Accent violet — primaire plus soutenu pour boutons / actions sur fond sombre */
+  --ds-primary: #6d28d9;
+  --ds-primary-hover: #7c3aed;
+  --ds-primary-soft: #231f32;
+  --ds-primary-border: rgba(255, 255, 255, 0.08);
+  /* Contour des boutons pleins (équivalent 1px rgba(167,139,250,.3)) */
+  --ds-primary-button-edge: rgba(167, 139, 250, 0.3);
+
+  /* Sidebar / overlay */
   --ds-sidebar-bg: #13101f;
   --ds-layout-bg: #0a0a0f;
+
+  /* Odontogramme dark */
+  --tooth-sain-crown: #1a3d2a;
+  --tooth-sain-stroke: #2d6b45;
+  --tooth-sain-root: #0f2b1d;
+  --tooth-soin-crown: #2d1a4d;
+  --tooth-soin-stroke: #5c3580;
+  --tooth-soin-root: #20123a;
+  --tooth-chirurgie-crown: #3d2800;
+  --tooth-chirurgie-stroke: #7a5000;
+  --tooth-chirurgie-root: #2a1c00;
+  --tooth-couronne-crown: #3d3000;
+  --tooth-couronne-stroke: #7a6000;
+  --tooth-couronne-root: #2a2100;
+  --tooth-absente-crown: #1e1e1e;
+  --tooth-absente-stroke: #3d3d3d;
+  --tooth-absente-root: #141414;
+}
+
+/*
+ * Boutons d’action plein violet (dark uniquement) : contour léger + libellé blanc.
+ * Cible les utilitaires Tailwind bg-[var(--ds-primary)] et bg-[color:var(--ds-primary)].
+ */
+[data-theme="dark"] :is(button, a[href], [role="button"]).bg-\[var\(--ds-primary\)\],
+[data-theme="dark"] :is(button, a[href], [role="button"]).bg-\[color\:var\(--ds-primary\)\],
+.dark :is(button, a[href], [role="button"]).bg-\[var\(--ds-primary\)\],
+.dark :is(button, a[href], [role="button"]).bg-\[color\:var\(--ds-primary\)\] {
+  box-shadow: 0 0 0 1px var(--ds-primary-button-edge);
+  color: #ffffff !important;
 }
 
 [data-theme="dark"] .mobile-nav-glass {
@@ -73,119 +145,167 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Couleurs de statut adaptées dark mode */
+/* ─────────────────────────────────────────────────────────────
+   Dark mode — alertes colorées
+   Danger (rouge)   : #2D1515 / #5C2020 / #FF8080
+   Warning (orange) : #2D1E0A / #5C3A10 / #FFB060
+   Success (vert)   : #0D2D1A / #1A5C35 / #60D890
+   Info (violet)    : #1E1040 / #3D2080 / #A080FF
+   ───────────────────────────────────────────────────────────── */
 
-[data-theme="dark"] .bg-emerald-50 {
-  background-color: rgba(16,185,129,0.12) !important;
+/* Danger */
+[data-theme="dark"] .bg-red-50,
+[data-theme="dark"] .bg-rose-50 {
+  background-color: #2d1515 !important;
 }
-[data-theme="dark"] .bg-emerald-100 {
-  background-color: rgba(16,185,129,0.18) !important;
+[data-theme="dark"] .bg-red-100,
+[data-theme="dark"] .bg-rose-100 {
+  background-color: #3a1a1a !important;
 }
-[data-theme="dark"] .text-emerald-700,
-[data-theme="dark"] .text-emerald-800 {
-  color: #34d399 !important;
+[data-theme="dark"] .border-red-100,
+[data-theme="dark"] .border-red-200,
+[data-theme="dark"] .border-rose-100,
+[data-theme="dark"] .border-rose-200 {
+  border-color: #5c2020 !important;
 }
-[data-theme="dark"] .border-emerald-100,
-[data-theme="dark"] .border-emerald-200 {
-  border-color: rgba(16,185,129,0.2) !important;
+[data-theme="dark"] .text-red-500,
+[data-theme="dark"] .text-red-600,
+[data-theme="dark"] .text-red-700,
+[data-theme="dark"] .text-red-800,
+[data-theme="dark"] .text-rose-600,
+[data-theme="dark"] .text-rose-700,
+[data-theme="dark"] .text-rose-800 {
+  color: #ff8080 !important;
 }
 
-[data-theme="dark"] .bg-amber-50 {
-  background-color: rgba(245,158,11,0.12) !important;
+/* Warning (orange / amber / yellow) */
+[data-theme="dark"] .bg-orange-50,
+[data-theme="dark"] .bg-amber-50,
+[data-theme="dark"] .bg-yellow-50 {
+  background-color: #2d1e0a !important;
 }
-[data-theme="dark"] .bg-amber-100 {
-  background-color: rgba(245,158,11,0.18) !important;
+[data-theme="dark"] .bg-orange-100,
+[data-theme="dark"] .bg-amber-100,
+[data-theme="dark"] .bg-yellow-100 {
+  background-color: #3a2612 !important;
 }
-[data-theme="dark"] .text-amber-700,
-[data-theme="dark"] .text-amber-800 {
-  color: #fbbf24 !important;
-}
+[data-theme="dark"] .border-orange-100,
+[data-theme="dark"] .border-orange-200,
 [data-theme="dark"] .border-amber-100,
-[data-theme="dark"] .border-amber-200 {
-  border-color: rgba(245,158,11,0.2) !important;
-}
-
-[data-theme="dark"] .bg-orange-50 {
-  background-color: rgba(249,115,22,0.12) !important;
-}
-[data-theme="dark"] .bg-orange-100 {
-  background-color: rgba(249,115,22,0.18) !important;
+[data-theme="dark"] .border-amber-200,
+[data-theme="dark"] .border-yellow-100,
+[data-theme="dark"] .border-yellow-200 {
+  border-color: #5c3a10 !important;
 }
 [data-theme="dark"] .text-orange-600,
 [data-theme="dark"] .text-orange-700,
-[data-theme="dark"] .text-orange-800 {
-  color: #fb923c !important;
-}
-[data-theme="dark"] .border-orange-100,
-[data-theme="dark"] .border-orange-200 {
-  border-color: rgba(249,115,22,0.2) !important;
-}
-
-[data-theme="dark"] .bg-cyan-50 {
-  background-color: rgba(6,182,212,0.12) !important;
-}
-[data-theme="dark"] .bg-cyan-100 {
-  background-color: rgba(6,182,212,0.18) !important;
-}
-[data-theme="dark"] .text-cyan-700,
-[data-theme="dark"] .text-cyan-800 {
-  color: #22d3ee !important;
-}
-
-[data-theme="dark"] .bg-violet-50,
-[data-theme="dark"] .bg-purple-50 {
-  background-color: rgba(124,58,237,0.12) !important;
-}
-[data-theme="dark"] .bg-violet-100,
-[data-theme="dark"] .bg-purple-100 {
-  background-color: rgba(124,58,237,0.18) !important;
-}
-[data-theme="dark"] .text-violet-700,
-[data-theme="dark"] .text-violet-800 {
-  color: #a78bfa !important;
-}
-
-[data-theme="dark"] .bg-green-100 {
-  background-color: rgba(16,185,129,0.15) !important;
-}
-[data-theme="dark"] .text-green-700,
-[data-theme="dark"] .text-green-800 {
-  color: #34d399 !important;
-}
-
-[data-theme="dark"] .bg-yellow-100 {
-  background-color: rgba(234,179,8,0.15) !important;
-}
+[data-theme="dark"] .text-orange-800,
+[data-theme="dark"] .text-amber-600,
+[data-theme="dark"] .text-amber-700,
+[data-theme="dark"] .text-amber-800,
 [data-theme="dark"] .text-yellow-700,
 [data-theme="dark"] .text-yellow-800 {
-  color: #fbbf24 !important;
+  color: #ffb060 !important;
 }
 
-/* Settings — inputs visibles */
+/* Success (emerald / green / teal) */
+[data-theme="dark"] .bg-emerald-50,
+[data-theme="dark"] .bg-green-50,
+[data-theme="dark"] .bg-teal-50 {
+  background-color: #0d2d1a !important;
+}
+[data-theme="dark"] .bg-emerald-100,
+[data-theme="dark"] .bg-green-100,
+[data-theme="dark"] .bg-teal-100 {
+  background-color: #143a23 !important;
+}
+[data-theme="dark"] .border-emerald-100,
+[data-theme="dark"] .border-emerald-200,
+[data-theme="dark"] .border-green-100,
+[data-theme="dark"] .border-green-200 {
+  border-color: #1a5c35 !important;
+}
+[data-theme="dark"] .text-emerald-600,
+[data-theme="dark"] .text-emerald-700,
+[data-theme="dark"] .text-emerald-800,
+[data-theme="dark"] .text-green-600,
+[data-theme="dark"] .text-green-700,
+[data-theme="dark"] .text-green-800,
+[data-theme="dark"] .text-teal-700 {
+  color: #60d890 !important;
+}
+
+/* Info (violet / purple / indigo) */
+[data-theme="dark"] .bg-violet-50,
+[data-theme="dark"] .bg-purple-50,
+[data-theme="dark"] .bg-indigo-50 {
+  background-color: #1e1040 !important;
+}
+[data-theme="dark"] .bg-violet-100,
+[data-theme="dark"] .bg-purple-100,
+[data-theme="dark"] .bg-indigo-100 {
+  background-color: #261450 !important;
+}
+[data-theme="dark"] .border-violet-100,
+[data-theme="dark"] .border-violet-200,
+[data-theme="dark"] .border-purple-100,
+[data-theme="dark"] .border-purple-200,
+[data-theme="dark"] .border-indigo-100,
+[data-theme="dark"] .border-indigo-200 {
+  border-color: #3d2080 !important;
+}
+[data-theme="dark"] .text-violet-600,
+[data-theme="dark"] .text-violet-700,
+[data-theme="dark"] .text-violet-800,
+[data-theme="dark"] .text-purple-600,
+[data-theme="dark"] .text-purple-700,
+[data-theme="dark"] .text-indigo-600,
+[data-theme="dark"] .text-indigo-700 {
+  color: #a080ff !important;
+}
+
+/* Cyan / sky — ramenés sur la palette violette */
+[data-theme="dark"] .bg-cyan-50,
+[data-theme="dark"] .bg-sky-50 {
+  background-color: #1e1040 !important;
+}
+[data-theme="dark"] .bg-cyan-100,
+[data-theme="dark"] .bg-sky-100 {
+  background-color: #261450 !important;
+}
+[data-theme="dark"] .text-cyan-600,
+[data-theme="dark"] .text-cyan-700,
+[data-theme="dark"] .text-cyan-800,
+[data-theme="dark"] .text-sky-600,
+[data-theme="dark"] .text-sky-700 {
+  color: #a080ff !important;
+}
+
+/* Inputs — surface niveau 2 */
 [data-theme="dark"]
   input:not([type="checkbox"]):not([type="radio"]),
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
-  background-color: #1e1a2e !important;
-  border-color: #312e5a !important;
-  color: #e2e8f0 !important;
+  background-color: var(--ds-surface-2) !important;
+  border-color: var(--ds-border) !important;
+  color: var(--ds-text) !important;
 }
 
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder {
-  color: #475569 !important;
+  color: var(--ds-text-subtle) !important;
 }
 
-/* Header */
+/* Header topbar */
 [data-theme="dark"] header {
-  background-color: #13101f !important;
-  border-color: #2e2a3d !important;
+  background-color: var(--ds-surface) !important;
+  border-color: var(--ds-border) !important;
 }
 
 /* Séparateurs */
 [data-theme="dark"] .divide-slate-100 > * + *,
 [data-theme="dark"] .divide-y > * + * {
-  border-color: #2e2a3d !important;
+  border-color: var(--ds-border) !important;
 }
 
 /* Scrollbar élégante */
@@ -197,18 +317,18 @@
   background: transparent;
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: #2e2a3d;
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 4px;
 }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: #3d3854;
+  background: rgba(255, 255, 255, 0.18);
 }
 
-/* Planning — RDV blancs */
+/* Planning — RDV blancs → surface niveau 1 */
 [data-theme="dark"] .bg-white.rounded-lg,
 [data-theme="dark"] .bg-white.rounded-xl,
 [data-theme="dark"] .bg-white.rounded-2xl {
-  background-color: #1a1a24 !important;
+  background-color: var(--ds-surface) !important;
 }
 
 /* Planning — RDV en dark mode */
@@ -220,39 +340,10 @@
 
 /* Textes sur le planning */
 [data-theme="dark"] .text-\[\#7c3aed\] {
-  color: #a78bfa !important;
+  color: var(--ds-primary) !important;
 }
 [data-theme="dark"] .text-\[\#6d28d9\] {
-  color: #8b5cf6 !important;
-}
-
-/* ── Finances — cartes KPI ── */
-[data-theme="dark"] .bg-emerald-50 {
-  background-color: rgba(16,185,129,0.1) !important;
-  border-color: rgba(16,185,129,0.15) !important;
-}
-[data-theme="dark"] .text-emerald-600 {
-  color: #6ee7b7 !important;
-}
-[data-theme="dark"] .text-emerald-700 {
-  color: #6ee7b7 !important;
-}
-[data-theme="dark"] .border-emerald-100 {
-  border-color: rgba(16,185,129,0.15) !important;
-}
-
-/* ── Planning — blocs RDV ── */
-[data-theme="dark"] [class*="bg-red-"][class*="rounded"] {
-  background-color: rgba(239,68,68,0.15) !important;
-}
-[data-theme="dark"] [class*="bg-red-50"] {
-  background-color: rgba(239,68,68,0.12) !important;
-}
-[data-theme="dark"] .text-red-600 {
-  color: #fca5a5 !important;
-}
-[data-theme="dark"] .text-red-700 {
-  color: #fca5a5 !important;
+  color: var(--ds-primary-hover) !important;
 }
 
 /* Planning calendrier — cellules RDV */
@@ -270,110 +361,125 @@
   filter: brightness(1.4);
 }
 
-/* ── Page header — titre et sous-titre ── */
+/* ── Titres — contraste textes primaire ── */
 [data-theme="dark"] h1,
 [data-theme="dark"] h2,
-[data-theme="dark"] h3 {
-  color: #f1f5f9 !important;
-}
-
-/* ── Finances header blanc ── */
-[data-theme="dark"] .bg-\[\#faf9ff\],
-[data-theme="dark"] .bg-\[var\(--ds-bg\)\] {
-  background-color: var(--ds-bg) !important;
-}
-
-/* ── Graphiques Recharts ── */
-[data-theme="dark"] .recharts-cartesian-grid line {
-  stroke: rgba(255,255,255,0.06) !important;
-}
-[data-theme="dark"] .recharts-text {
-  fill: #94a3b8 !important;
-}
-[data-theme="dark"] .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background-color: #1a1a24 !important;
-  border-color: #312e5a !important;
-  color: #f1f5f9 !important;
-}
-
-/* Sidebar — bg violet adapté dark */
-[data-theme="dark"] [style*="--ds-sidebar-bg"] {
-  background-color: #13101f;
-}
-
-/* Page Finances — header et onglets */
-[data-theme="dark"] .border-b.border-slate-200 {
-  border-color: #312e5a !important;
-}
-
-/* Finances page — fonds résiduels */
-[data-theme="dark"] .bg-\[\#fafafa\] {
-  background-color: var(--ds-bg) !important;
-}
-[data-theme="dark"] .bg-\[\#faf9ff\] {
-  background-color: var(--ds-bg) !important;
-}
-
-/* Actes enregistrés fiche patient — fond des cartes */
-[data-theme="dark"] .bg-amber-50 {
-  background-color: rgba(245,158,11,0.1) !important;
-}
-[data-theme="dark"] .bg-amber-100 {
-  background-color: rgba(245,158,11,0.15) !important;
-}
-
-/* Tableau de bord — texte titre principal */
+[data-theme="dark"] h3,
 [data-theme="dark"] h1.text-\[var\(--ds-text\)\],
 [data-theme="dark"] h2.text-\[var\(--ds-text\)\] {
-  color: #f1f5f9 !important;
+  color: var(--ds-text) !important;
 }
 
-/* Cockpit patient — cartes actes enregistrés */
-[data-theme="dark"] .border.rounded-xl.bg-\[var\(--ds-surface\)\] {
-  background-color: #1a1a24 !important;
-  border-color: #312e5a !important;
-}
-
-/* Finances onglets — fond page */
+/* Fonds résiduels forcés sur --ds-bg */
+[data-theme="dark"] .bg-\[\#faf9ff\],
+[data-theme="dark"] .bg-\[\#fafafa\],
+[data-theme="dark"] .bg-\[var\(--ds-bg\)\],
 [data-theme="dark"] .min-h-screen {
   background-color: var(--ds-bg) !important;
 }
 
-/* Settings — page */
-[data-theme="dark"] header.bg-\[var\(--ds-surface\)\] {
-  background-color: #1a1a24 !important;
-  border-color: #312e5a !important;
+/* ── Graphiques Recharts — dark cohérent ── */
+[data-theme="dark"] .recharts-cartesian-grid line,
+[data-theme="dark"] .recharts-cartesian-axis-line {
+  stroke: rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .recharts-cartesian-axis-tick-line {
+  stroke: rgba(255, 255, 255, 0.12) !important;
+}
+[data-theme="dark"] .recharts-text,
+[data-theme="dark"] .recharts-cartesian-axis-tick-value {
+  fill: var(--ds-text-muted) !important;
+}
+[data-theme="dark"] .recharts-legend-item-text {
+  color: var(--ds-text-muted) !important;
+}
+[data-theme="dark"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #2d2840 !important;
+  border: 1px solid var(--ds-border-strong) !important;
+  border-radius: 10px !important;
+  color: var(--ds-text) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
+[data-theme="dark"] .recharts-tooltip-item,
+[data-theme="dark"] .recharts-tooltip-label {
+  color: var(--ds-text) !important;
 }
 
-/* Odontogramme — fond des sections Maxillaire/Mandibule */
-[data-theme="dark"] .rounded-2xl.bg-\[var\(--ds-surface\)\] {
-  background-color: #1a1a24 !important;
+/* Recharts — ramener les rouges/cyans parasites sur la palette Oryx (violet) */
+[data-theme="dark"] .recharts-line path[stroke="#ef4444"],
+[data-theme="dark"] .recharts-line path[stroke="#EF4444"],
+[data-theme="dark"] .recharts-line path[stroke="#06b6d4"],
+[data-theme="dark"] .recharts-line path[stroke="#06B6D4"],
+[data-theme="dark"] .recharts-line path[stroke="#0891b2"],
+[data-theme="dark"] .recharts-line path[stroke="#0891B2"] {
+  stroke: var(--ds-primary) !important;
+}
+[data-theme="dark"] .recharts-bar-rectangle path[fill="#ef4444"],
+[data-theme="dark"] .recharts-bar-rectangle path[fill="#EF4444"],
+[data-theme="dark"] .recharts-bar-rectangle path[fill="#06b6d4"],
+[data-theme="dark"] .recharts-bar-rectangle path[fill="#06B6D4"] {
+  fill: var(--ds-primary) !important;
 }
 
-/* Textes des actes enregistrés sur fiche patient */
+/* Sidebar — bg violet adapté dark */
+[data-theme="dark"] [style*="--ds-sidebar-bg"] {
+  background-color: var(--ds-sidebar-bg);
+}
+
+/* Bordures grises Tailwind → --ds-border */
+[data-theme="dark"] .border-b.border-slate-200,
+[data-theme="dark"] .border-slate-100,
+[data-theme="dark"] .border-slate-200 {
+  border-color: var(--ds-border) !important;
+}
+
+/* Cartes / sections — surface niveau 1 */
+[data-theme="dark"] .bg-\[var\(--ds-surface\)\],
+[data-theme="dark"] header.bg-\[var\(--ds-surface\)\],
+[data-theme="dark"] .rounded-2xl.bg-\[var\(--ds-surface\)\],
+[data-theme="dark"] .border.rounded-xl.bg-\[var\(--ds-surface\)\] {
+  background-color: var(--ds-surface) !important;
+  border-color: var(--ds-border) !important;
+}
+
+/* Cartes imbriquées / inputs / badges neutres — surface niveau 2 */
+[data-theme="dark"] .bg-slate-50,
+[data-theme="dark"] .bg-slate-100,
+[data-theme="dark"] .bg-zinc-50,
+[data-theme="dark"] .bg-zinc-100,
+[data-theme="dark"] .bg-gray-50,
+[data-theme="dark"] .bg-gray-100,
+[data-theme="dark"] .bg-\[var\(--ds-primary-soft\)\] {
+  background-color: var(--ds-surface-2) !important;
+}
+
+/* Textes — hiérarchie primaire / secondaire / tertiaire */
 [data-theme="dark"] .text-\[var\(--ds-text\)\] {
-  color: #e2e8f0 !important;
+  color: var(--ds-text) !important;
 }
 [data-theme="dark"] .text-\[var\(--ds-text-muted\)\] {
-  color: #94a3b8 !important;
+  color: var(--ds-text-muted) !important;
 }
-
-/* Alertes médicales */
-[data-theme="dark"] .bg-red-50 {
-  background-color: rgba(239, 68, 68, 0.1) !important;
+[data-theme="dark"] .text-slate-400,
+[data-theme="dark"] .text-slate-500,
+[data-theme="dark"] .text-zinc-400,
+[data-theme="dark"] .text-zinc-500,
+[data-theme="dark"] .text-gray-400,
+[data-theme="dark"] .text-gray-500 {
+  color: var(--ds-text-muted) !important;
 }
-[data-theme="dark"] .border-red-200 {
-  border-color: rgba(239, 68, 68, 0.2) !important;
+[data-theme="dark"] .text-slate-600,
+[data-theme="dark"] .text-slate-700,
+[data-theme="dark"] .text-zinc-600,
+[data-theme="dark"] .text-zinc-700,
+[data-theme="dark"] .text-gray-600,
+[data-theme="dark"] .text-gray-700 {
+  color: var(--ds-text) !important;
 }
-
-/* Finances — bénéfice net */
-[data-theme="dark"] .bg-emerald-50\/20 {
-  background-color: rgba(16, 185, 129, 0.08) !important;
-}
-
-/* Header page — fond blanc résiduel */
-[data-theme="dark"] .bg-\[var\(--ds-surface\)\] {
-  background-color: #1a1a24 !important;
+[data-theme="dark"] .text-slate-300,
+[data-theme="dark"] .text-zinc-300,
+[data-theme="dark"] .text-gray-300 {
+  color: var(--ds-text-subtle) !important;
 }
 
 /* Onglets Finance — texte et indicateur */
@@ -426,6 +532,50 @@ body {
   font-family: "Sora", sans-serif;
   font-size: 0.95rem;
   letter-spacing: 0.01em;
+}
+
+/* Fiche patient — timeline fade up */
+@keyframes oryx-fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.oryx-fade-slide-in {
+  animation: oryx-fade-slide-in 0.25s ease;
+}
+
+@keyframes oryx-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.oryx-float {
+  animation: oryx-float 4s ease-in-out infinite;
+}
+
+@keyframes oryx-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.oryx-fade-up {
+  animation: oryx-fade-up 0.4s ease both;
 }
 
 @keyframes blink-red-alert {

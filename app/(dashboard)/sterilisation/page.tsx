@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
   ChevronDown,
+  ChevronRight,
   Clock,
+  Package,
   Plus,
   Scissors,
   Search,
@@ -17,6 +19,12 @@ import {
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
+import {
+  APPOINTMENTS_UPDATED_EVENT,
+  formatDateKeyLocal,
+  readAppointmentsFromStorage,
+  type AppointmentRdv,
+} from "@/utils/appointmentData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +66,183 @@ interface SterilizationDataV2 {
   /** @deprecated conservé pour migration uniquement */
   kits?: unknown[];
   nextKitNumero?: number;
+}
+
+// ─── Traçabilité individuelle des kits ───────────────────────────────────────
+
+type KitStatut = "pret" | "sale" | "machine";
+type KitLogAction = "utilise" | "sterilise" | "marque_sale";
+
+interface KitUsageRecord {
+  date: string;
+  patientNom: string;
+  patientId: string;
+  dent: string;
+  operateur: string;
+}
+
+interface KitCycleRecord {
+  date: string;
+  operateur: string;
+  bowieDick: CycleTestResult;
+  helix: CycleTestResult;
+}
+
+interface KitLogEntry {
+  date: string;
+  action: KitLogAction;
+  details: string;
+  operateur: string;
+}
+
+interface IndividualKit {
+  id: string;
+  type: KitTypeId;
+  statut: KitStatut;
+  cycleId?: string | null;
+  derniereUtilisation: KitUsageRecord | null;
+  derniereCycle: KitCycleRecord | null;
+  historiqueComplet: KitLogEntry[];
+}
+
+const KITS_LS_KEY = "oryx_kits";
+
+const KIT_DEFAULT_COUNT: Record<KitTypeId, number> = {
+  examen: 10,
+  chirurgie: 8,
+  endo: 8,
+};
+
+const KIT_ID_PREFIX: Record<KitTypeId, string> = {
+  examen: "EX",
+  chirurgie: "CH",
+  endo: "EN",
+};
+
+function buildDefaultKits(): IndividualKit[] {
+  const kits: IndividualKit[] = [];
+  for (const t of ["examen", "chirurgie", "endo"] as KitTypeId[]) {
+    const n = KIT_DEFAULT_COUNT[t];
+    const prefix = KIT_ID_PREFIX[t];
+    for (let i = 1; i <= n; i++) {
+      kits.push({
+        id: `${prefix}-${String(i).padStart(3, "0")}`,
+        type: t,
+        statut: "pret",
+        cycleId: null,
+        derniereUtilisation: null,
+        derniereCycle: null,
+        historiqueComplet: [],
+      });
+    }
+  }
+  return kits;
+}
+
+function readKits(): IndividualKit[] | null {
+  try {
+    const raw = localStorage.getItem(KITS_LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    return parsed as IndividualKit[];
+  } catch {
+    return null;
+  }
+}
+
+function writeKits(kits: IndividualKit[]) {
+  try {
+    localStorage.setItem(KITS_LS_KEY, JSON.stringify(kits));
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Aligne un tableau de kits « tous prêts » avec les cycles non validés :
+ * pour chaque cycle non validé, on prend N kits prêts du bon type et on
+ * les marque « machine » avec l'ID du cycle.
+ */
+function syncKitsWithPendingCycles(
+  kits: IndividualKit[],
+  cycles: AutoclaveCycle[],
+): IndividualKit[] {
+  const pool = kits.map((k) => ({ ...k }));
+  for (const c of cycles) {
+    if (c.valide) continue;
+    for (const kt of ["examen", "chirurgie", "endo"] as KitTypeId[]) {
+      const need = c.qtyByType[kt] ?? 0;
+      let taken = 0;
+      for (const k of pool) {
+        if (taken >= need) break;
+        if (k.type !== kt) continue;
+        if (k.statut !== "pret") continue;
+        k.statut = "machine";
+        k.cycleId = c.id;
+        k.historiqueComplet = [
+          ...k.historiqueComplet,
+          {
+            date: c.date,
+            action: "sterilise",
+            details: `Placé dans le cycle autoclave #${c.numero}`,
+            operateur: c.operateur,
+          },
+        ];
+        taken++;
+      }
+    }
+  }
+  return pool;
+}
+
+function statutLabel(s: KitStatut): string {
+  if (s === "pret") return "Prêt";
+  if (s === "sale") return "Sale";
+  return "En machine";
+}
+
+const JOURNEE_BANNER_LS_KEY = "oryx_journee_banner_collapsed";
+
+/**
+ * Heuristique de mapping « soin » → type de kit stérilisé.
+ * - Chirurgie : chirurgie, extraction, implant, avulsion, greffe, sinus
+ * - Endo     : endo, canal, canalaire, dévital, pulpe, racine, pulpectomie
+ * - Sinon    : examen (consultation, détartrage, contrôle, composite, etc.)
+ */
+function mapSoinToKitType(soin: string): KitTypeId {
+  const s = soin.toLowerCase();
+  if (
+    s.includes("chirurg") ||
+    s.includes("extract") ||
+    s.includes("implant") ||
+    s.includes("avuls") ||
+    s.includes("greffe") ||
+    s.includes("sinus")
+  ) {
+    return "chirurgie";
+  }
+  if (
+    s.includes("endo") ||
+    s.includes("canal") ||
+    s.includes("dévital") ||
+    s.includes("devital") ||
+    s.includes("pulpe") ||
+    s.includes("pulpect") ||
+    s.includes("racine")
+  ) {
+    return "endo";
+  }
+  return "examen";
+}
+
+function formatFullDateFR(d: Date): string {
+  return d.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -327,9 +512,7 @@ function buildSeedCycles(): AutoclaveCycle[] {
 
 export default function SterilisationPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [stockByType, setStockByType] = useState<Record<KitTypeId, KitStock>>(
-    DEFAULT_STOCK,
-  );
+  const [kits, setKits] = useState<IndividualKit[]>([]);
   const [cycles, setCycles] = useState<AutoclaveCycle[]>([]);
 
   const [showCycleModal, setShowCycleModal] = useState(false);
@@ -343,27 +526,146 @@ export default function SterilisationPage() {
   });
   const [cycleError, setCycleError] = useState<string | null>(null);
 
+  const [usePopoverTypeId, setUsePopoverTypeId] = useState<KitTypeId | null>(
+    null,
+  );
+  const [drawerTypeId, setDrawerTypeId] = useState<KitTypeId | null>(null);
+  const [expandedHistoryKitIds, setExpandedHistoryKitIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const popoverRootRef = useRef<HTMLDivElement | null>(null);
+  const cyclesSectionRef = useRef<HTMLElement | null>(null);
+
+  const [todayAppointments, setTodayAppointments] = useState<AppointmentRdv[]>(
+    [],
+  );
+  const [journeeBannerCollapsed, setJourneeBannerCollapsed] = useState(false);
+
   useEffect(() => {
     setIsMounted(true);
     const data = readStorage();
+    let nextCycles: AutoclaveCycle[];
+
     const isEmpty = data.cycles.length === 0 && isStockPristine(data.stockByType);
     if (isEmpty) {
-      const seedStock = initialStockForSeed();
       const seedCycles = buildSeedCycles();
-      const next = { stockByType: seedStock, cycles: seedCycles };
-      setStockByType(seedStock);
-      setCycles(seedCycles);
-      writeStorage(next);
+      nextCycles = seedCycles;
+      writeStorage({ stockByType: initialStockForSeed(), cycles: seedCycles });
     } else {
-      setStockByType(data.stockByType);
-      setCycles(data.cycles);
+      nextCycles = data.cycles;
+    }
+    setCycles(nextCycles);
+
+    const storedKits = readKits();
+    if (!storedKits) {
+      const fresh = syncKitsWithPendingCycles(buildDefaultKits(), nextCycles);
+      setKits(fresh);
+      writeKits(fresh);
+    } else {
+      setKits(storedKits);
     }
   }, []);
+
+  const stockByType = useMemo<Record<KitTypeId, KitStock>>(() => {
+    const next: Record<KitTypeId, KitStock> = {
+      examen: { disponible: 0, sale: 0, enCours: 0 },
+      chirurgie: { disponible: 0, sale: 0, enCours: 0 },
+      endo: { disponible: 0, sale: 0, enCours: 0 },
+    };
+    for (const k of kits) {
+      const st = next[k.type];
+      if (!st) continue;
+      if (k.statut === "pret") st.disponible++;
+      else if (k.statut === "sale") st.sale++;
+      else if (k.statut === "machine") st.enCours++;
+    }
+    return next;
+  }, [kits]);
 
   useEffect(() => {
     if (!isMounted) return;
     writeStorage({ stockByType, cycles });
   }, [stockByType, cycles, isMounted]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    writeKits(kits);
+  }, [kits, isMounted]);
+
+  useEffect(() => {
+    if (!usePopoverTypeId) return;
+    function onDocMouseDown(e: MouseEvent) {
+      if (!popoverRootRef.current) return;
+      if (!popoverRootRef.current.contains(e.target as Node)) {
+        setUsePopoverTypeId(null);
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [usePopoverTypeId]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    const todayKey = formatDateKeyLocal(new Date());
+    const refresh = () => {
+      const all = readAppointmentsFromStorage();
+      setTodayAppointments(all.filter((r) => r.dateKey === todayKey));
+    };
+    refresh();
+    window.addEventListener(APPOINTMENTS_UPDATED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, refresh);
+  }, [isMounted]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    try {
+      const raw = localStorage.getItem(JOURNEE_BANNER_LS_KEY);
+      if (raw === "1") setJourneeBannerCollapsed(true);
+    } catch {
+      /* ignore */
+    }
+  }, [isMounted]);
+
+  function toggleJourneeBanner() {
+    setJourneeBannerCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(JOURNEE_BANNER_LS_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  const journeeDemand = useMemo<Record<KitTypeId, number>>(() => {
+    const acc: Record<KitTypeId, number> = {
+      examen: 0,
+      chirurgie: 0,
+      endo: 0,
+    };
+    for (const rdv of todayAppointments) {
+      const t = mapSoinToKitType(rdv.soin || "");
+      acc[t]++;
+    }
+    return acc;
+  }, [todayAppointments]);
+
+  const journeeHasShortage = useMemo(
+    () =>
+      KIT_TYPES.some(
+        (kt) => journeeDemand[kt.id] > (stockByType[kt.id]?.disponible ?? 0),
+      ),
+    [journeeDemand, stockByType],
+  );
+
+  function scrollToCyclesSection() {
+    cyclesSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -430,16 +732,29 @@ export default function SterilisationPage() {
       valide: false,
     };
 
-    setStockByType((prev) => {
-      const next = { ...prev };
+    setKits((prev) => {
+      const next = prev.map((k) => ({ ...k }));
       for (const kt of KIT_TYPES) {
-        const q = kitCounts[kt.id];
-        if (q === 0) continue;
-        next[kt.id] = {
-          ...next[kt.id],
-          sale: next[kt.id].sale - q,
-          enCours: next[kt.id].enCours + q,
-        };
+        let taken = 0;
+        const need = kitCounts[kt.id];
+        if (need <= 0) continue;
+        for (const k of next) {
+          if (taken >= need) break;
+          if (k.type !== kt.id) continue;
+          if (k.statut !== "sale") continue;
+          k.statut = "machine";
+          k.cycleId = cycleId;
+          k.historiqueComplet = [
+            ...k.historiqueComplet,
+            {
+              date: nowISO,
+              action: "sterilise",
+              details: `Placé dans le cycle autoclave #${numero}`,
+              operateur: newOperateur,
+            },
+          ];
+          taken++;
+        }
       }
       return next;
     });
@@ -456,41 +771,86 @@ export default function SterilisationPage() {
     setCycleError(null);
   }
 
-  function utiliserUnKit(kitType: KitTypeId) {
-    setStockByType((prev) => {
-      const st = prev[kitType];
-      if (st.disponible <= 0) return prev;
-      return {
-        ...prev,
-        [kitType]: {
-          disponible: st.disponible - 1,
-          sale: st.sale + 1,
-          enCours: st.enCours,
-        },
-      };
-    });
+  function utiliserKitById(kitId: string) {
+    const nowISO = new Date().toISOString();
+    const operateur = newOperateur || DEFAULT_OPERATORS[0];
+    setKits((prev) =>
+      prev.map((k) => {
+        if (k.id !== kitId) return k;
+        if (k.statut !== "pret") return k;
+        const usage: KitUsageRecord = {
+          date: nowISO,
+          patientNom: "—",
+          patientId: "",
+          dent: "—",
+          operateur,
+        };
+        return {
+          ...k,
+          statut: "sale",
+          cycleId: null,
+          derniereUtilisation: usage,
+          historiqueComplet: [
+            ...k.historiqueComplet,
+            {
+              date: nowISO,
+              action: "utilise",
+              details: "Kit sorti pour utilisation clinique",
+              operateur,
+            },
+          ],
+        };
+      }),
+    );
+    setUsePopoverTypeId(null);
   }
 
   function validerCycle(cycle: AutoclaveCycle) {
     if (cycle.valide) return;
-    const q = cycle.qtyByType;
-    setStockByType((prev) => {
-      const next = { ...prev };
-      for (const kt of KIT_TYPES) {
-        const n = q[kt.id];
-        if (n <= 0) continue;
-        const st = next[kt.id];
-        next[kt.id] = {
-          disponible: st.disponible + n,
-          sale: st.sale,
-          enCours: Math.max(0, st.enCours - n),
+    const nowISO = new Date().toISOString();
+    setKits((prev) =>
+      prev.map((k) => {
+        if (k.cycleId !== cycle.id) return k;
+        const cycleRecord: KitCycleRecord = {
+          date: nowISO,
+          operateur: cycle.operateur,
+          bowieDick: cycle.bowieDick,
+          helix: cycle.helix,
         };
-      }
-      return next;
-    });
+        const detailsBits = [
+          `Cycle #${cycle.numero} validé`,
+          `Bowie-Dick ${cycle.bowieDick}`,
+          `Helix ${cycle.helix}`,
+        ];
+        return {
+          ...k,
+          statut: "pret",
+          cycleId: null,
+          derniereCycle: cycleRecord,
+          historiqueComplet: [
+            ...k.historiqueComplet,
+            {
+              date: nowISO,
+              action: "sterilise",
+              details: detailsBits.join(" — "),
+              operateur: cycle.operateur,
+            },
+          ],
+        };
+      }),
+    );
     setCycles((prev) =>
       prev.map((c) => (c.id === cycle.id ? { ...c, valide: true } : c)),
     );
+  }
+
+  function toggleKitHistory(kitId: string) {
+    setExpandedHistoryKitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kitId)) next.delete(kitId);
+      else next.add(kitId);
+      return next;
+    });
   }
 
   if (!isMounted) {
@@ -518,6 +878,156 @@ export default function SterilisationPage() {
         </AnimatedButton>
       </div>
 
+      {/* Mode Journée */}
+      {(() => {
+        const totalRdv = todayAppointments.length;
+        const collapsed = journeeBannerCollapsed;
+        const shortage = journeeHasShortage;
+        const wrapperClass = shortage
+          ? "border-amber-200 bg-amber-50/70 dark:border-amber-800/40 dark:bg-amber-950/50"
+          : "border-emerald-100 bg-emerald-50/60 dark:border-emerald-800/40 dark:bg-emerald-950/50";
+        return (
+          <section
+            className={[
+              "rounded-2xl border px-4 py-3 transition-colors",
+              wrapperClass,
+            ].join(" ")}
+            aria-label="Mode Journée"
+          >
+            <button
+              type="button"
+              onClick={toggleJourneeBanner}
+              className="flex w-full items-center justify-between gap-3"
+              aria-expanded={!collapsed}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={[
+                    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
+                    shortage
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                      : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
+                  ].join(" ")}
+                  aria-hidden
+                >
+                  {shortage ? (
+                    <AlertTriangle className="h-4 w-4" />
+                  ) : (
+                    <Check className="h-4 w-4" strokeWidth={2.5} />
+                  )}
+                </span>
+                <div className="min-w-0 text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    Mode Journée
+                  </p>
+                  <p
+                    className={[
+                      "truncate text-sm font-semibold",
+                      shortage
+                        ? "text-[color:var(--ds-text)]"
+                        : "text-emerald-900 dark:text-emerald-300",
+                    ].join(" ")}
+                  >
+                    Journée du {formatFullDateFR(new Date())}
+                    <span
+                      className={[
+                        "ml-2 text-xs font-medium",
+                        shortage
+                          ? "text-[var(--ds-text-muted)]"
+                          : "text-emerald-700/90 dark:text-emerald-400/90",
+                      ].join(" ")}
+                    >
+                      · {totalRdv} RDV
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <ChevronDown
+                className={[
+                  "h-4 w-4 shrink-0 text-[var(--ds-text-muted)] transition-transform",
+                  collapsed ? "-rotate-90" : "",
+                ].join(" ")}
+              />
+            </button>
+
+            {!collapsed ? (
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+                  {KIT_TYPES.map((kt) => {
+                    const demand = journeeDemand[kt.id];
+                    const ready = stockByType[kt.id]?.disponible ?? 0;
+                    const ok = demand <= ready;
+                    return (
+                      <div
+                        key={kt.id}
+                        className={[
+                          "flex items-center gap-3 rounded-xl border bg-[var(--ds-surface)] px-3 py-2",
+                          ok
+                            ? "border-[var(--ds-primary-border)]"
+                            : "border-amber-200 dark:border-amber-800/40",
+                        ].join(" ")}
+                      >
+                        <span
+                          className={[
+                            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border",
+                            kt.color,
+                          ].join(" ")}
+                          aria-hidden
+                        >
+                          <kt.icon className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                            {kt.label}
+                          </p>
+                          <p className="text-xs font-medium text-[var(--ds-text)]">
+                            <span className="tabular-nums">{demand}</span>{" "}
+                            RDV
+                            <span className="text-[var(--ds-text-muted)]">
+                              {" "}
+                              · {ready} prêts
+                            </span>
+                          </p>
+                        </div>
+                        <span
+                          className={[
+                            "inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                            ok
+                              ? "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/45 dark:text-emerald-300"
+                              : "border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/45 dark:text-amber-200",
+                          ].join(" ")}
+                          title={
+                            ok
+                              ? "Kits suffisants pour la journée"
+                              : "Pas assez de kits prêts pour la journée"
+                          }
+                        >
+                          <span aria-hidden>{ok ? "✅" : "⚠️"}</span>
+                          {ok ? "Suffisant" : "Insuffisant"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {shortage ? (
+                  <div className="flex items-center justify-end sm:pl-2">
+                    <button
+                      type="button"
+                      onClick={scrollToCyclesSection}
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 shadow-sm transition-colors hover:bg-amber-200/80"
+                    >
+                      <Thermometer className="h-4 w-4" />
+                      Lancer un cycle maintenant
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        );
+      })()}
+
       {/* Cartes stock par type */}
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
@@ -528,6 +1038,8 @@ export default function SterilisationPage() {
             const st = stockByType[kt.id];
             const Icon = kt.icon;
             const canUse = st.disponible > 0;
+            const popoverOpen = usePopoverTypeId === kt.id;
+            const kitsOfType = kits.filter((k) => k.type === kt.id);
             return (
               <div
                 key={kt.id}
@@ -550,50 +1062,128 @@ export default function SterilisationPage() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => utiliserUnKit(kt.id)}
-                    disabled={!canUse}
-                    title={
-                      canUse
-                        ? "Retirer un kit prêt (consultation)"
-                        : "Aucun kit prêt"
-                    }
-                    className={[
-                      "shrink-0 rounded-xl border px-4 py-1.5 text-xs font-semibold transition-all",
-                      canUse
-                        ? "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] hover:bg-[var(--ds-primary)] hover:text-white"
-                        : "cursor-not-allowed border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)] opacity-50",
-                    ].join(" ")}
+                  <div
+                    className="relative"
+                    ref={popoverOpen ? popoverRootRef : undefined}
                   >
-                    Utiliser
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setUsePopoverTypeId(popoverOpen ? null : kt.id)
+                      }
+                      disabled={!canUse}
+                      title={
+                        canUse
+                          ? "Retirer un kit prêt (consultation)"
+                          : "Aucun kit prêt"
+                      }
+                      className={[
+                        "shrink-0 rounded-xl border px-4 py-1.5 text-xs font-semibold transition-all",
+                        canUse
+                          ? "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] hover:bg-[var(--ds-primary)] hover:text-white"
+                          : "cursor-not-allowed border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)] opacity-50",
+                      ].join(" ")}
+                    >
+                      Utiliser
+                    </button>
+                    {popoverOpen ? (
+                      <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-xl">
+                        <div className="border-b border-[var(--ds-primary-border)] px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                            Choisir un kit {kt.label}
+                          </p>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto py-1">
+                          {kitsOfType.length === 0 ? (
+                            <p className="px-3 py-3 text-xs text-[var(--ds-text-muted)]">
+                              Aucun kit disponible.
+                            </p>
+                          ) : (
+                            kitsOfType.map((k) => {
+                              const isPret = k.statut === "pret";
+                              const icon =
+                                k.statut === "pret"
+                                  ? "✅"
+                                  : k.statut === "machine"
+                                    ? "⚙️"
+                                    : "🧴";
+                              return (
+                                <button
+                                  key={k.id}
+                                  type="button"
+                                  disabled={!isPret}
+                                  onClick={() =>
+                                    isPret ? utiliserKitById(k.id) : undefined
+                                  }
+                                  className={[
+                                    "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition-colors",
+                                    isPret
+                                      ? "text-[var(--ds-text)] hover:bg-[var(--ds-primary-soft)]"
+                                      : "cursor-not-allowed text-[var(--ds-text-muted)] opacity-60",
+                                  ].join(" ")}
+                                  title={
+                                    isPret
+                                      ? "Sélectionner ce kit"
+                                      : `Statut : ${statutLabel(k.statut)}`
+                                  }
+                                >
+                                  <span className="font-medium tabular-nums">
+                                    {k.id}
+                                  </span>
+                                  <span className="flex items-center gap-1.5">
+                                    <span
+                                      className="text-sm leading-none"
+                                      aria-hidden
+                                    >
+                                      {icon}
+                                    </span>
+                                    <span className="text-[10px] uppercase tracking-wider">
+                                      {statutLabel(k.statut)}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-center lg:p-3">
-                    <p className="text-xs font-bold tracking-widest text-emerald-400 lg:text-sm">
+                <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
+                  <div className="flex min-h-0 flex-col justify-center gap-0.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-[0.4rem] text-center lg:p-[0.6rem]">
+                    <p className="text-[10px] font-bold leading-tight tracking-widest text-emerald-400 lg:text-xs">
                       Prêt
                     </p>
-                    <p className="text-3xl font-bold tabular-nums text-emerald-400">
+                    <p className="text-[20px] font-bold leading-none tabular-nums text-emerald-400">
                       {st.disponible}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-2 text-center lg:p-3">
-                    <p className="text-xs font-bold tracking-widest text-red-400 lg:text-sm">
+                  <div className="flex min-h-0 flex-col justify-center gap-0.5 rounded-xl border border-red-500/30 bg-red-500/10 p-[0.4rem] text-center lg:p-[0.6rem]">
+                    <p className="text-[10px] font-bold leading-tight tracking-widest text-red-400 lg:text-xs">
                       Sale
                     </p>
-                    <p className="text-3xl font-bold tabular-nums text-red-400">
+                    <p className="text-[20px] font-bold leading-none tabular-nums text-red-400">
                       {st.sale}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] p-2 text-center lg:p-3">
-                    <p className="text-xs font-bold tracking-widest text-[var(--ds-primary)] lg:text-sm">
+                  <div className="flex min-h-0 flex-col justify-center gap-0.5 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] p-[0.4rem] text-center lg:p-[0.6rem]">
+                    <p className="text-[10px] font-bold leading-tight tracking-widest text-[var(--ds-primary)] lg:text-xs">
                       En machine
                     </p>
-                    <p className="text-3xl font-bold tabular-nums text-[var(--ds-primary)]">
+                    <p className="text-[20px] font-bold leading-none tabular-nums text-[var(--ds-primary)]">
                       {st.enCours}
                     </p>
                   </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setDrawerTypeId(kt.id)}
+                    className="text-[11px] font-medium text-[var(--ds-primary)] underline-offset-2 transition-colors hover:underline"
+                  >
+                    Voir les kits
+                  </button>
                 </div>
               </div>
             );
@@ -662,7 +1252,10 @@ export default function SterilisationPage() {
         />
       </div>
 
-      <section className="rounded-3xl bg-[var(--ds-surface)] p-6 shadow-sm">
+      <section
+        ref={cyclesSectionRef}
+        className="rounded-3xl bg-[var(--ds-surface)] p-6 shadow-sm scroll-mt-24"
+      >
         <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
           Cycles Autoclave
         </h2>
@@ -926,6 +1519,251 @@ export default function SterilisationPage() {
           </div>
         </div>
       )}
+
+      {drawerTypeId ? (
+        <KitsDrawer
+          kitType={KIT_TYPE_MAP[drawerTypeId]}
+          kits={kits.filter((k) => k.type === drawerTypeId)}
+          expandedIds={expandedHistoryKitIds}
+          onToggleHistory={toggleKitHistory}
+          onClose={() => setDrawerTypeId(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function KitStatusBadge({ statut }: { statut: KitStatut }) {
+  const map: Record<KitStatut, string> = {
+    pret: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    sale: "border-red-100 bg-red-50 text-red-700",
+    machine:
+      "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)]",
+  };
+  return (
+    <span
+      className={[
+        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+        map[statut],
+      ].join(" ")}
+    >
+      {statutLabel(statut)}
+    </span>
+  );
+}
+
+function KitsDrawer({
+  kitType,
+  kits,
+  expandedIds,
+  onToggleHistory,
+  onClose,
+}: {
+  kitType: KitType;
+  kits: IndividualKit[];
+  expandedIds: Set<string>;
+  onToggleHistory: (id: string) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const Icon = kitType.icon;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-slate-900/30 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <aside
+        className="h-full w-full max-w-md overflow-y-auto bg-[var(--ds-surface)] shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span
+              className={[
+                "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
+                kitType.color,
+              ].join(" ")}
+            >
+              <Icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
+                Kits {kitType.label}
+              </p>
+              <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
+                Traçabilité ({kits.length})
+              </h3>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-2xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3 px-4 py-4">
+          {kits.length === 0 ? (
+            <p className="px-1 py-6 text-center text-sm text-[var(--ds-text-muted)]">
+              Aucun kit enregistré.
+            </p>
+          ) : (
+            kits.map((k) => {
+              const expanded = expandedIds.has(k.id);
+              const utilisation = k.derniereUtilisation;
+              const cycle = k.derniereCycle;
+              return (
+                <div
+                  key={k.id}
+                  className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-[var(--ds-text-muted)]" />
+                      <p className="text-sm font-semibold tabular-nums text-[var(--ds-text)]">
+                        {k.id}
+                      </p>
+                    </div>
+                    <KitStatusBadge statut={k.statut} />
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
+                    <div>
+                      <dt className="font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Dernière utilisation
+                      </dt>
+                      <dd className="mt-0.5 text-[var(--ds-text)]">
+                        {utilisation ? (
+                          <>
+                            <span className="font-medium">
+                              {utilisation.patientNom || "—"}
+                            </span>
+                            {utilisation.dent && utilisation.dent !== "—" ? (
+                              <span className="text-[var(--ds-text-muted)]">
+                                {" "}
+                                · dent {utilisation.dent}
+                              </span>
+                            ) : null}
+                            <span className="block text-[var(--ds-text-muted)]">
+                              {formatDateShort(utilisation.date)} —{" "}
+                              {utilisation.operateur}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[var(--ds-text-muted)]">
+                            Aucune utilisation enregistrée
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
+                        Dernier cycle
+                      </dt>
+                      <dd className="mt-0.5 text-[var(--ds-text)]">
+                        {cycle ? (
+                          <>
+                            <span className="font-medium">
+                              {formatDateShort(cycle.date)}
+                            </span>
+                            <span className="text-[var(--ds-text-muted)]">
+                              {" "}
+                              — {cycle.operateur}
+                            </span>
+                            <span className="block text-[10px] uppercase tracking-wider text-[var(--ds-text-muted)]">
+                              Bowie-Dick :{" "}
+                              <span
+                                className={
+                                  cycle.bowieDick === "conforme"
+                                    ? "text-emerald-700"
+                                    : "text-red-600"
+                                }
+                              >
+                                {cycle.bowieDick}
+                              </span>{" "}
+                              · Helix :{" "}
+                              <span
+                                className={
+                                  cycle.helix === "conforme"
+                                    ? "text-emerald-700"
+                                    : "text-red-600"
+                                }
+                              >
+                                {cycle.helix}
+                              </span>
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-[var(--ds-text-muted)]">
+                            Jamais stérilisé
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => onToggleHistory(k.id)}
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                      aria-expanded={expanded}
+                    >
+                      {expanded ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      )}
+                      Voir historique
+                      <span className="text-[10px] font-normal text-[var(--ds-text-muted)]">
+                        ({k.historiqueComplet.length})
+                      </span>
+                    </button>
+
+                    {expanded ? (
+                      <ol className="mt-2 space-y-2 border-l border-[var(--ds-primary-border)] pl-3">
+                        {k.historiqueComplet.length === 0 ? (
+                          <li className="text-[11px] text-[var(--ds-text-muted)]">
+                            Aucun mouvement enregistré.
+                          </li>
+                        ) : (
+                          [...k.historiqueComplet]
+                            .slice()
+                            .reverse()
+                            .map((log, idx) => (
+                              <li key={idx} className="text-[11px]">
+                                <p className="font-medium text-[var(--ds-text)]">
+                                  {log.details}
+                                </p>
+                                <p className="text-[var(--ds-text-muted)]">
+                                  {formatDateShort(log.date)} — {log.operateur}{" "}
+                                  · {log.action}
+                                </p>
+                              </li>
+                            ))
+                        )}
+                      </ol>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

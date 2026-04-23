@@ -94,7 +94,7 @@ export function LabWhatsAppButton({
       </button>
       {open ? (
         <ul
-          className="absolute right-0 top-full z-50 mt-1.5 min-w-[13.5rem] overflow-hidden rounded-xl border border-slate-200/70 bg-white py-1 shadow-[0_8px_30px_rgba(15,23,42,0.08)]"
+          className="absolute right-0 top-full z-50 mt-1.5 min-w-[13.5rem] overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-1 shadow-lg"
           role="listbox"
         >
           {valid.map((t, i) => (
@@ -103,13 +103,13 @@ export function LabWhatsAppButton({
                 href={whatsAppLabUrl(patientName, t.numero)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block px-3 py-2.5 text-left text-[13px] font-normal leading-snug text-slate-700 transition-colors hover:bg-slate-50"
+                className="block px-3 py-2.5 text-left text-[13px] font-normal leading-snug text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
                 onClick={() => setOpen(false)}
               >
-                <span className="font-medium text-slate-800">
+                <span className="font-medium text-[var(--ds-text)]">
                   {t.label || "Contact"}
                 </span>
-                <span className="mt-0.5 block text-xs font-light text-slate-500">
+                <span className="mt-0.5 block text-xs font-light text-[var(--ds-text-muted)]">
                   {t.numero}
                 </span>
               </a>

@@ -1,21 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
   Clock,
-  MoreVertical,
   Package,
   PackageOpen,
+  Pencil,
   Plus,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
+  DEFAULT_ACT_PROTOCOLS,
   DENTAL_STOCK_LS_KEY,
+  loadProtocols,
   saveDentalStock,
+  isProductLinkedToProtocol,
+  type ActProtocolMap,
   type StockLine,
 } from "@/utils/stockLogic";
 
@@ -240,26 +247,59 @@ function progressBarClass(p: Produit) {
 function badgeClass(statut: Statut) {
   switch (statut) {
     case "En stock":
-      return "bg-emerald-50 text-emerald-700";
+      return "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-300";
     case "Faible":
-      return "bg-amber-50 text-amber-700";
+      return "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
     case "Rupture":
-      return "bg-red-50 text-red-600";
+      return "border border-red-200 bg-red-100 text-red-800 font-semibold shadow-sm dark:border-red-800/40 dark:bg-red-950/50 dark:text-red-200";
   }
 }
 
-function peremptionProcheCount(produits: Produit[]) {
-  const thresholdDays = 210; // ~7 mois, pour un rendu stable sur la maquette
-  const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() + thresholdDays);
+const PEREMPTION_PROCHE_JOURS = 90;
 
-  return produits.filter((p) => {
-    const d = parsePeremptionDisplayToDate(p.peremption);
-    if (!d) return false;
-    return d >= now && d <= cutoff;
-  }).length;
+/** Péremption dans les 90 jours (date d’expiration future ou aujourd’hui). */
+function isPeremptionProche(p: Produit): boolean {
+  const d = parsePeremptionDisplayToDate(p.peremption);
+  if (!d) return false;
+  const today = new Date();
+  const start = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const exp = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = (exp.getTime() - start.getTime()) / 86400000;
+  return diffDays >= 0 && diffDays <= PEREMPTION_PROCHE_JOURS;
 }
+
+/** Fond / bordure de ligne — classes Tailwind uniquement (dark mode lisible). */
+function getRowTrClassName(statut: Statut, peremptionProche: boolean): string {
+  const base =
+    "border-b border-slate-50 last:border-0 transition-[filter] hover:brightness-[0.985] dark:border-[var(--ds-primary-border)]";
+
+  if (statut === "Rupture") {
+    if (peremptionProche) {
+      return `${base} bg-[#FEF2F2] [background-image:linear-gradient(0deg,rgba(255,251,235,0.78),rgba(255,251,235,0.78))] dark:bg-red-950/40 dark:[background-image:none] dark:border-red-800/30`;
+    }
+    return `${base} bg-[#FEF2F2] dark:bg-red-950/40 dark:border-red-800/30`;
+  }
+  if (statut === "Faible") {
+    if (peremptionProche) {
+      return `${base} bg-[#FFF7ED] [background-image:linear-gradient(0deg,rgba(255,251,235,0.78),rgba(255,251,235,0.78))] dark:bg-amber-950/40 dark:[background-image:none] dark:border-amber-800/30`;
+    }
+    return `${base} bg-[#FFF7ED] dark:bg-amber-950/40 dark:border-amber-800/30`;
+  }
+  if (peremptionProche) {
+    return `${base} bg-[#FFFBEB] dark:bg-amber-950/30`;
+  }
+  return base;
+}
+
+function peremptionProcheCount(produits: Produit[]) {
+  return produits.filter((p) => isPeremptionProche(p)).length;
+}
+
+const STOCK_COLLAPSED_CATS_LS_KEY = "oryx_stock_collapsed_cats";
 
 function formatDateTimeFR(d: Date) {
   return d.toLocaleString("fr-FR", {
@@ -525,7 +565,9 @@ export default function StocksPage() {
   const [stockHistory, setStockHistory] = useState<StockHistoryItem[]>([]);
   const [search, setSearch] = useState("");
   const [filtre, setFiltre] = useState<Categorie | "">("");
-  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const [editingStock, setEditingStock] = useState<Produit | null>(null);
   const [stockActionType, setStockActionType] = useState<"add" | "remove">("add");
@@ -537,6 +579,7 @@ export default function StocksPage() {
 
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Produit | null>(null);
+  const [hoveredProductId, setHoveredProductId] = useState<string | null>(null);
   const modalMode = editingProduct ? "edit" : "create";
 
   // Hydratation Next.js-safe : on recharge le stock (et l'historique) depuis localStorage au montage.
@@ -574,6 +617,23 @@ export default function StocksPage() {
       setStockHistory([]);
     } finally {
       setHasHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STOCK_COLLAPSED_CATS_LS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        setCollapsedCats(
+          new Set(
+            parsed.filter((x): x is string => typeof x === "string"),
+          ),
+        );
+      }
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -615,6 +675,28 @@ export default function StocksPage() {
     });
   }, [produits, search, filtre]);
 
+  const groupedByCategory = useMemo(() => {
+    const map = new Map<Categorie, Produit[]>();
+    for (const p of filtered) {
+      const c = normalizeCategorie(p.categorie);
+      if (!map.has(c)) map.set(c, []);
+      map.get(c)!.push(p);
+    }
+    const order: Categorie[] = [];
+    for (const cat of CATEGORIES) {
+      if (map.has(cat)) order.push(cat);
+    }
+    for (const cat of map.keys()) {
+      if (!order.includes(cat)) order.push(cat);
+    }
+    return order.map((cat) => [cat, map.get(cat)!] as const);
+  }, [filtered]);
+
+  const protocolMap = useMemo((): ActProtocolMap => {
+    if (!hasHydrated) return DEFAULT_ACT_PROTOCOLS;
+    return loadProtocols();
+  }, [hasHydrated]);
+
   const totalProduits = produits.length;
   const enRupture = produits.filter(
     (p) => computeStatut(p) === "Rupture",
@@ -644,13 +726,43 @@ export default function StocksPage() {
   function openCreateModal() {
     setEditingProduct(null);
     setIsProductModalOpen(true);
-    setOpenActionsId(null);
   }
 
   function openEditModal(product: Produit) {
     setEditingProduct(product);
     setIsProductModalOpen(true);
-    setOpenActionsId(null);
+  }
+
+  function toggleCategorySection(cat: string) {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      try {
+        localStorage.setItem(
+          STOCK_COLLAPSED_CATS_LS_KEY,
+          JSON.stringify([...next]),
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function handleDeleteProduct(p: Produit) {
+    if (
+      !window.confirm(
+        `Supprimer le produit « ${p.nom} » ? Cette action est irréversible.`,
+      )
+    ) {
+      return;
+    }
+    setProduits((prev) => {
+      const next = prev.filter((x) => x.id !== p.id);
+      saveDentalStock(next as StockLine[]);
+      return next;
+    });
   }
 
   function handleSaveProduct(draft: Omit<Produit, "id">, id?: string) {
@@ -811,7 +923,7 @@ export default function StocksPage() {
                   Péremption
                 </th>
                 <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                  Options
+                  Édition
                 </th>
                 <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Actions
@@ -819,151 +931,198 @@ export default function StocksPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
-                const pct =
-                  p.quantiteMax > 0
-                    ? Math.round((p.quantite / p.quantiteMax) * 100)
-                    : 0;
-                const statut = computeStatut(p);
-                const isActionsOpen = openActionsId === p.id;
-
+              {groupedByCategory.map(([categorie, items]) => {
+                const isCollapsed = collapsedCats.has(categorie);
                 return (
-                  <tr
-                    key={p.id}
-                    className="border-b border-slate-50 last:border-0 transition-colors hover:bg-[var(--ds-bg)]/60"
-                  >
-                    {/* Produit */}
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-[var(--ds-text)]">
-                        {p.nom}
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-[var(--ds-text-muted)]">
-                        {p.categorie}
-                      </p>
-                    </td>
+                  <Fragment key={categorie}>
+                    <tr className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80">
+                      <td colSpan={6} className="px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySection(categorie)}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-[color:var(--ds-text)] transition-colors hover:bg-[var(--ds-surface)]"
+                          aria-expanded={!isCollapsed}
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight className="h-4 w-4 shrink-0 text-[var(--ds-text-muted)]" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 shrink-0 text-[var(--ds-text-muted)]" />
+                          )}
+                          <span>{categorie}</span>
+                          <span className="text-xs font-medium text-[var(--ds-text-muted)]">
+                            ({items.length}{" "}
+                            {items.length === 1 ? "produit" : "produits"})
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                    {!isCollapsed &&
+                      items.map((p) => {
+                        const pct =
+                          p.quantiteMax > 0
+                            ? Math.round((p.quantite / p.quantiteMax) * 100)
+                            : 0;
+                        const statut = computeStatut(p);
+                        const peremptionProche = isPeremptionProche(p);
+                        const rowClass = getRowTrClassName(statut, peremptionProche);
+                        const linkedProto = isProductLinkedToProtocol(
+                          p.id,
+                          protocolMap,
+                        );
 
-                    {/* Quantité (jauge) */}
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--ds-primary-soft)]">
-                          <div
-                            className={`h-full rounded-full transition-all ${progressBarClass(p)}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold tabular-nums text-[var(--ds-text)]">
-                          {p.quantite}/{p.quantiteMax}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Statut */}
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-lg px-2.5 py-0.5 text-[11px] font-medium ${badgeClass(statut)}`}
-                      >
-                        {statut}
-                      </span>
-                    </td>
-
-                    {/* Péremption */}
-                    <td className="px-5 py-4 text-sm text-[var(--ds-text-muted)]">
-                      {formatPeremptionForDisplay(p.peremption)}
-                    </td>
-
-                    {/* Actions */}
-                    <td className="relative px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenActionsId(isActionsOpen ? null : p.id)
-                        }
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
-                        aria-label={`Actions pour ${p.nom}`}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </button>
-
-                      {isActionsOpen && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-40"
-                            aria-hidden="true"
-                            onClick={() => setOpenActionsId(null)}
-                          />
-                          <div className="absolute right-5 top-full z-50 mt-1 w-40 overflow-hidden rounded-2xl bg-[var(--ds-surface)] py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(p)}
-                              className="flex w-full items-center px-4 py-2 text-left text-xs font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setProduits((prev) =>
-                                  prev.filter((x) => x.id !== p.id),
-                                );
-                                setOpenActionsId(null);
-                              }}
-                              className="flex w-full items-center px-4 py-2 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50/60"
-                            >
-                              Supprimer
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </td>
-
-                    {/* Actions rapides (multidose + / -) */}
-                    <td className="px-5 py-4 text-right">
-                      <div className="inline-flex flex-wrap items-center justify-end gap-2">
-                        {p.gestion === "multidose" ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleOpenMultidoseUnit(p.id);
-                              setOpenActionsId(null);
-                            }}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-border)]"
-                            title="Ouvrir une unité (Multidose)"
-                            aria-label={`Ouvrir une unité — ${p.nom}`}
+                        return (
+                          <tr
+                            key={p.id}
+                            className={rowClass}
+                            onMouseEnter={() => setHoveredProductId(p.id)}
+                            onMouseLeave={() => setHoveredProductId(null)}
                           >
-                            <PackageOpen className="h-4 w-4 shrink-0" aria-hidden />
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingStock(p);
-                            setStockActionType("remove");
-                            setStockAdjustValue("1");
-                            setStockReason("");
-                            setOpenActionsId(null);
-                          }}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-red-700 transition-colors hover:bg-red-50/80"
-                          aria-label={`Retirer du stock : ${p.nom}`}
-                        >
-                          -
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingStock(p);
-                            setStockActionType("add");
-                            setStockAdjustValue("1");
-                            setStockReason("");
-                            setOpenActionsId(null);
-                          }}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]/80"
-                          aria-label={`Ajouter du stock : ${p.nom}`}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                            {/* Produit */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-start gap-2">
+                                {linkedProto ? (
+                                  <span
+                                    className="mt-0.5 inline-flex shrink-0 text-violet-600"
+                                    title="Consommable lié à un protocole"
+                                  >
+                                    <Package
+                                      className="h-4 w-4"
+                                      aria-hidden
+                                    />
+                                  </span>
+                                ) : null}
+                                <p
+                                  className={[
+                                    "min-w-0 text-sm font-medium text-[var(--ds-text)]",
+                                    statut === "Faible" || statut === "Rupture"
+                                      ? "dark:text-gray-200"
+                                      : "",
+                                  ].join(" ")}
+                                >
+                                  {p.nom}
+                                </p>
+                              </div>
+                            </td>
+
+                            {/* Quantité (jauge) */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-2 w-24 overflow-hidden rounded-full bg-[var(--ds-primary-soft)]">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${progressBarClass(p)}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-semibold tabular-nums text-[var(--ds-text)]">
+                                  {p.quantite}/{p.quantiteMax}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Statut */}
+                            <td className="px-5 py-4">
+                              <span
+                                className={`inline-flex rounded-lg px-2.5 py-0.5 text-[11px] font-medium ${badgeClass(statut)}`}
+                              >
+                                {statut}
+                              </span>
+                            </td>
+
+                            {/* Péremption */}
+                            <td className="px-5 py-4">
+                              {peremptionProche &&
+                              formatPeremptionForDisplay(p.peremption) !==
+                                "—" ? (
+                                <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800 dark:border-orange-800/40 dark:bg-orange-950/45 dark:text-orange-200">
+                                  <span aria-hidden>⏰</span>
+                                  {formatPeremptionForDisplay(p.peremption)}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-[var(--ds-text-muted)]">
+                                  {formatPeremptionForDisplay(p.peremption)}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Édition */}
+                            <td className="px-5 py-4 text-right">
+                              <div
+                                className={`inline-flex items-center justify-end gap-1 transition-opacity ${
+                                  hoveredProductId === p.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(p)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
+                                  aria-label={`Modifier ${p.nom}`}
+                                  title="Modifier"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteProduct(p)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-red-600/90 transition-colors hover:bg-red-50"
+                                  aria-label={`Supprimer ${p.nom}`}
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Actions rapides (multidose + / -) */}
+                            <td className="px-5 py-4 text-right">
+                              <div className="inline-flex flex-wrap items-center justify-end gap-2">
+                                {p.gestion === "multidose" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenMultidoseUnit(p.id)}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-border)]"
+                                    title="Ouvrir une unité (Multidose)"
+                                    aria-label={`Ouvrir une unité — ${p.nom}`}
+                                  >
+                                    <PackageOpen
+                                      className="h-4 w-4 shrink-0"
+                                      aria-hidden
+                                    />
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingStock(p);
+                                    setStockActionType("remove");
+                                    setStockAdjustValue("1");
+                                    setStockReason("");
+                                  }}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-red-50 text-red-700 transition-colors hover:bg-red-50/80"
+                                  aria-label={`Retirer du stock : ${p.nom}`}
+                                >
+                                  -
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingStock(p);
+                                    setStockActionType("add");
+                                    setStockAdjustValue("1");
+                                    setStockReason("");
+                                  }}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]/80"
+                                  aria-label={`Ajouter du stock : ${p.nom}`}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </Fragment>
                 );
               })}
 
