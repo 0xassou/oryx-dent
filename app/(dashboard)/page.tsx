@@ -11,15 +11,16 @@ import {
 } from "react";
 import {
   AlertTriangle,
+  Bell,
   Calendar,
   Check,
+  ClipboardList,
   FlaskConical,
-  PackageSearch,
   Plus,
   Search,
   ShieldCheck,
   Sparkles,
-  UserPlus,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -1103,7 +1104,7 @@ export default function DashboardPage() {
               {doctorInfo.initiales}
             </span>
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
+              <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
                 Bonjour, Dr. {doctorInfo.nom}
               </h1>
               <p className="mt-1 text-sm text-[var(--ds-text-muted)]">{todayLong}</p>
@@ -1130,7 +1131,7 @@ export default function DashboardPage() {
           label="Nouveaux patients"
           value={patientCount}
           change={`+${patientsThisMonthCount} ce mois-ci`}
-          icon={<UserPlus />}
+          icon={<Users />}
         />
         <Link
           href="/sterilisation"
@@ -1155,7 +1156,7 @@ export default function DashboardPage() {
             value={stockCriticalCount}
             unit="alertes"
             change="Sous le seuil sécurité"
-            icon={<PackageSearch />}
+            icon={<AlertTriangle />}
           />
         </Link>
       </div>
@@ -1358,8 +1359,9 @@ export default function DashboardPage() {
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                   <div className="mb-3 flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 shrink-0 text-[color:var(--ds-primary)]" />
                     <span className="text-[13px] font-semibold text-[var(--ds-text)]">
-                      📝 Actions Prioritaires
+                      Actions Prioritaires
                     </span>
                   </div>
                   <div className="mt-4 flex items-center gap-2 rounded-lg bg-[var(--ds-bg)] px-3 py-2.5">
@@ -1429,8 +1431,9 @@ export default function DashboardPage() {
 
                 <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                   <div className="mb-3 flex items-center gap-2">
+                    <Bell className="h-4 w-4 shrink-0 text-[color:var(--ds-primary)]" />
                     <span className="text-[13px] font-semibold text-[var(--ds-text)]">
-                      🔔 À recontacter
+                      À recontacter
                     </span>
                   </div>
                   <div className="mt-4 space-y-3">

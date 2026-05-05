@@ -522,16 +522,22 @@
 @theme inline {
   --color-background: var(--ds-bg);
   --color-foreground: var(--ds-text);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Sora", sans-serif;
+  --font-mono: "DM Mono", monospace;
 }
 
 body {
   background: var(--ds-bg);
   color: var(--ds-text);
   font-family: "Sora", sans-serif;
-  font-size: 0.95rem;
-  letter-spacing: 0.01em;
+  font-size: 1rem;
+  line-height: 1.6;
+  letter-spacing: 0.015em;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  font-size: 17px;
 }
 
 /* Fiche patient — timeline fade up */
@@ -650,4 +656,18 @@ body {
     4px 4px 8px rgba(0, 0, 0, 0.5),
     -4px -4px 8px rgba(255, 255, 255, 0.04);
   transform: translateY(-1px);
+}
+
+/* ── KPI Cards — fonds colorés light mode ── */
+.kpi-violet  { background: #f5f3ff; border-color: #ede9fe; }
+.kpi-emerald { background: #ecfdf5; border-color: #d1fae5; }
+.kpi-cyan    { background: #ecfeff; border-color: #cffafe; }
+.kpi-red     { background: #fff1f2; border-color: #fecdd3; }
+.kpi-amber   { background: #fffbeb; border-color: #fde68a; }
+
+/* Boutons violets — texte blanc forcé */
+button.bg-\[color\:var\(--ds-primary\)\],
+button.bg-\[var\(--ds-primary\)\],
+a.bg-\[color\:var\(--ds-primary\)\] {
+  color: #ffffff !important;
 }

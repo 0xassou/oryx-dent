@@ -15,7 +15,7 @@ import {
   AddPatientModal,
   type AddPatientPayload,
 } from "@/components/patients/AddPatientModal";
-import { formatDate, formatPhoneNumber } from "@/utils/formatters";
+import { formatDate, formatPhoneNumber, toTitleCase } from "@/utils/formatters";
 import {
   computeAgeFromDateIso,
   displayPatientName,
@@ -142,7 +142,7 @@ function PatientsPageContent() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--ds-text)]">Patients</h1>
+          <h1 className="text-2xl font-bold text-[var(--ds-text)]">Patients</h1>
           <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
             Total : {patients.length} patient{patients.length !== 1 ? "s" : ""}{" "}
             enregistré{patients.length !== 1 ? "s" : ""}
@@ -154,7 +154,7 @@ function PatientsPageContent() {
         </AnimatedButton>
       </div>
 
-      <div className="relative max-w-md">
+      <div className="relative w-full">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]" />
         <input
           type="search"
@@ -174,21 +174,24 @@ function PatientsPageContent() {
           <>
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[560px]">
-                <thead>
-                  <tr className="border-b border-[var(--ds-primary-border)]">
-                    <th className="pb-3 text-left text-sm font-medium text-[var(--ds-text-muted)]">
+                <thead className="border-b border-[var(--ds-border)] bg-[var(--ds-bg)]">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                       Prénom
                     </th>
-                    <th className="pb-3 text-left text-sm font-medium text-[var(--ds-text-muted)]">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                       Nom
                     </th>
-                    <th className="pb-3 text-left text-sm font-medium text-[var(--ds-text-muted)]">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                       Téléphone
                     </th>
-                    <th className="pb-3 text-left text-sm font-medium text-[var(--ds-text-muted)]">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                       Dernière visite
                     </th>
-                    <th className="pb-3 text-right text-sm font-medium text-[var(--ds-text-muted)]">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                      Statut
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                       Actions
                     </th>
                   </tr>
@@ -196,19 +199,25 @@ function PatientsPageContent() {
                 <tbody>
                   {filtered.map((patient) => {
                     const isActionsOpen = openActionsId === patient.id;
+                    const initials = `${patient.prenom?.[0]?.toUpperCase() ?? ""}${patient.nom?.[0]?.toUpperCase() ?? ""}` || "?";
                     return (
                       <tr
                         key={patient.id}
                         onClick={() => goToPatient(patient.id)}
-                        className="cursor-pointer border-b border-[var(--ds-primary-border)] last:border-0 transition-colors hover:bg-[var(--ds-primary-soft)]/50"
+                        className="cursor-pointer border-b border-[var(--ds-border)] transition-colors hover:bg-[var(--ds-primary-soft)]/30"
                       >
-                        <td className="py-4 text-sm font-medium text-[var(--ds-text)]">
-                          {patient.prenom || "—"}
+                        <td className="px-4 py-2.5 text-sm font-medium text-[var(--ds-text)]">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[11px] font-bold text-[color:var(--ds-primary)]">
+                              {initials}
+                            </div>
+                            <span>{patient.prenom || "—"}</span>
+                          </div>
                         </td>
-                        <td className="py-4 text-sm font-medium text-[var(--ds-text)]">
+                        <td className="px-4 py-2.5 text-sm font-medium text-[var(--ds-text)]">
                           {patient.nom || "—"}
                         </td>
-                        <td className="py-4 text-sm text-[var(--ds-text-muted)]">
+                        <td className="px-4 py-2.5 text-sm text-[var(--ds-text-muted)]">
                           <div className="flex items-center">
                             <span>{formatPhoneNumber(patient.telephone)}</span>
                             <a
@@ -232,10 +241,15 @@ function PatientsPageContent() {
                             </a>
                           </div>
                         </td>
-                        <td className="py-4 text-sm text-[var(--ds-text-muted)]">
+                        <td className="px-4 py-2.5 text-sm text-[var(--ds-text-muted)]">
                           {formatDate(patient.derniereVisite)}
                         </td>
-                        <td className="relative py-4 text-right">
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-2.5 py-0.5 text-[10px] font-semibold text-[color:var(--ds-primary)]">
+                            Actif
+                          </span>
+                        </td>
+                        <td className="relative px-4 py-2.5 text-right">
                           <button
                             type="button"
                             className="inline-flex h-9 w-9 items-center justify-center rounded-2xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-primary)]"
@@ -310,7 +324,7 @@ function PatientsPageContent() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-[var(--ds-text)]">
-                          {patient.prenom} {patient.nom}
+                          {toTitleCase(patient.prenom)} {toTitleCase(patient.nom)}
                         </p>
                         <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                           {formatPhoneNumber(patient.telephone)}

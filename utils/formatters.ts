@@ -4,6 +4,12 @@ export const formatDate = (isoString: string) => { const date = new Date(isoStri
 
 export const formatDateShort = (isoString: string) => { const date = new Date(isoString); return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }).format(date); };
 
+/** Met en majuscule la première lettre de chaque mot (display only, ne modifie pas les données stockées). */
+export function toTitleCase(str: string): string {
+  if (!str) return str;
+  return str.replace(/\S+/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+
 /** Affichage type 06 00 00 00 00 (paquets de 2 chiffres, max 10 pour mobile DZ). */
 export function formatPhoneNumber(raw: string): string {
   if (raw == null || raw === "") return "—";

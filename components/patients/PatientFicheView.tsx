@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { OdontogrammeFiche } from "@/components/patients/OdontogrammeFiche";
 import type { ToothId, ToothStatus } from "@/components/dentition/DentalChart";
-import { formatPhoneNumber } from "@/utils/formatters";
+import { formatPhoneNumber, toTitleCase } from "@/utils/formatters";
 import { RoleGate } from "@/components/auth/RoleGate";
 
 /**
@@ -309,7 +309,7 @@ function PatientHero({
   data: PatientFicheData;
 }) {
   const { patient, statut } = data;
-  const fullName = `${patient.prenom} ${patient.nom}`.trim() || "Patient";
+  const fullName = toTitleCase(`${patient.prenom} ${patient.nom}`.trim()) || "Patient";
   const avatar = initials(patient.prenom, patient.nom);
   const birth = formatBirth(patient.dateNaissance);
 

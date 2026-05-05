@@ -105,7 +105,7 @@ export function ActesTarifsSection() {
         <button
           type="button"
           onClick={addAct}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-3 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
         >
           <Plus className="h-4 w-4" strokeWidth={2.25} />
           Ajouter un acte

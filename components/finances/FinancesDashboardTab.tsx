@@ -287,7 +287,7 @@ export function FinancesDashboardTab() {
       },
       { name: "Stock", value: byCat.Stock, color: "#06b6d4" },
       { name: "Labo", value: byCat.Labo, color: "#6366f1" },
-      { name: "Frais", value: byCat.Frais, color: "#f43f5e" },
+      { name: "Frais", value: byCat.Frais, color: "#7c3aed" },
     ].filter((x) => x.value > 0);
     return {
       totalRecettes: tr,
@@ -603,9 +603,9 @@ export function FinancesDashboardTab() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm">
+        <div className="kpi-card rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-medium text-[var(--ds-text-muted)]">Total recettes</p>
+            <p className="text-sm font-semibold text-[var(--ds-text-muted)]">Total recettes</p>
             <div className="rounded-xl bg-emerald-50 p-2">
               <TrendingUp className="h-4 w-4 text-emerald-600" />
             </div>
@@ -616,9 +616,9 @@ export function FinancesDashboardTab() {
           <p className="mt-1 text-xs text-[var(--ds-text-muted)]">Factures payées</p>
         </div>
 
-        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm">
+        <div className="kpi-card rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-medium text-[var(--ds-text-muted)]">Croissance CA</p>
+            <p className="text-sm font-semibold text-[var(--ds-text-muted)]">Croissance CA</p>
             <div className="rounded-xl bg-violet-50 p-2">
               <BarChart2 className="h-4 w-4 text-violet-600" />
             </div>
@@ -630,9 +630,9 @@ export function FinancesDashboardTab() {
           <p className="mt-1 text-xs text-[var(--ds-text-muted)]">vs mois précédent</p>
         </div>
 
-        <div className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm">
+        <div className="kpi-card rounded-2xl border border-red-200 bg-red-50 px-4 py-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-medium text-[var(--ds-text-muted)]">Total dépenses</p>
+            <p className="text-sm font-semibold text-[var(--ds-text-muted)]">Total dépenses</p>
             <div className="rounded-xl bg-red-50 p-2">
               <TrendingDown className="h-4 w-4 text-red-500" />
             </div>
@@ -644,14 +644,14 @@ export function FinancesDashboardTab() {
         </div>
 
         <div
-          className={`kpi-card rounded-2xl border p-5 shadow-sm ${
+          className={`kpi-card rounded-2xl border px-4 py-4 shadow-sm ${
             beneficeNet >= 0
-              ? "border border-emerald-500/20 bg-emerald-50/20"
-              : "border border-red-500/20 bg-red-50/20"
+              ? "border border-emerald-200 bg-emerald-50"
+              : "border border-red-200 bg-red-50"
           }`}
         >
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-medium text-[var(--ds-text-muted)]">Bénéfice net</p>
+            <p className="text-sm font-semibold text-[var(--ds-text-muted)]">Bénéfice net</p>
             <div
               className={`rounded-xl p-2 ${
                 beneficeNet >= 0 ? "bg-emerald-500/10" : "bg-red-500/10"
@@ -687,12 +687,12 @@ export function FinancesDashboardTab() {
             }
           }}
           className={[
-            "kpi-card cursor-pointer rounded-2xl border border-orange-100 bg-[var(--ds-surface)] p-5 shadow-sm transition-all ring-offset-2 hover:shadow-md hover:ring-2 hover:ring-orange-500/50 ring-offset-[var(--ds-bg)]",
+            "kpi-card cursor-pointer rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4 shadow-sm transition-all ring-offset-2 hover:shadow-md hover:ring-2 hover:ring-orange-500/50 ring-offset-[var(--ds-bg)]",
             activeDetail === "impayes" ? "ring-2 ring-orange-500" : "",
           ].join(" ")}
         >
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-medium text-[var(--ds-text-muted)]">Impayés</p>
+            <p className="text-sm font-semibold text-[var(--ds-text-muted)]">Impayés</p>
             <div className="rounded-xl bg-orange-50 p-2">
               <AlertCircle className="h-4 w-4 text-orange-500" />
             </div>
@@ -749,8 +749,8 @@ export function FinancesDashboardTab() {
             >
               <defs>
                 <linearGradient id="gradDepenses" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid
@@ -788,13 +788,13 @@ export function FinancesDashboardTab() {
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="#f43f5e"
+                stroke="#7c3aed"
                 strokeWidth={2.5}
                 fill="url(#gradDepenses)"
-                dot={{ fill: "#f43f5e", r: 3, strokeWidth: 0 }}
+                dot={{ fill: "#7c3aed", r: 3, strokeWidth: 0 }}
                 activeDot={{
                   r: 5,
-                  fill: "#f43f5e",
+                  fill: "#7c3aed",
                   stroke: "var(--ds-surface)",
                   strokeWidth: 2,
                 }}

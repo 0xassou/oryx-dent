@@ -16,6 +16,7 @@ import {
   formatDateKeyLocal,
 } from "@/utils/appointmentData";
 import { applyTheme, getStoredTheme } from "@/utils/theme";
+import { toTitleCase } from "@/utils/formatters";
 
 type LayoutNotification = {
   id: string;
@@ -120,7 +121,7 @@ export default function DashboardLayout({
   const [notifications, setNotifications] = useState<LayoutNotification[]>([]);
   const isPlanning = pathname === "/planning";
 
-  const displayName = user?.nom ?? (role === "admin" ? "Dr. Assil" : ROLE_LABEL[role]);
+  const displayName = toTitleCase(user?.nom ?? (role === "admin" ? "Dr. Assil" : ROLE_LABEL[role]));
   const displayInitials = getInitials(user?.nom ?? (role === "admin" ? "Dr Assil" : ROLE_LABEL[role]));
   const roleLabel = ROLE_LABEL[role];
 
@@ -136,7 +137,7 @@ export default function DashboardLayout({
   return (
     <>
       <div
-        className="fixed inset-0 bg-[var(--ds-layout-bg)] p-3"
+        className="fixed inset-0 bg-[var(--ds-layout-bg)] p-2 lg:p-3 xl:p-4"
         style={{ backgroundColor: "var(--ds-layout-bg)" }}
       >
         <div
@@ -153,17 +154,17 @@ export default function DashboardLayout({
           />
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--ds-bg)] text-[var(--ds-text)]">
-            <header className="flex h-16 flex-shrink-0 items-center justify-between gap-4 border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6">
+            <header className="flex h-14 flex-shrink-0 items-center justify-between gap-4 border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 lg:px-6 xl:h-16 xl:px-8">
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="hidden flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[var(--ds-text-muted)] transition-all hover:bg-[var(--ds-primary-soft)] lg:hidden"
+                className="flex lg:hidden h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[var(--ds-text-muted)] transition-all hover:bg-[var(--ds-primary-soft)]"
                 aria-label="Ouvrir le menu"
               >
                 <Menu className="h-5 w-5" />
               </button>
               {/* Recherche globale */}
-              <div className="relative flex max-w-[160px] flex-1 items-center lg:max-w-md">
+              <div className="relative flex max-w-[160px] flex-1 items-center lg:max-w-lg xl:max-w-xl">
                 <Search className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--ds-text-muted)]" />
                 <input
                   type="text"
@@ -318,8 +319,8 @@ export default function DashboardLayout({
               <div
                 className={
                   isPlanning
-                    ? "flex min-h-0 flex-1 flex-col overflow-hidden p-6"
-                    : "p-6"
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden p-4 lg:p-6 xl:p-8"
+                    : "p-4 lg:p-6 xl:p-8"
                 }
               >
                 <RouteGuard>{children}</RouteGuard>

@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   AlertTriangle,
+  Building2,
   Calendar,
   CheckCircle2,
   ClipboardList,
   Clock,
   FileText,
-  FlaskConical,
   Package,
   Pencil,
+  Phone,
   Plus,
   Search,
   Send,
@@ -61,6 +63,10 @@ import {
   type DentalPatientRecord,
 } from "@/utils/patientData";
 import { generateLabBonPDF } from "@/utils/generateLabBonPDF";
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 function uid() {
   return Math.random().toString(16).slice(2);
@@ -158,6 +164,7 @@ function isPastIso(iso: string | undefined): boolean {
 }
 
 type ActiveTab = "all" | "urgent" | "fabrication" | "ready" | "pose";
+type FilterKey = ActiveTab;
 
 export default function LaboratoirePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("all");
@@ -337,10 +344,7 @@ export default function LaboratoirePage() {
     return tabFiltered.filter((c) => {
       const patient = c.patient.toLowerCase();
       const travail = c.travail.toLowerCase();
-      const labo = c.labo.toLowerCase();
-      return (
-        patient.includes(q) || travail.includes(q) || labo.includes(q)
-      );
+      return patient.includes(q) || travail.includes(q);
     });
   }, [tabFiltered, searchTerm]);
 
@@ -407,159 +411,129 @@ export default function LaboratoirePage() {
     pose: poseCommandes.length,
   };
 
+  const FILTERS: Array<{ key: FilterKey; label: string; count: number }> = [
+    { key: "all", label: "Toutes", count: tabCounts.all },
+    { key: "urgent", label: "Urgences", count: tabCounts.urgent },
+    { key: "fabrication", label: "Fabrication", count: tabCounts.fabrication },
+    { key: "ready", label: "Reçu", count: tabCounts.ready },
+    { key: "pose", label: "Posé", count: tabCounts.pose },
+  ];
+
   return (
-    <div className="space-y-6 pb-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
+    <div className="space-y-0 pb-8 font-['Sora']">
+      <header className="flex items-start justify-between pb-5 pt-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
             Laboratoire &amp; Prothèses
           </h1>
-          <p className="text-sm font-light text-[var(--ds-text-muted)]">
-            Suivi des commandes prothétiques et des délais laboratoire.
+          <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
+            Suivi des commandes prothétiques et des délais laboratoire
           </p>
         </div>
-        <AnimatedButton onClick={() => setIsModalOpen(true)}>
-          <Plus className="h-4 w-4" strokeWidth={2} />
+        <AnimatedButton
+          onClick={() => setIsModalOpen(true)}
+          className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(124,58,237,0.25)] transition-colors hover:bg-[color:var(--ds-primary-dark)]"
+        >
+          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           Nouvelle commande labo
         </AnimatedButton>
       </header>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          icon={<FlaskConical className="h-4 w-4" />}
-          iconClass="bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)]"
-          valueClass="text-[color:var(--ds-primary)]"
+          icon={<ClipboardList className="h-5 w-5" strokeWidth={1.8} />}
+          iconClass="bg-violet-100 text-[color:var(--ds-primary)]"
+          valueClass="text-[22px] text-[color:var(--ds-text)]"
+          bgClass="border-violet-200 bg-violet-50"
           value={commandes.length}
           label="Total commandes"
         />
         <KpiCard
-          icon={<AlertTriangle className="h-4 w-4" />}
-          iconClass="bg-red-50 text-red-600"
-          valueClass="text-red-600"
+          icon={<AlertTriangle className="h-5 w-5" strokeWidth={1.8} />}
+          iconClass="bg-red-100 text-red-600"
+          valueClass="text-[22px] text-red-600"
+          bgClass="border-red-200 bg-red-50"
           value={urgentCommandes.length}
-          label="Poses avant retour labo"
+          label="Urgences"
         />
         <KpiCard
-          icon={<Clock className="h-4 w-4" />}
-          iconClass="bg-indigo-50 text-indigo-600"
-          valueClass="text-indigo-600"
+          icon={<Clock className="h-5 w-5" strokeWidth={1.8} />}
+          iconClass="bg-cyan-100 text-cyan-700"
+          valueClass="text-[22px] text-cyan-700"
+          bgClass="border-cyan-200 bg-cyan-50"
           value={fabricationCommandes.length}
           label="En fabrication"
         />
         <KpiCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          iconClass="bg-emerald-50 text-emerald-600"
-          valueClass="text-emerald-600"
+          icon={<CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />}
+          iconClass="bg-emerald-100 text-emerald-700"
+          valueClass="text-[22px] text-emerald-700"
+          bgClass="border-emerald-200 bg-emerald-50"
           value={recuCommandes.length}
           label="Reçu au cabinet"
         />
       </div>
 
-      {/* Alerte orange */}
       {urgentCommandes.length > 0 ? (
-        <div
-          role="alert"
-          className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300"
-        >
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-            <AlertTriangle className="h-4 w-4" />
-          </span>
-          <p className="font-light">
-            <strong className="font-semibold">
-              {urgentCommandes.length} commande
-              {urgentCommandes.length > 1 ? "s" : ""}
-            </strong>{" "}
-            {urgentCommandes.length > 1
-              ? "ont une date de pose prévue avant le retour du labo"
-              : "a une date de pose prévue avant le retour du labo"}{" "}
-            — action requise.
+        <div className="mx-0 mb-5 flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+          <p className="text-base text-amber-800">
+            <span className="font-bold">
+              {urgentCommandes.length} commande{urgentCommandes.length > 1 ? "s" : ""}
+            </span>{" "}
+            ont une date de pose prévue avant le retour du labo — action requise.
           </p>
         </div>
       ) : null}
 
-      {/* Filters + search */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          {(
-            [
-              ["all", "Toutes", null],
-              ["urgent", "🚨 Urgences", "urgent"],
-              ["fabrication", "⚙️ En fabrication", null],
-              ["ready", "📦 Reçu", null],
-              ["pose", "✅ Posé", null],
-            ] as const
-          ).map(([id, label, variant]) => {
-            const active = activeTab === id;
-            const count = tabCounts[id];
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveTab(id)}
-                className={[
-                  "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-all",
-                  active
-                    ? variant === "urgent"
-                      ? "border-red-500 bg-red-500 text-white shadow-[0_2px_10px_rgba(220,38,38,0.22)]"
-                      : "border-[color:var(--ds-primary)] bg-[color:var(--ds-primary)] text-white shadow-[0_2px_10px_rgba(124,58,237,0.22)]"
-                    : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-bg)]",
-                ].join(" ")}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
+        <div className="flex gap-1 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-0.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setActiveTab(f.key)}
+              className={cn(
+                "flex items-center gap-2 rounded-[9px] px-5 py-2.5 text-base font-semibold transition-all",
+                activeTab === f.key
+                  ? "bg-[color:var(--ds-primary)] text-white"
+                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
+              )}
+            >
+              {f.label}
+              <span
+                className={cn(
+                  "font-['DM_Mono'] rounded-full px-2 py-0.5 text-sm font-bold leading-snug",
+                  activeTab === f.key
+                    ? "bg-white/20 text-white"
+                    : "bg-black/5 text-[var(--ds-text-muted)]",
+                )}
               >
-                <span>{label}</span>
-                {count > 0 ? (
-                  <span
-                    className={[
-                      "text-[11px] font-semibold tabular-nums",
-                      active ? "opacity-85" : "opacity-70",
-                    ].join(" ")}
-                  >
-                    {count}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
+                {f.count}
+              </span>
+            </button>
+          ))}
         </div>
 
-        <div className="relative lg:w-[320px]">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]"
-            strokeWidth={2}
-            aria-hidden
-          />
+        <div className="flex items-center gap-2 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2">
+          <Search className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" strokeWidth={2} />
           <input
-            type="search"
+            type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Rechercher un patient, un acte…"
-            aria-label="Rechercher dans les commandes laboratoire"
-            autoComplete="off"
-            className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2 pl-10 pr-10 text-sm font-normal text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-soft)]"
+            className="w-52 border-0 bg-transparent text-xs text-[color:var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)]"
           />
-          {searchTerm ? (
-            <button
-              type="button"
-              onClick={() => setSearchTerm("")}
-              className="absolute right-2 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
-              aria-label="Effacer la recherche"
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
-          ) : null}
         </div>
       </div>
 
-      {/* Result count */}
-      <p className="text-[13px] font-light text-[var(--ds-text-muted)]">
-        <span className="tabular-nums">{filtered.length}</span> commande
+      <p className="pb-4 text-lg font-medium text-[var(--ds-text-muted)]">
+        <span className="font-['DM_Mono']">{filtered.length}</span> commande
         {filtered.length > 1 ? "s" : ""} trouvée
         {filtered.length > 1 ? "s" : ""}
       </p>
 
-      {/* Liste commandes */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-[0_2px_12px_rgba(15,23,42,0.03)]">
+        <div className="mx-0 rounded-2xl border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-sm">
           {searchTerm.trim() && tabFiltered.length > 0 ? (
             <div className="mx-auto max-w-md space-y-3">
               <div
@@ -593,12 +567,14 @@ export default function LaboratoirePage() {
               cmd.statut !== "POSE";
             const retourOk = cmd.statut === "RECU_CABINET" || cmd.statut === "POSE";
             const posePast = isPastIso(cmd.rdvPatientIso);
+            const pretAPoser = cmd.statut === "RECU_CABINET";
 
-            const borderVariant: "urgent" | "warning" | null = conflit
-              ? "urgent"
-              : critical || retourPast
-                ? "warning"
-                : null;
+            const STATUS_ACCENT: Record<string, string> = {
+              "En attente": "border-l-amber-400",
+              "En fabrication": "border-l-cyan-400",
+              "Reçu au cabinet": "border-l-violet-500",
+              Posé: "border-l-emerald-400",
+            };
 
             const labPartner: DentalLabPartner =
               findLabByName(cmd.labo, labs) ?? {
@@ -611,19 +587,7 @@ export default function LaboratoirePage() {
             const dent = parseDentFromTravail(cmd.travail);
             const acte = travailWithoutDent(cmd.travail);
 
-            const retourColor =
-              cmd.statut === "POSE"
-                ? "text-emerald-600"
-                : retourPast
-                  ? "text-red-600"
-                  : critical
-                    ? "text-amber-600"
-                    : "text-[var(--ds-text-muted)]";
-            const poseColor = conflit
-              ? "text-red-600"
-              : posePast && cmd.statut === "POSE"
-                ? "text-emerald-600"
-                : "text-[var(--ds-text-muted)]";
+            const statutLabel = laboratoireStatutLabel(cmd.statut);
 
             return (
               <article
@@ -637,124 +601,75 @@ export default function LaboratoirePage() {
                     setDrawerCommandId(cmd.id);
                   }
                 }}
-                className={[
-                  "oryx-fade-up group grid cursor-pointer grid-cols-1 items-center gap-4 rounded-2xl border bg-[var(--ds-surface)] p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-all focus-visible:ring-2 focus-visible:ring-[var(--ds-primary-soft)] hover:-translate-y-[1px] hover:border-[var(--ds-primary-border)] hover:shadow-[0_6px_24px_rgba(124,58,237,0.10)] lg:grid-cols-[1fr_auto]",
-                  borderVariant === "urgent"
-                    ? "border-l-[3px] border-l-red-500 border-[var(--ds-primary-border)]"
-                    : borderVariant === "warning"
-                      ? "border-l-[3px] border-l-amber-500 border-[var(--ds-primary-border)]"
-                      : "border-[var(--ds-primary-border)]",
-                ].join(" ")}
+                className={cn(
+                  "cursor-pointer rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-6 py-5",
+                  "border-l-[3px] transition-all hover:border-[var(--ds-primary-border)] hover:shadow-[0_4px_16px_rgba(124,58,237,0.07)]",
+                  STATUS_ACCENT[statutLabel] ?? "border-l-[var(--ds-border)]",
+                )}
               >
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[15px] font-semibold text-[var(--ds-text)]">
-                      {cmd.patient}
-                    </span>
-                    <StatusBadge statut={cmd.statut} />
-                    {conflit ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
-                        🚨 Pose avant retour
-                      </span>
-                    ) : null}
-                    {!conflit && critical ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                        ⏰ Retour imminent
-                      </span>
-                    ) : null}
-                    {retourOk && cmd.statut === "RECU_CABINET" ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        📦 Prêt à poser
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-[13px] font-light text-[var(--ds-text-muted)]">
-                    {acte}
-                    {dent ? (
-                      <>
-                        <span className="opacity-50"> · </span>
-                        <span>Dent {dent}</span>
-                      </>
-                    ) : null}
-                    {cmd.teinte ? (
-                      <>
-                        <span className="opacity-50"> · </span>
-                        <span>Teinte {cmd.teinte}</span>
-                      </>
-                    ) : null}
-                    {cmd.materiau ? (
-                      <>
-                        <span className="opacity-50"> · </span>
-                        <span>{cmd.materiau}</span>
-                      </>
-                    ) : null}
-                  </p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--ds-text-muted)]">
-                    <span className={"inline-flex items-center gap-1 " + retourColor}>
-                      <Calendar className="h-3.5 w-3.5" />
-                      Retour{" "}
-                      <strong className="font-mono font-semibold">
-                        {formatDayShortFR(cmd.retourIso)}
-                      </strong>
-                      {retourPast ? " ⚠️" : ""}
-                    </span>
-                    {cmd.rdvPatientIso ? (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span
-                          className={
-                            "inline-flex items-center gap-1 " + poseColor
-                          }
-                        >
-                          <Package className="h-3.5 w-3.5" />
-                          Pose{" "}
-                          <strong className="font-mono font-semibold">
-                            {formatDayShortFR(cmd.rdvPatientIso)}
-                          </strong>
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
+                <div className="mb-2.5 flex items-center gap-2">
+                  <span className="text-xl font-bold text-[color:var(--ds-text)]">
+                    {cmd.patient}
+                  </span>
+                  <StatusBadgeInline statut={statutLabel} />
+                  {conflit ? <UrgenceBadge /> : null}
+                  {pretAPoser ? <PretBadge /> : null}
+                  <div className="flex-1" />
+                  <span className="flex items-center gap-1 text-[11px] text-[var(--ds-text-muted)]">
+                    <Building2 className="h-3 w-3" strokeWidth={1.8} />
+                    {cmd.labo}
+                  </span>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-3">
-                  <span className="hidden truncate text-right text-[12px] font-light text-[var(--ds-text-muted)] sm:inline-block sm:max-w-[14rem]">
-                    🏥 {cmd.labo}
-                  </span>
-                  <div
-                    className="flex items-center gap-1.5"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {cmd.statut === "RECU_CABINET" ? (
+                <p className="mb-2.5 text-base text-[var(--ds-text-muted)]">
+                  <span className="font-medium text-[color:var(--ds-text)]">{acte}</span>
+                  {" · "}
+                  {dent ?? "—"}
+                  {" · "}
+                  {cmd.teinte ?? "—"}
+                  {" · "}
+                  {cmd.materiau ?? "—"}
+                </p>
+
+                <div className="flex items-center gap-4 border-t border-[var(--ds-border)] pt-2.5">
+                  <DateItem
+                    label="Retour"
+                    date={formatDayShortFR(cmd.retourIso)}
+                    isAlert={retourPast || critical}
+                  />
+                  <DateItem
+                    label="Pose"
+                    date={formatDayShortFR(cmd.rdvPatientIso)}
+                    isAlert={conflit || (posePast && cmd.statut !== "POSE")}
+                  />
+                  <div className="ml-auto flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <ActionButton
+                      icon={<Phone className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                      onClick={() => setDrawerCommandId(cmd.id)}
+                      title="Contacter"
+                    />
+                    <ActionButton
+                      icon={<Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />}
+                      onClick={() => setDrawerCommandId(cmd.id)}
+                      title="Modifier"
+                    />
+                    <LabWhatsAppButton
+                      patientName={cmd.patient}
+                      telephones={labPartner.telephones}
+                    />
+                    {pretAPoser ? (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           changeStatut(cmd, "POSE");
                         }}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[color:var(--ds-primary)] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-                        title="Marquer comme posé"
+                        className="rounded-lg bg-[color:var(--ds-primary)] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[color:var(--ds-primary-dark)]"
+                        title="Poser"
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
                         Poser
                       </button>
                     ) : null}
-                    <LabWhatsAppButton
-                      patientName={cmd.patient}
-                      telephones={labPartner.telephones}
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDrawerCommandId(cmd.id);
-                      }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] transition-colors hover:border-[color:var(--ds-primary)] hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
-                      title="Modifier"
-                      aria-label={`Modifier la commande de ${cmd.patient}`}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
                   </div>
                 </div>
               </article>
@@ -1043,18 +958,25 @@ function KpiCard({
   valueClass,
   value,
   label,
+  bgClass,
 }: {
   icon: React.ReactNode;
   iconClass: string;
   valueClass: string;
   value: number | string;
   label: string;
+  bgClass?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_2px_16px_rgba(15,23,42,0.04)] transition-shadow hover:shadow-[0_6px_24px_rgba(124,58,237,0.08)]">
+    <div
+      className={[
+        "flex items-center gap-4 rounded-2xl border px-6 py-6 shadow-sm",
+        bgClass ?? "border-[var(--ds-border)] bg-[var(--ds-surface)]",
+      ].join(" ")}
+    >
       <span
         className={[
-          "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+          "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
           iconClass,
         ].join(" ")}
         aria-hidden
@@ -1064,17 +986,109 @@ function KpiCard({
       <div className="min-w-0">
         <p
           className={[
-            "text-2xl font-semibold leading-none tracking-tight tabular-nums",
+            "font-['DM_Mono'] text-5xl font-bold leading-none",
             valueClass,
           ].join(" ")}
         >
           {value}
         </p>
-        <p className="mt-1 text-[11.5px] font-light text-[var(--ds-text-muted)]">
+        <p className="mt-2 text-lg font-semibold text-[var(--ds-text-muted)]">
           {label}
         </p>
       </div>
     </div>
+  );
+}
+
+function StatusBadgeInline({ statut }: { statut: string }) {
+  const styles: Record<string, string> = {
+    "En attente": "border-amber-200 bg-amber-50 text-amber-800",
+    "En fabrication": "border-cyan-200 bg-cyan-50 text-cyan-800",
+    "Reçu au cabinet":
+      "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)]",
+    Posé: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  };
+  const dots: Record<string, string> = {
+    "En attente": "bg-amber-400",
+    "En fabrication": "bg-cyan-400",
+    "Reçu au cabinet": "bg-[color:var(--ds-primary)]",
+    Posé: "bg-emerald-400",
+  };
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold",
+        styles[statut] ?? "border-[var(--ds-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)]",
+      )}
+    >
+      <span className={cn("h-2 w-2 rounded-full", dots[statut] ?? "bg-slate-400")} />
+      {statut}
+    </span>
+  );
+}
+
+function UrgenceBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
+      <span className="h-1 w-1 rounded-full bg-red-500" />
+      Pose avant retour
+    </span>
+  );
+}
+
+function PretBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+      <span className="h-1 w-1 rounded-full bg-emerald-500" />
+      Prêt à poser
+    </span>
+  );
+}
+
+function DateItem({
+  label,
+  date,
+  isAlert,
+}: {
+  label: string;
+  date: string;
+  isAlert?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-base text-[var(--ds-text-muted)]">
+      <Calendar className="h-3 w-3" strokeWidth={1.8} />
+      <span>{label}</span>
+      <span
+        className={cn(
+          "font-['DM_Mono'] font-medium",
+          isAlert ? "text-red-600" : "text-[color:var(--ds-text)]",
+        )}
+      >
+        {date}
+      </span>
+      {isAlert ? <AlertCircle className="h-3 w-3 text-red-500" strokeWidth={1.8} /> : null}
+    </div>
+  );
+}
+
+function ActionButton({
+  icon,
+  onClick,
+  title,
+}: {
+  icon: React.ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--ds-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)] transition-all hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
+    >
+      {icon}
+    </button>
   );
 }
 

@@ -11,18 +11,15 @@ import {
   Pencil,
   Plus,
   Search,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
-  DEFAULT_ACT_PROTOCOLS,
   DENTAL_STOCK_LS_KEY,
-  loadProtocols,
   saveDentalStock,
-  isProductLinkedToProtocol,
-  type ActProtocolMap,
   type StockLine,
 } from "@/utils/stockLogic";
 
@@ -692,11 +689,6 @@ export default function StocksPage() {
     return order.map((cat) => [cat, map.get(cat)!] as const);
   }, [filtered]);
 
-  const protocolMap = useMemo((): ActProtocolMap => {
-    if (!hasHydrated) return DEFAULT_ACT_PROTOCOLS;
-    return loadProtocols();
-  }, [hasHydrated]);
-
   const totalProduits = produits.length;
   const enRupture = produits.filter(
     (p) => computeStatut(p) === "Rupture",
@@ -811,7 +803,7 @@ export default function StocksPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[color:var(--ds-text)]">
+          <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
             Gestion des Stocks
           </h1>
           <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
@@ -826,43 +818,43 @@ export default function StocksPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 lg:grid-cols-3">
-        <div className="kpi-card flex items-center gap-4 rounded-2xl bg-[var(--ds-surface)] p-3 shadow-sm lg:p-5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)]">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[color:var(--ds-primary)]">
             <Package className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-tight text-[var(--ds-text-muted)] lg:text-sm">
+            <p className="text-base font-semibold tracking-tight text-[var(--ds-text-muted)]">
               Total Produits
             </p>
-            <p className="mt-0.5 text-2xl font-semibold tracking-tight text-[color:var(--ds-text)] lg:text-3xl">
+            <p className="mt-0.5 text-4xl font-bold tracking-tight text-[color:var(--ds-text)]">
               {totalProduits}
             </p>
           </div>
         </div>
 
-        <div className="kpi-card flex items-center gap-4 rounded-2xl bg-[var(--ds-surface)] p-3 shadow-sm lg:p-5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600">
             <AlertTriangle className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-tight text-[var(--ds-text-muted)] lg:text-sm">
+            <p className="text-base font-semibold tracking-tight text-[var(--ds-text-muted)]">
               En rupture
             </p>
-            <p className="mt-0.5 text-2xl font-semibold tracking-tight text-red-600 lg:text-3xl">
+            <p className="mt-0.5 text-4xl font-bold tracking-tight text-red-600">
               {enRupture}
             </p>
           </div>
         </div>
 
-        <div className="kpi-card flex items-center gap-4 rounded-2xl bg-[var(--ds-surface)] p-3 shadow-sm lg:p-5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
             <Clock className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-tight text-[var(--ds-text-muted)] lg:text-sm">
+            <p className="text-base font-semibold tracking-tight text-[var(--ds-text-muted)]">
               Péremption proche
             </p>
-            <p className="mt-0.5 text-2xl font-semibold tracking-tight text-amber-600 lg:text-3xl">
+            <p className="mt-0.5 text-4xl font-bold tracking-tight text-amber-600">
               {peremptionProche}
             </p>
           </div>
@@ -948,6 +940,7 @@ export default function StocksPage() {
                           ) : (
                             <ChevronDown className="h-4 w-4 shrink-0 text-[var(--ds-text-muted)]" />
                           )}
+                          <Tag className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
                           <span>{categorie}</span>
                           <span className="text-xs font-medium text-[var(--ds-text-muted)]">
                             ({items.length}{" "}
@@ -965,11 +958,6 @@ export default function StocksPage() {
                         const statut = computeStatut(p);
                         const peremptionProche = isPeremptionProche(p);
                         const rowClass = getRowTrClassName(statut, peremptionProche);
-                        const linkedProto = isProductLinkedToProtocol(
-                          p.id,
-                          protocolMap,
-                        );
-
                         return (
                           <tr
                             key={p.id}
@@ -980,17 +968,9 @@ export default function StocksPage() {
                             {/* Produit */}
                             <td className="px-5 py-4">
                               <div className="flex items-start gap-2">
-                                {linkedProto ? (
-                                  <span
-                                    className="mt-0.5 inline-flex shrink-0 text-violet-600"
-                                    title="Consommable lié à un protocole"
-                                  >
-                                    <Package
-                                      className="h-4 w-4"
-                                      aria-hidden
-                                    />
-                                  </span>
-                                ) : null}
+                                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--ds-primary-soft)]">
+                                  <Package className="h-3.5 w-3.5 text-[color:var(--ds-primary)]" aria-hidden />
+                                </div>
                                 <p
                                   className={[
                                     "min-w-0 text-sm font-medium text-[var(--ds-text)]",
@@ -1034,7 +1014,7 @@ export default function StocksPage() {
                               formatPeremptionForDisplay(p.peremption) !==
                                 "—" ? (
                                 <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800 dark:border-orange-800/40 dark:bg-orange-950/45 dark:text-orange-200">
-                                  <span aria-hidden>⏰</span>
+                                  <Clock className="h-3.5 w-3.5" aria-hidden />
                                   {formatPeremptionForDisplay(p.peremption)}
                                 </span>
                               ) : (

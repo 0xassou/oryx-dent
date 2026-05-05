@@ -862,7 +862,7 @@ export default function SterilisationPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="w-full space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
@@ -1033,7 +1033,7 @@ export default function SterilisationPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
           Stock par type de kit
         </h2>
-        <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="mt-3 grid grid-cols-3 gap-4">
           {KIT_TYPES.map((kt) => {
             const st = stockByType[kt.id];
             const Icon = kt.icon;
@@ -1224,30 +1224,34 @@ export default function SterilisationPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <KpiCard
           icon={ShieldCheck}
           label="Kits prêts (disponible)"
           value={String(totals.disponible)}
           badgeClass="bg-emerald-50 text-emerald-700"
+          cardClass="border-emerald-200 bg-emerald-50"
         />
         <KpiCard
           icon={Thermometer}
           label="Cycles du jour"
           value={String(cyclesToday)}
-          badgeClass="bg-[var(--ds-primary-soft)] text-[var(--ds-primary)]"
+          badgeClass="bg-violet-100 text-[var(--ds-primary)]"
+          cardClass="border-violet-200 bg-violet-50"
         />
         <KpiCard
           icon={Clock}
           label="En autoclave (en cours)"
           value={String(totals.enCours)}
-          badgeClass="bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)]"
+          badgeClass="bg-cyan-100 text-cyan-700"
+          cardClass="border-cyan-200 bg-cyan-50"
         />
         <KpiCard
           icon={AlertTriangle}
           label="Kits sales (à traiter)"
           value={String(totals.sale)}
           badgeClass="bg-red-50 text-red-700"
+          cardClass="border-red-200 bg-red-50"
           alert={totals.sale > 0}
         />
       </div>
@@ -1783,33 +1787,36 @@ function KpiCard({
   label,
   value,
   badgeClass,
+  cardClass,
   alert,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   badgeClass: string;
+  cardClass: string;
   alert?: boolean;
 }) {
   return (
     <div
       className={[
-        "kpi-card relative rounded-2xl bg-[var(--ds-surface)] p-5 shadow-sm transition-shadow hover:shadow-md",
+        "kpi-card relative rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md",
+        cardClass,
         alert ? "ring-1 ring-red-200" : "",
       ].join(" ")}
     >
       <div className="flex items-center gap-3">
         <span
           className={[
-            "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+            "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
             badgeClass,
           ].join(" ")}
         >
           <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-medium text-[var(--ds-text-muted)]">{label}</p>
-          <p className="text-xl font-bold tracking-tight text-[color:var(--ds-text)]">
+          <p className="text-sm font-medium text-[var(--ds-text-muted)]">{label}</p>
+          <p className="text-3xl font-bold tracking-tight text-[color:var(--ds-text)]">
             {value}
           </p>
         </div>

@@ -54,7 +54,7 @@ function ToggleLegacy({
       onClick={() => onChange(!checked)}
       className={[
         "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors",
-        checked ? "bg-slate-900" : "bg-[var(--ds-primary-border)]",
+        checked ? "bg-[color:var(--ds-primary)]" : "bg-[var(--ds-primary-border)]",
       ].join(" ")}
     >
       <span
@@ -244,7 +244,7 @@ export default function SettingsPage() {
   return (
     <div className="w-full space-y-6">
       <header className="mb-6 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-8 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--ds-text)]">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--ds-text)]">
           Réglages
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[var(--ds-text-muted)]">
@@ -267,7 +267,7 @@ export default function SettingsPage() {
               className={[
                 "flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs transition-colors whitespace-nowrap lg:text-sm",
                 isActive
-                  ? "bg-slate-900 font-medium text-white shadow-sm"
+                  ? "bg-[color:var(--ds-primary)] font-medium text-white shadow-sm"
                   : "text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
               ].join(" ")}
             >
@@ -372,7 +372,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                   >
                     Sauvegarder
                   </button>
@@ -622,7 +622,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleSaveSettings}
-                  className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                  className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                 >
                   Sauvegarder
                 </button>
@@ -794,7 +794,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                   >
                     Sauvegarder
                   </button>
@@ -1013,7 +1013,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                   >
                     Sauvegarder
                   </button>

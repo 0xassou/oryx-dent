@@ -19,50 +19,43 @@ interface KpiCardProps {
   stockAlertCount?: number;
 }
 
-type ResolvedTheme = "rdv" | "patients" | "emerald" | "orange";
+type ResolvedTheme = "rdv" | "patients" | "kits" | "stock";
 
 const THEME: Record<
   ResolvedTheme,
   {
     card: string;
     iconWrap: string;
-    value: string;
     icon: string;
   }
 > = {
   rdv: {
-    card: "border-blue-200/80 bg-blue-50 dark:border-blue-800/50 dark:bg-blue-950/40",
-    iconWrap: "bg-blue-100 dark:bg-blue-900/50",
-    value: "text-blue-600 dark:text-blue-400",
-    icon: "text-blue-600 dark:text-blue-300",
+    card: "border-violet-200 bg-violet-50",
+    iconWrap: "bg-violet-100",
+    icon: "text-[color:var(--ds-primary)]",
   },
   patients: {
-    card: "border-purple-200/80 bg-purple-50 dark:border-purple-800/50 dark:bg-purple-950/40",
-    iconWrap: "bg-purple-100 dark:bg-purple-900/50",
-    value: "text-purple-600 dark:text-purple-400",
-    icon: "text-purple-600 dark:text-purple-300",
+    card: "border-cyan-200 bg-cyan-50",
+    iconWrap: "bg-cyan-100",
+    icon: "text-cyan-700",
   },
-  emerald: {
-    card: "border-emerald-200/80 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/40",
-    iconWrap: "bg-emerald-100 dark:bg-emerald-900/50",
-    value: "text-emerald-600 dark:text-emerald-400",
-    icon: "text-emerald-600 dark:text-emerald-300",
+  kits: {
+    card: "border-emerald-200 bg-emerald-50",
+    iconWrap: "bg-emerald-100",
+    icon: "text-emerald-700",
   },
-  orange: {
-    card: "border-orange-200/80 bg-orange-50 dark:border-orange-800/50 dark:bg-orange-950/40",
-    iconWrap: "bg-orange-100 dark:bg-orange-900/50",
-    value: "text-orange-600 dark:text-orange-400",
-    icon: "text-orange-600 dark:text-orange-300",
+  stock: {
+    card: "border-red-200 bg-red-50",
+    iconWrap: "bg-red-100",
+    icon: "text-red-700",
   },
 };
 
-function resolveTheme(kpi: KpiKey, stockAlertCount: number | undefined): ResolvedTheme {
-  if (kpi === "stock") {
-    return (stockAlertCount ?? 0) > 0 ? "orange" : "emerald";
-  }
+function resolveTheme(kpi: KpiKey): ResolvedTheme {
+  if (kpi === "stock") return "stock";
   if (kpi === "rdv") return "rdv";
   if (kpi === "patients") return "patients";
-  return "emerald";
+  return "kits";
 }
 
 export function KpiCard({
@@ -72,54 +65,46 @@ export function KpiCard({
   change,
   icon,
   kpi,
-  stockAlertCount,
 }: KpiCardProps) {
-  const resolved = resolveTheme(kpi, stockAlertCount);
+  const resolved = resolveTheme(kpi);
   const t = THEME[resolved];
 
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-xl border p-4",
+        "rounded-2xl border px-6 py-6",
         t.card,
       ].join(" ")}
     >
-      <p className="mb-1.5 pr-14 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--ds-text-muted)]">
-        {label}
-      </p>
-
-      <div className="flex items-baseline gap-1">
-        <span
-          className={[
-            "font-['DM_Mono',monospace] text-[22px] font-medium leading-none tracking-tight",
-            t.value,
-          ].join(" ")}
-        >
-          {value}
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-base font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+          {label}
         </span>
-        {unit ? (
-          <span className="font-['Sora',sans-serif] text-[12px] text-[var(--ds-text-muted)]">
-            {unit}
-          </span>
+        {icon ? (
+          <div
+            className={[
+              "flex h-12 w-12 items-center justify-center rounded-2xl",
+              t.iconWrap,
+              t.icon,
+              "[&>svg]:h-4 [&>svg]:w-4",
+            ].join(" ")}
+            aria-hidden
+          >
+            {icon}
+          </div>
         ) : null}
       </div>
 
+      <p className="font-['DM_Mono',monospace] text-4xl font-bold text-[color:var(--ds-text)]">
+        {value}
+        {unit ? (
+          <span className="ml-1 font-['Sora',sans-serif] text-xs font-medium text-[var(--ds-text-muted)]">
+            {unit}
+          </span>
+        ) : null}
+      </p>
       {change ? (
-        <p className="mt-1.5 text-[11px] text-[var(--ds-text-muted)]">{change}</p>
-      ) : null}
-
-      {icon ? (
-        <div
-          className={[
-            "absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg",
-            t.iconWrap,
-            t.icon,
-            "[&>svg]:h-[18px] [&>svg]:w-[18px] lg:[&>svg]:h-5 lg:[&>svg]:w-5",
-          ].join(" ")}
-          aria-hidden
-        >
-          {icon}
-        </div>
+        <p className="mt-1 text-xs text-[var(--ds-text-muted)]">{change}</p>
       ) : null}
     </div>
   );
