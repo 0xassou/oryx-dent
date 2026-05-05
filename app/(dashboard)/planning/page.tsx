@@ -754,7 +754,7 @@ function PlanningPageContent() {
               <ChevronLeft className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
             </button>
             <label className="flex h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 px-4 py-2.5 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]">
-              <span className="text-sm leading-none" aria-hidden>📅</span>
+              <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ds-text-muted)]" aria-hidden />
               <input
                 type="date"
                 value={formatDateKey(activeDateForPicker)}

@@ -737,10 +737,10 @@ export function FinancesDashboardTab() {
         </div>
 
         <>
-          {depenses6M[0]?.isDemo && (
-            <p className="mb-2 text-xs italic text-[var(--ds-text-muted)]">
-              Aperçu avec données de démonstration
-            </p>
+          {depenses6M.length === 0 && (
+            <div className="mb-4 flex items-center justify-center rounded-lg bg-[var(--ds-bg)] py-8 text-sm text-[var(--ds-text-muted)]">
+              Aucune donnée disponible
+            </div>
           )}
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart
@@ -817,7 +817,7 @@ export function FinancesDashboardTab() {
                 <p className="mb-1 text-xs text-[var(--ds-text-muted)]">
                   Total période
                 </p>
-                <p className="text-sm font-bold tabular-nums text-red-400">
+                <p className="text-sm font-bold tabular-nums text-[var(--ds-text)]">
                   {total.toLocaleString("fr-DZ")} DA
                 </p>
               </div>
@@ -979,8 +979,8 @@ export function FinancesDashboardTab() {
             className="inline-flex items-center gap-2 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-bg)]"
             aria-label="Exporter CSV"
           >
-            <Download className="h-4 w-4" />
-            <span>📥 Exporter (CSV)</span>
+            <Download className="h-4 w-4 text-[var(--ds-text-muted)]" />
+            <span>Exporter (CSV)</span>
           </button>
         </div>
 
@@ -995,7 +995,8 @@ export function FinancesDashboardTab() {
                 : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
             ].join(" ")}
           >
-            🟢 Entrées (Recettes)
+            <TrendingUp className="inline h-4 w-4 text-emerald-500 mr-1.5" />
+            Entrées (Recettes)
           </button>
           <button
             type="button"
@@ -1007,7 +1008,8 @@ export function FinancesDashboardTab() {
                 : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
             ].join(" ")}
           >
-            🔴 Sorties (Dépenses)
+            <TrendingDown className="inline h-4 w-4 text-red-500 mr-1.5" />
+            Sorties (Dépenses)
           </button>
         </div>
 

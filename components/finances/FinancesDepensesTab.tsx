@@ -130,7 +130,7 @@ export function FinancesDepensesTab() {
           className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
-          + Enregistrer une dépense
+          Enregistrer une dépense
         </button>
       </div>
 

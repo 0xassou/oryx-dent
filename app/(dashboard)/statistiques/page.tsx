@@ -9,6 +9,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Label,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -145,18 +146,19 @@ export default function StatistiquesPage() {
   }, [patients, mounted]);
 
   const rdvParJour = useMemo(() => {
-    const jours = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    const joursGetDay = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+    const joursOrdonnes = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
     const map: Record<string, number> = {};
-    jours.forEach((j) => {
+    joursOrdonnes.forEach((j) => {
       map[j] = 0;
     });
     appointments.forEach((a) => {
       const d = new Date(`${a.dateKey}T12:00:00`);
       if (Number.isNaN(d.getTime())) return;
-      const jour = jours[d.getDay()];
+      const jour = joursGetDay[d.getDay()];
       map[jour] = (map[jour] ?? 0) + 1;
     });
-    return jours.map((j) => ({
+    return joursOrdonnes.map((j) => ({
       jour: j,
       rdv: map[j],
     }));
@@ -388,6 +390,36 @@ export default function StatistiquesPage() {
                     {actesData.map((entry, i) => (
                       <Cell key={i} fill={entry.color} />
                     ))}
+                    <Label
+                      content={({ viewBox }) => {
+                        const { cx, cy } = viewBox as { cx: number; cy: number };
+                        const top = actesData[0];
+                        const label = top.name.length > 9 ? top.name.slice(0, 9) + "…" : top.name;
+                        return (
+                          <g>
+                            <text
+                              x={cx}
+                              y={cy - 7}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              style={{ fontSize: 15, fontWeight: 700, fill: "var(--ds-text)" }}
+                            >
+                              {top.pct}%
+                            </text>
+                            <text
+                              x={cx}
+                              y={cy + 10}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              style={{ fontSize: 9, fill: "var(--ds-text-muted)" }}
+                            >
+                              {label}
+                            </text>
+                          </g>
+                        );
+                      }}
+                      position="center"
+                    />
                   </Pie>
                   <Tooltip
                     contentStyle={{

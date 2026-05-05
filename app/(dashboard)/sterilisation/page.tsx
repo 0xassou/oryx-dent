@@ -1304,7 +1304,7 @@ export default function SterilisationPage() {
                       return n > 0 ? `${n} ${kt.label}` : null;
                     }).filter(Boolean);
                     return (
-                      <tr key={c.id} className="group">
+                      <tr key={c.id} className={`group${c.valide && c.helix === "non-conforme" ? " bg-orange-50" : ""}`}>
                         <td className="py-3 pr-4 font-semibold text-[var(--ds-text)]">
                           #{c.numero}
                         </td>
@@ -1325,9 +1325,15 @@ export default function SterilisationPage() {
                         </td>
                         <td className="py-3 pr-4">
                           {c.valide ? (
-                            <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100">
-                              Terminé / Validé
-                            </span>
+                            c.helix === "non-conforme" ? (
+                              <span className="inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 ring-1 ring-orange-200">
+                                Terminé / Anomalie
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100">
+                                Terminé / Validé
+                              </span>
+                            )
                           ) : (
                             <span className="inline-flex rounded-full bg-[var(--ds-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ds-primary-hover)] ring-1 ring-[var(--ds-primary-border)]">
                               En cours
