@@ -28,6 +28,25 @@ import {
   writeMinimalPatientProfile,
 } from "@/utils/patientData";
 
+const AVATAR_PALETTE = [
+  { bg: "bg-violet-100 dark:bg-violet-900/40", text: "text-violet-700 dark:text-violet-300" },
+  { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-700 dark:text-emerald-300" },
+  { bg: "bg-rose-100 dark:bg-rose-900/40", text: "text-rose-700 dark:text-rose-300" },
+  { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300" },
+  { bg: "bg-cyan-100 dark:bg-cyan-900/40", text: "text-cyan-700 dark:text-cyan-300" },
+  { bg: "bg-indigo-100 dark:bg-indigo-900/40", text: "text-indigo-700 dark:text-indigo-300" },
+  { bg: "bg-pink-100 dark:bg-pink-900/40", text: "text-pink-700 dark:text-pink-300" },
+  { bg: "bg-teal-100 dark:bg-teal-900/40", text: "text-teal-700 dark:text-teal-300" },
+];
+
+function getAvatarColor(seed: string) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
 function PatientsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -200,15 +219,16 @@ function PatientsPageContent() {
                   {filtered.map((patient) => {
                     const isActionsOpen = openActionsId === patient.id;
                     const initials = `${patient.prenom?.[0]?.toUpperCase() ?? ""}${patient.nom?.[0]?.toUpperCase() ?? ""}` || "?";
+                    const avatarColor = getAvatarColor(patient.id);
                     return (
                       <tr
                         key={patient.id}
                         onClick={() => goToPatient(patient.id)}
-                        className="cursor-pointer border-b border-[var(--ds-border)] transition-colors hover:bg-[var(--ds-primary-soft)]/30"
+                        className="group cursor-pointer border-b border-[var(--ds-border)] transition-colors last:border-0 hover:bg-[var(--ds-primary-soft)]/50"
                       >
                         <td className="px-4 py-2.5 text-sm font-medium text-[var(--ds-text)]">
                           <div className="flex items-center gap-2.5">
-                            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--ds-primary-soft)] text-[11px] font-bold text-[color:var(--ds-primary)]">
+                            <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl text-[11px] font-bold transition-transform group-hover:scale-110 ${avatarColor.bg} ${avatarColor.text}`}>
                               {initials}
                             </div>
                             <span>{patient.prenom || "—"}</span>
@@ -304,6 +324,7 @@ function PatientsPageContent() {
                 )
                   .charAt(0)
                   .toUpperCase();
+                const avatarColor = getAvatarColor(patient.id);
                 return (
                   <div
                     key={patient.id}
@@ -316,10 +337,10 @@ function PatientsPageContent() {
                         router.push(`/patients/${patient.id}`);
                       }
                     }}
-                    className="flex cursor-pointer items-center justify-between rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 transition-all hover:border-[var(--ds-primary)]/40"
+                    className="flex cursor-pointer items-center justify-between rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 transition-all hover:border-[var(--ds-primary)]/40 hover:shadow-sm"
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--ds-primary)] text-sm font-bold text-white">
+                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm font-bold ${avatarColor.bg} ${avatarColor.text}`}>
                         {initial}
                       </div>
                       <div className="min-w-0">
