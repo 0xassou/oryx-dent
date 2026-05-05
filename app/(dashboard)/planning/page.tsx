@@ -57,6 +57,11 @@ function formatDateKey(d: Date): string {
 
 const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
+function isWeekend(iso: string): boolean {
+  const dow = new Date(`${iso}T12:00:00`).getDay();
+  return dow === 0 || dow === 6;
+}
+
 type SlidingDayColumn = {
   iso: string;
   weekdayShort: string;
@@ -492,7 +497,10 @@ function CalendarView({
             <div
               key={`head-${col.iso}`}
               data-cal-head={col.iso}
-              className="sticky top-0 z-[35] border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 shadow-[0_1px_0_0_rgb(241_245_249)]"
+              className={[
+                "sticky top-0 z-[35] border-b border-[var(--ds-primary-border)] px-3 py-2 shadow-[0_1px_0_0_rgb(241_245_249)]",
+                isWeekend(col.iso) ? "bg-slate-50 dark:bg-slate-800/60" : "bg-[var(--ds-surface)]",
+              ].join(" ")}
               style={{ gridColumn: j + 2, gridRow: 1 }}
             >
               <p className="text-[10px] font-medium uppercase tracking-tight text-[var(--ds-text-muted)]">
@@ -527,10 +535,15 @@ function CalendarView({
                 {workSlots.map((slotStart, slotIdx) => {
                   const key = `${col.iso}-${slotStart}`;
                   const isOver = dropKey === key;
+                  const wknd = isWeekend(col.iso);
                   return (
                     <div
                       key={key}
-                      className={["border-b border-[var(--ds-primary-border)]/80 bg-[var(--ds-bg)]/40 hover:bg-[var(--ds-primary-soft)]/40", isOver ? "ring-2 ring-inset ring-[var(--ds-primary-border)]/70" : ""].join(" ")}
+                      className={[
+                        "border-b border-[var(--ds-primary-border)]/80 hover:bg-[var(--ds-primary-soft)]/40",
+                        wknd ? "bg-slate-100/60 dark:bg-slate-700/20" : "bg-[var(--ds-bg)]/40",
+                        isOver ? "ring-2 ring-inset ring-[var(--ds-primary-border)]/70" : "",
+                      ].join(" ")}
                       style={{ position: "absolute", left: 0, right: 0, top: slotIdx * SLOT_HEIGHT_PX, height: SLOT_HEIGHT_PX, zIndex: 10 }}
                       onDragOver={(e) => { e.preventDefault(); setDropKey(key); }}
                       onDragLeave={() => setDropKey(null)}

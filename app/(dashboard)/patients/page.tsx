@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, MoreVertical, Search, FileText, UserPlus } from "lucide-react";
+import { ArrowUpDown, ChevronRight, MoreVertical, Search, FileText, UserPlus } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { syncPatientToDBAction } from "@/app/actions/patients";
 import {
@@ -47,6 +47,8 @@ function getAvatarColor(seed: string) {
   return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
 }
 
+const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+
 function PatientsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,6 +57,8 @@ function PatientsPageContent() {
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"tous" | "actifs" | "inactifs">("tous");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
   const reload = useCallback(() => {
     setPatients(readPatientsFromStorage());
@@ -82,17 +86,32 @@ function PatientsPageContent() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter((p) => {
-      const name = displayPatientName(p).toLowerCase();
-      return (
-        name.includes(q) ||
-        p.nom.toLowerCase().includes(q) ||
-        p.prenom.toLowerCase().includes(q) ||
-        p.telephone.replace(/\s/g, "").includes(q.replace(/\s/g, ""))
-      );
+    const now = Date.now();
+
+    const result = patients.filter((p) => {
+      if (q) {
+        const name = displayPatientName(p).toLowerCase();
+        if (
+          !name.includes(q) &&
+          !p.nom.toLowerCase().includes(q) &&
+          !p.prenom.toLowerCase().includes(q) &&
+          !p.telephone.replace(/\s/g, "").includes(q.replace(/\s/g, ""))
+        ) return false;
+      }
+      if (statusFilter !== "tous") {
+        const isActif = now - new Date(p.derniereVisite).getTime() < SIX_MONTHS_MS;
+        if (statusFilter === "actifs" && !isActif) return false;
+        if (statusFilter === "inactifs" && isActif) return false;
+      }
+      return true;
     });
-  }, [patients, search]);
+
+    return result.sort((a, b) => {
+      const ta = new Date(a.derniereVisite).getTime();
+      const tb = new Date(b.derniereVisite).getTime();
+      return sortOrder === "desc" ? tb - ta : ta - tb;
+    });
+  }, [patients, search, statusFilter, sortOrder]);
 
   function goToPatient(patientId: string) {
     router.push(`/patients/${patientId}`);
@@ -182,6 +201,34 @@ function PatientsPageContent() {
           placeholder="Rechercher par nom, prénom ou téléphone…"
           className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]"
         />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1.5">
+          {(["tous", "actifs", "inactifs"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setStatusFilter(f)}
+              className={[
+                "rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors",
+                statusFilter === f
+                  ? "bg-[var(--ds-primary)] text-white"
+                  : "border border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-[var(--ds-primary-border)] hover:text-[var(--ds-text)]",
+              ].join(" ")}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSortOrder((o) => (o === "desc" ? "asc" : "desc"))}
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:border-[var(--ds-primary-border)] hover:text-[var(--ds-text)]"
+        >
+          <ArrowUpDown className="h-3.5 w-3.5" />
+          Dernière visite : {sortOrder === "desc" ? "récent → ancien" : "ancien → récent"}
+        </button>
       </div>
 
       <div className="rounded-3xl bg-[var(--ds-surface)] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
