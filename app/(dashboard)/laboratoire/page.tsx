@@ -995,16 +995,16 @@ function KpiCard({
         {icon}
       </span>
       <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+          {label}
+        </p>
         <p
           className={[
-            "font-['DM_Mono'] text-5xl font-bold leading-none",
+            "mt-1 font-['DM_Mono'] text-4xl font-bold leading-none",
             valueClass,
           ].join(" ")}
         >
           {value}
-        </p>
-        <p className="mt-2 text-lg font-semibold text-[var(--ds-text-muted)]">
-          {label}
         </p>
       </div>
     </div>

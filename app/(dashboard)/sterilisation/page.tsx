@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Info,
   Package,
   Plus,
   Scissors,
@@ -875,12 +876,19 @@ export default function SterilisationPage() {
     <div className="w-full space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
-            Stérilisation
-          </h1>
-          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
-            Boucle stock : prêt → utilisé (sale) → autoclave (en cours) → prêt.
-          </p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
+              Stérilisation
+            </h1>
+            <button
+              type="button"
+              title="Boucle stock : prêt → utilisé (sale) → autoclave (en cours) → prêt."
+              aria-label="Flux de stérilisation"
+              className="text-[var(--ds-text-muted)] transition-colors hover:text-[var(--ds-text)]"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <AnimatedButton onClick={() => setShowCycleModal(true)}>
           <Plus className="h-4 w-4" strokeWidth={2} />

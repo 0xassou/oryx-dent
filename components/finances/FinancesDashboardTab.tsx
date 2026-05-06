@@ -221,7 +221,12 @@ function getRealTransactions() {
         montantPaye?: number;
       }) => ({
         id: f.id ?? "",
-        dateHeure: f.date ?? "",
+        dateHeure: (() => {
+          const dt = f.date ? parseFactureDateFr(f.date) : null;
+          return dt
+            ? dt.toLocaleDateString("fr-DZ", { day: "numeric", month: "long", year: "numeric" })
+            : (f.date ?? "");
+        })(),
         patient: f.patient ?? "",
         acteMotif: "Soins dentaires",
         montant: f.montantTotal ?? 0,

@@ -12,22 +12,22 @@ interface ActivityItem {
 const typeConfig = {
   rdv: {
     badgeClass:
-      "bg-[var(--ds-primary-soft)] text-[var(--ds-primary)] border border-[var(--ds-primary-border)]",
+      "bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)] border border-[var(--ds-primary-border)]",
     label: "RDV",
   },
   paiement: {
     badgeClass:
-      "bg-[var(--ds-bg)] text-[var(--ds-primary-hover)] border border-[var(--ds-primary-border)]",
+      "bg-emerald-50 text-emerald-700 border border-emerald-200",
     label: "Paiement",
   },
   patient: {
     badgeClass:
-      "bg-[var(--ds-surface-2)] text-[var(--ds-text)] border border-[var(--ds-primary-border)]",
+      "bg-cyan-50 text-cyan-700 border border-cyan-200",
     label: "Patient",
   },
   stock: {
     badgeClass:
-      "bg-[var(--ds-bg)] text-[var(--ds-text-muted)] border border-[var(--ds-primary-border)]",
+      "bg-amber-50 text-amber-700 border border-amber-200",
     label: "Stock",
   },
 };
