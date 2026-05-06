@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   Edit2,
   Package,
@@ -592,6 +593,9 @@ export default function StocksPage() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Produit | null>(null);
   const [hoveredProductId, setHoveredProductId] = useState<string | null>(null);
+  const [showOnlyRupture, setShowOnlyRupture] = useState(false);
+  const [sortCol, setSortCol] = useState<"quantite" | "peremption" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const modalMode = editingProduct ? "edit" : "create";
 
   // Hydratation Next.js-safe : on recharge le stock (et l'historique) depuis localStorage au montage.
@@ -683,9 +687,10 @@ export default function StocksPage() {
         search === "" ||
         p.nom.toLowerCase().includes(search.toLowerCase());
       const matchCat = filtre === "" || p.categorie === filtre;
-      return matchSearch && matchCat;
+      const matchRupture = !showOnlyRupture || computeStatut(p) === "Rupture";
+      return matchSearch && matchCat && matchRupture;
     });
-  }, [produits, search, filtre]);
+  }, [produits, search, filtre, showOnlyRupture]);
 
   const groupedByCategory = useMemo(() => {
     const map = new Map<Categorie, Produit[]>();
@@ -701,8 +706,25 @@ export default function StocksPage() {
     for (const cat of map.keys()) {
       if (!order.includes(cat)) order.push(cat);
     }
-    return order.map((cat) => [cat, map.get(cat)!] as const);
-  }, [filtered]);
+    return order.map((cat) => {
+      let items = map.get(cat)!;
+      if (sortCol) {
+        items = [...items].sort((a, b) => {
+          let va: number;
+          let vb: number;
+          if (sortCol === "quantite") {
+            va = a.quantite;
+            vb = b.quantite;
+          } else {
+            va = parsePeremptionDisplayToDate(a.peremption)?.getTime() ?? Infinity;
+            vb = parsePeremptionDisplayToDate(b.peremption)?.getTime() ?? Infinity;
+          }
+          return sortDir === "asc" ? va - vb : vb - va;
+        });
+      }
+      return [cat, items] as const;
+    });
+  }, [filtered, sortCol, sortDir]);
 
   const totalProduits = produits.length;
   const enRupture = produits.filter(
@@ -729,6 +751,34 @@ export default function StocksPage() {
     editingStock != null &&
     stockAdjustQtyValid &&
     !stockRemoveExceedsAvailable;
+
+  function handleRuptureKpiClick() {
+    const ruptureCategories = new Set(
+      produits
+        .filter((p) => computeStatut(p) === "Rupture")
+        .map((p) => p.categorie),
+    );
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      for (const cat of ruptureCategories) next.delete(cat);
+      try {
+        localStorage.setItem(STOCK_COLLAPSED_CATS_LS_KEY, JSON.stringify([...next]));
+      } catch { /* ignore */ }
+      return next;
+    });
+    setFiltre("");
+    setSearch("");
+    setShowOnlyRupture(true);
+  }
+
+  function handleSort(col: "quantite" | "peremption") {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
 
   function openCreateModal() {
     setEditingProduct(null);
@@ -847,7 +897,17 @@ export default function StocksPage() {
           </div>
         </div>
 
-        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+        <button
+          type="button"
+          onClick={handleRuptureKpiClick}
+          className={[
+            "kpi-card flex w-full items-center gap-4 rounded-2xl border p-5 shadow-sm text-left transition-shadow hover:shadow-md",
+            showOnlyRupture
+              ? "border-red-400 bg-red-100 ring-2 ring-red-300"
+              : "border-red-200 bg-red-50",
+          ].join(" ")}
+          title="Voir les produits en rupture"
+        >
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-600">
             <AlertTriangle className="h-5 w-5" />
           </span>
@@ -859,7 +919,7 @@ export default function StocksPage() {
               {enRupture}
             </p>
           </div>
-        </div>
+        </button>
 
         <div className="kpi-card flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
@@ -883,14 +943,14 @@ export default function StocksPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setShowOnlyRupture(false); }}
             placeholder="Rechercher un produit…"
             className="w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 py-2.5 pl-9 pr-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
           />
         </div>
         <select
           value={filtre}
-          onChange={(e) => setFiltre(e.target.value as Categorie | "")}
+          onChange={(e) => { setFiltre(e.target.value as Categorie | ""); setShowOnlyRupture(false); }}
           className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
         >
           <option value="">Toutes les catégories</option>
@@ -921,13 +981,35 @@ export default function StocksPage() {
                   Produit
                 </th>
                 <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                  Quantité
+                  <button
+                    type="button"
+                    onClick={() => handleSort("quantite")}
+                    className="inline-flex items-center gap-1 transition-colors hover:text-[var(--ds-text)]"
+                  >
+                    Quantité
+                    {sortCol === "quantite" ? (
+                      sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronUp className="h-3 w-3 opacity-30" />
+                    )}
+                  </button>
                 </th>
                 <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Statut
                 </th>
                 <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                  Péremption
+                  <button
+                    type="button"
+                    onClick={() => handleSort("peremption")}
+                    className="inline-flex items-center gap-1 transition-colors hover:text-[var(--ds-text)]"
+                  >
+                    Péremption
+                    {sortCol === "peremption" ? (
+                      sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronUp className="h-3 w-3 opacity-30" />
+                    )}
+                  </button>
                 </th>
                 <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Édition

@@ -460,27 +460,34 @@ export function FinancesDashboardTab() {
 
   function BadgeStatut({ statut }: { statut: string }) {
     const s = statut.toLowerCase();
-    const isAttente = s.includes("attente");
-    const isEncaisse = s.includes("encaiss") || s.includes("encais");
+    const base = "rounded-full px-2.5 py-0.5 text-xs font-medium ring-1";
 
-    if (isEncaisse && !isAttente) {
+    if (s === "payé" || s === "paye") {
       return (
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/20">
+        <span className={`${base} bg-emerald-50 text-emerald-700 ring-emerald-600/20`}>
           {statut}
         </span>
       );
     }
 
-    if (isAttente) {
+    if (s.includes("partiel")) {
       return (
-        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-600/20">
+        <span className={`${base} bg-cyan-50 text-cyan-800 ring-cyan-600/25`}>
+          {statut}
+        </span>
+      );
+    }
+
+    if (s.includes("attente")) {
+      return (
+        <span className={`${base} bg-amber-50 text-amber-700 ring-amber-600/20`}>
           {statut}
         </span>
       );
     }
 
     return (
-      <span className="rounded-full bg-[var(--ds-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ds-text)] ring-1 ring-[var(--ds-primary-border)]">
+      <span className={`${base} bg-[var(--ds-primary-soft)] text-[var(--ds-text)] ring-[var(--ds-primary-border)]`}>
         {statut}
       </span>
     );

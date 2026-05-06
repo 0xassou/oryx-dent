@@ -624,8 +624,8 @@ export default function LaboratoirePage() {
                   {conflit && cmd.statut !== "POSE" ? <UrgenceBadge /> : null}
                   {pretAPoser ? <PretBadge /> : null}
                   <div className="flex-1" />
-                  <span className="flex items-center gap-1 text-[11px] text-[var(--ds-text-muted)]">
-                    <Building2 className="h-3 w-3" strokeWidth={1.8} />
+                  <span className="flex items-center gap-1 text-sm font-medium text-[var(--ds-text)]">
+                    <Building2 className="h-3 w-3 text-[var(--ds-text-muted)]" strokeWidth={1.8} />
                     {cmd.labo}
                   </span>
                 </div>
