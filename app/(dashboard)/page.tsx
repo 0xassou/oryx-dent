@@ -418,35 +418,52 @@ function ActesTooltip({
 
 function ActesDoughnutChart({ data }: { data: ActeChartDatum[] }) {
   const totalPatients = data.reduce((a, b) => a + b.value, 0);
+  const dominant = [...data].sort((a, b) => b.value - a.value)[0];
+  const dominantPct =
+    dominant && totalPatients > 0
+      ? Math.round((dominant.value / totalPatients) * 100)
+      : 0;
   return (
     <div className="flex min-w-0 w-full flex-col items-center">
-      <ResponsiveContainer width="100%" height={250}>
-        <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-          <Pie
-            data={data as ActeChartDatum[]}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={58}
-            outerRadius={88}
-            paddingAngle={2}
-            stroke="none"
-          >
-            {data.map((entry, i) => (
-              <Cell
-                key={i}
-                fill={entry.color}
-                className="cursor-pointer outline-none transition-opacity hover:opacity-90 focus:opacity-90"
-              />
-            ))}
-          </Pie>
-          <Tooltip
-            content={<ActesTooltip />}
-            cursor={{ fill: "transparent" }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+      <div className="relative w-full">
+        <ResponsiveContainer width="100%" height={250}>
+          <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+            <Pie
+              data={data as ActeChartDatum[]}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={58}
+              outerRadius={88}
+              paddingAngle={2}
+              stroke="none"
+            >
+              {data.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={entry.color}
+                  className="cursor-pointer outline-none transition-opacity hover:opacity-90 focus:opacity-90"
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              content={<ActesTooltip />}
+              cursor={{ fill: "transparent" }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        {dominant && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <p className="text-xl font-bold leading-none tabular-nums text-[var(--ds-text)]">
+              {dominantPct}%
+            </p>
+            <p className="mt-1 max-w-[72px] text-center text-[10px] font-medium leading-tight text-[var(--ds-text-muted)]">
+              {dominant.name}
+            </p>
+          </div>
+        )}
+      </div>
       <ul className="mt-4 w-full space-y-2 border-t border-[var(--ds-primary-border)] pt-4">
         {data.map((s) => (
           <li

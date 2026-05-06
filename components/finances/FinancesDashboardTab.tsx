@@ -709,26 +709,6 @@ export function FinancesDashboardTab() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl border border-[var(--ds-primary)]/20 bg-[var(--ds-primary-soft)] px-5 py-3">
-        <div className="flex items-center gap-3">
-          <BarChart2 className="h-5 w-5 text-[var(--ds-primary)]" />
-          <div>
-            <p className="text-sm font-semibold text-[var(--ds-primary)]">
-              Statistiques avancées
-            </p>
-            <p className="text-xs text-[var(--ds-text-muted)]">
-              Performance, tendances et analyse détaillée
-            </p>
-          </div>
-        </div>
-        <Link
-          href="/statistiques"
-          className="flex items-center gap-1.5 rounded-xl bg-[var(--ds-primary)] px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-[var(--ds-primary-hover)]"
-        >
-          Voir les stats →
-        </Link>
-      </div>
-
       <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -845,6 +825,26 @@ export function FinancesDashboardTab() {
             </div>
           );
         })()}
+      </div>
+
+      <div className="flex items-center justify-between rounded-2xl border border-[var(--ds-primary)]/20 bg-[var(--ds-primary-soft)] px-5 py-3">
+        <div className="flex items-center gap-3">
+          <BarChart2 className="h-5 w-5 text-[var(--ds-primary)]" />
+          <div>
+            <p className="text-sm font-semibold text-[var(--ds-primary)]">
+              Statistiques avancées
+            </p>
+            <p className="text-xs text-[var(--ds-text-muted)]">
+              Performance, tendances et analyse détaillée
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/statistiques"
+          className="flex items-center gap-1.5 rounded-xl bg-[var(--ds-primary)] px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-[var(--ds-primary-hover)]"
+        >
+          Voir les stats →
+        </Link>
       </div>
 
       {/* Layout principal */}
