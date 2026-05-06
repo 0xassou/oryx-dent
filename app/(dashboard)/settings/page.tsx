@@ -8,6 +8,7 @@ import {
   FlaskConical,
   Settings,
   Tags,
+  Upload,
   UserCircle,
   Users,
 } from "lucide-react";
@@ -357,11 +358,16 @@ export default function SettingsPage() {
                   </h2>
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-medium text-[var(--ds-text)]">
-                        Authentification à double facteur (2FA)
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-[var(--ds-text)]">
+                          Authentification à double facteur (2FA)
+                        </p>
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          Recommandé
+                        </span>
+                      </div>
                       <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
-                        Renforcez la sécurité de votre compte praticien.
+                        Protégez votre compte avec un code à usage unique.
                       </p>
                     </div>
                     <Toggle checked={twoFA} onChange={setTwoFA} />
@@ -761,7 +767,7 @@ export default function SettingsPage() {
 
                 <div className={`mt-8 ${fieldRow}`}>
                   <span className={labelClass}>Logo du cabinet (PNG / JPG)</span>
-                  <label className="flex w-full min-w-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/50 p-2.5 py-10 text-center text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-surface)]">
+                  <label className="flex w-full min-w-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/50 px-4 py-10 text-center transition-colors hover:border-[color:var(--ds-primary)] hover:bg-[var(--ds-surface)]">
                     <input
                       type="file"
                       accept="image/png,image/jpeg"
@@ -779,7 +785,10 @@ export default function SettingsPage() {
                         reader.readAsDataURL(file);
                       }}
                     />
-                    Importer une image
+                    <Upload className="h-7 w-7 text-[var(--ds-text-muted)]" strokeWidth={1.5} />
+                    <span className="text-sm font-medium text-[var(--ds-text-muted)]">
+                      Glissez ou cliquez pour importer · PNG/JPG · Max 2 Mo
+                    </span>
                   </label>
                   {settings.logoBase64 ? (
                     <img
