@@ -218,7 +218,7 @@ function ListView({
       {/* Bande 7 jours */}
       <div className="grid grid-cols-7 gap-2 rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         {weekCols.map((col) => {
-          const hasRdv = rdvs.some((r) => r.dateKey === col.iso);
+          const rdvCount = rdvs.filter((r) => r.dateKey === col.iso).length;
           const isSelected = col.iso === selectedDayIso;
           return (
             <button
@@ -247,8 +247,12 @@ function ListView({
               </span>
               <span
                 className={[
-                  "h-1 w-1 rounded-full transition-opacity",
-                  hasRdv ? "bg-[var(--ds-info)] opacity-100" : "opacity-0",
+                  "h-1.5 w-1.5 rounded-full transition-colors",
+                  rdvCount === 0
+                    ? "bg-emerald-500"
+                    : rdvCount <= 2
+                    ? "bg-orange-400"
+                    : "bg-red-500",
                 ].join(" ")}
               />
             </button>
@@ -519,7 +523,7 @@ function CalendarView({
                     >
                       <div className="flex min-w-0 flex-wrap items-baseline gap-1">
                         <p className="min-w-0 truncate text-xs leading-tight" style={calStyle.patientStyle}>
-                          {rdv.patient}
+                          {rdv.patient.length > 15 ? rdv.patient.slice(0, 15) + "…" : rdv.patient}
                         </p>
                         {rdv.rdvType === "direct" && (
                           <span className="shrink-0 rounded bg-white/15 px-1 text-[9px] font-bold uppercase text-white">
