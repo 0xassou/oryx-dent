@@ -31,10 +31,10 @@ interface AddPatientModalProps {
 }
 
 const inputBase =
-  "mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+  "mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-[color:var(--ds-primary)] focus-visible:ring-2 focus-visible:ring-[color:var(--ds-primary)]/20";
 
 const inputError =
-  "mt-1.5 w-full rounded-xl border border-red-400 bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-red-500 focus:ring-2 focus:ring-red-400/20";
+  "mt-1.5 w-full rounded-xl border border-red-400 bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-subtle)] focus:border-red-500 focus-visible:ring-2 focus-visible:ring-red-400/20";
 
 const labelBase = "block text-sm font-medium text-[var(--ds-text)]";
 
@@ -42,7 +42,7 @@ const sectionTitle =
   "text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]";
 
 const checkboxBase =
-  "h-4 w-4 rounded-lg border border-[var(--ds-primary-border)] accent-[color:var(--ds-primary)] text-[color:var(--ds-primary)] transition-colors focus:ring-2 focus:ring-[color:var(--ds-primary)]/20 focus:ring-offset-0";
+  "h-4 w-4 rounded-lg border border-[var(--ds-primary-border)] accent-[color:var(--ds-primary)] text-[color:var(--ds-primary)] transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--ds-primary)]/20 focus-visible:ring-offset-0";
 
 type FormErrors = {
   nom?: string;

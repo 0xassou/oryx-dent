@@ -869,6 +869,7 @@ export default function DashboardPage() {
   const [labCommandes, setLabCommandes] = useState<LaboratoireCommande[]>([]);
   const [rdvCount, setRdvCount] = useState(0);
   const [rdvToConfirmCount, setRdvToConfirmCount] = useState(0);
+  const [totalEncaisseToday, setTotalEncaisseToday] = useState(0);
   const [patientCount, setPatientCount] = useState(0);
   const [patientsThisMonthCount, setPatientsThisMonthCount] = useState(0);
   const [actesChartData, setActesChartData] = useState<ActeChartDatum[]>(
@@ -932,6 +933,32 @@ export default function DashboardPage() {
       /* ignore */
     }
     setRdvToConfirmCount(toConfirm);
+
+    let encaisseToday = 0;
+    try {
+      const rawDocs = localStorage.getItem("dental_dashboard_docs");
+      if (rawDocs) {
+        const data = JSON.parse(rawDocs) as unknown;
+        if (Array.isArray(data)) {
+          for (const item of data) {
+            if (!item || typeof item !== "object") continue;
+            const o = item as Record<string, unknown>;
+            const dateStr =
+              typeof o.date === "string"
+                ? o.date
+                : typeof o.dateISO === "string"
+                  ? o.dateISO
+                  : "";
+            if (!dateStr.startsWith(todayKey)) continue;
+            const mp = typeof o.montantPaye === "number" ? o.montantPaye : 0;
+            encaisseToday += mp;
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setTotalEncaisseToday(encaisseToday);
 
     const patients = readPatientsFromStorage();
     setPatientCount(patients.length);
@@ -1127,6 +1154,30 @@ export default function DashboardPage() {
               <p className="mt-1 text-sm text-[var(--ds-text-muted)]">{todayLong}</p>
             </div>
           </div>
+
+          {/* Daily Briefing — 3 métriques inline */}
+          <div className="hidden items-center gap-5 rounded-2xl bg-[var(--ds-bg)]/70 px-5 py-3 sm:flex">
+            <div className="text-center">
+              <p className="text-lg font-bold tabular-nums text-[color:var(--ds-text)]">
+                {Math.max(0, rdvCount - rdvToConfirmCount)}
+              </p>
+              <p className="text-[11px] text-[var(--ds-text-muted)]">RDV confirmés</p>
+            </div>
+            <div className="h-8 w-px bg-[var(--ds-primary-border)]" />
+            <div className="text-center">
+              <p className="text-lg font-bold tabular-nums text-amber-600">{rdvToConfirmCount}</p>
+              <p className="text-[11px] text-[var(--ds-text-muted)]">En attente</p>
+            </div>
+            <div className="h-8 w-px bg-[var(--ds-primary-border)]" />
+            <div className="text-center">
+              <p className="text-lg font-bold tabular-nums text-emerald-700">
+                {totalEncaisseToday.toLocaleString("fr-DZ")}
+                <span className="ml-0.5 text-sm font-medium"> DA</span>
+              </p>
+              <p className="text-[11px] text-[var(--ds-text-muted)]">Encaissé du jour</p>
+            </div>
+          </div>
+
           <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100/80 lg:px-4 lg:text-sm">
             <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
             Cabinet Ouvert

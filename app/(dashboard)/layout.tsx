@@ -179,7 +179,7 @@ export default function DashboardLayout({
                       setSearchQuery("");
                     }
                   }}
-                  className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] pl-9 pr-3 text-sm text-[var(--ds-text)] outline-none transition-all placeholder:text-[var(--ds-text-muted)] focus:border-[color-mix(in_srgb,var(--ds-primary)_40%,transparent)] focus:bg-[var(--ds-surface)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ds-primary)_8%,transparent)] lg:pr-12"
+                  className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] pl-9 pr-3 text-sm text-[var(--ds-text)] outline-none transition-all placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:bg-[var(--ds-surface)] focus-visible:ring-2 focus-visible:ring-[color:var(--ds-primary)]/20 lg:pr-12"
                 />
                 <kbd className="pointer-events-none absolute right-3 hidden items-center gap-0.5 rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--ds-text-muted)] shadow-sm lg:flex">
                   ⌘K

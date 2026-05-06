@@ -36,7 +36,7 @@ interface NewAppointmentModalProps {
 }
 
 const inputBase =
-  "mt-0 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20";
+  "mt-0 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]/80 px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[color:var(--ds-primary)] focus-visible:ring-2 focus-visible:ring-[color:var(--ds-primary)]/20";
 
 const fieldStack = "flex flex-col gap-2";
 
