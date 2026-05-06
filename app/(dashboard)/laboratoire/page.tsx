@@ -621,7 +621,7 @@ export default function LaboratoirePage() {
                     {cmd.patient}
                   </span>
                   <StatusBadgeInline statut={statutLabel} />
-                  {conflit ? <UrgenceBadge /> : null}
+                  {conflit && cmd.statut !== "POSE" ? <UrgenceBadge /> : null}
                   {pretAPoser ? <PretBadge /> : null}
                   <div className="flex-1" />
                   <span className="flex items-center gap-1 text-[11px] text-[var(--ds-text-muted)]">

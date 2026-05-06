@@ -6,9 +6,9 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Edit2,
   Package,
   PackageOpen,
-  Pencil,
   Plus,
   Search,
   Tag,
@@ -1068,7 +1068,7 @@ export default function StocksPage() {
                                   aria-label={`Modifier ${p.nom}`}
                                   title="Modifier"
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Edit2 className="h-4 w-4" />
                                 </button>
                                 <button
                                   type="button"
