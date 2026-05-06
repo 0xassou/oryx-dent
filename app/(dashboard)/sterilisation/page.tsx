@@ -517,6 +517,10 @@ export default function SterilisationPage() {
 
   const [showCycleModal, setShowCycleModal] = useState(false);
   const [newOperateur, setNewOperateur] = useState(DEFAULT_OPERATORS[0]);
+  const [newHeure, setNewHeure] = useState<string>(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
   const [newBowieDick, setNewBowieDick] = useState<CycleTestResult>("conforme");
   const [newHelix, setNewHelix] = useState<CycleTestResult>("conforme");
   const [kitCounts, setKitCounts] = useState<Record<KitTypeId, number>>({
@@ -711,7 +715,10 @@ export default function SterilisationPage() {
       }
     }
 
-    const nowISO = new Date().toISOString();
+    const [hh, mm] = newHeure ? newHeure.split(":").map(Number) : [new Date().getHours(), new Date().getMinutes()];
+    const dateWithTime = new Date();
+    dateWithTime.setHours(hh, mm, 0, 0);
+    const nowISO = dateWithTime.toISOString();
     const numero =
       cycles.length === 0
         ? 1
@@ -770,6 +777,8 @@ export default function SterilisationPage() {
     setNewHelix("conforme");
     setKitCounts({ examen: 0, chirurgie: 0, endo: 0 });
     setCycleError(null);
+    const now = new Date();
+    setNewHeure(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
   }
 
   function utiliserKitById(kitId: string) {
@@ -1311,6 +1320,9 @@ export default function SterilisationPage() {
                         </td>
                         <td className="py-3 pr-4 text-[var(--ds-text-muted)]">
                           {formatDateShort(c.date)}
+                          <span className="ml-1.5 tabular-nums text-xs">
+                            {new Date(c.date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
                         </td>
                         <td className="py-3 pr-4 text-[var(--ds-text-muted)]">
                           {c.operateur}
@@ -1408,6 +1420,18 @@ export default function SterilisationPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[var(--ds-text)]">
+                  Heure du cycle
+                </label>
+                <input
+                  type="time"
+                  value={newHeure}
+                  onChange={(e) => setNewHeure(e.target.value)}
+                  className="mt-1.5 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

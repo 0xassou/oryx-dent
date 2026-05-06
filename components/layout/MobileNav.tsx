@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -20,6 +20,7 @@ const NAV_ITEMS: { key: NavKey; href: string; icon: typeof LayoutDashboard; labe
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const { role, ready } = useRole();
   const items = NAV_ITEMS.filter((i) => !ready || canAccessNav(role, i.key));
   const leftItems = items.slice(0, Math.min(2, items.length));
@@ -109,7 +110,7 @@ export default function MobileNav() {
         <button
           type="button"
           onClick={() => {
-            window.location.href = "/planning?newRdv=true";
+            router.push("/planning?newRdv=true");
           }}
           style={{
             width: "74px",
