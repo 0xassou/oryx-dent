@@ -11,8 +11,9 @@ import {
   Download,
   ExternalLink,
   Eye,
-  FileImage,
+  File,
   FileText,
+  ImageIcon,
   Plus,
   UploadCloud,
   X,
@@ -554,59 +555,52 @@ function financeStatutFromReste(
 }
 
 function PatientDocumentThumbnail({ doc }: { doc: PatientDocument }) {
-  const isCbct =
-    doc.type === "cbct" || doc.nom.toLowerCase().includes("cbct");
-  if (isCbct) {
+  const isImagerie =
+    doc.type === "image" ||
+    doc.type === "cbct" ||
+    doc.nom.toLowerCase().includes("cbct");
+
+  // Image ou CBCT avec URL réelle → aperçu photo
+  if (isImagerie && doc.url) {
+    return <img src={doc.url} alt="" className="h-full w-full object-cover" />;
+  }
+
+  // Image / CBCT sans URL → fond bleu + icône imagerie
+  if (isImagerie) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[var(--ds-primary-border)]">
-        <FileText className="h-10 w-10 text-[var(--ds-text-muted)]" aria-hidden />
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-blue-50">
+        <ImageIcon className="h-10 w-10 text-blue-400" aria-hidden />
+        <span className="text-[10px] font-medium uppercase tracking-wide text-blue-400">
+          Imagerie
+        </span>
       </div>
     );
   }
+
+  // PDF → fond blanc + icône rouge
   if (doc.type === "pdf") {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[var(--ds-primary-soft)]">
-        {/* icône fichier PDF (asset demandé) */}
-        <img
-          src="/image_1.png"
-          alt=""
-          className="h-16 w-16 object-contain opacity-90"
-        />
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 border border-[var(--ds-primary-border)] bg-white">
+        <FileText className="h-10 w-10 text-red-400" aria-hidden />
+        <span className="text-[10px] font-medium uppercase tracking-wide text-red-400">
+          PDF
+        </span>
       </div>
     );
   }
-  if (doc.type === "image" && doc.url) {
-    return (
-      <img
-        src={doc.url}
-        alt=""
-        className="h-full w-full object-cover"
-      />
-    );
-  }
-  if (doc.type === "image") {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-[var(--ds-primary-soft)]">
-        <img
-          src="/image_0.png"
-          alt=""
-          className="h-16 w-16 object-contain opacity-90"
-        />
-      </div>
-    );
-  }
+
+  // Autre type avec URL prévisualisable
   if (doc.url) {
-    return (
-      <img
-        src={doc.url}
-        alt=""
-        className="h-full w-full object-cover"
-      />
-    );
+    return <img src={doc.url} alt="" className="h-full w-full object-cover" />;
   }
+
+  // Fallback générique → fond slate + icône File
   return (
-    <div className="flex h-full w-full items-center justify-center bg-[var(--ds-primary-border)]">
-      <FileImage className="h-10 w-10 text-[var(--ds-text-muted)]" aria-hidden />
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-50">
+      <File className="h-10 w-10 text-slate-400" aria-hidden />
+      <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+        Fichier
+      </span>
     </div>
   );
 }

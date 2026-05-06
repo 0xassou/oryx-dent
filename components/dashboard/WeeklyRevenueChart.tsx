@@ -59,7 +59,7 @@ export function WeeklyRevenueChart({
             >
               <div
                 className={[
-                  "w-full rounded-t-[4px] transition-all duration-200",
+                  "w-full rounded-t-[4px] transition-[height] duration-200",
                   isEmpty
                     ? "bg-[var(--ds-primary-border)]"
                     : day.isToday
