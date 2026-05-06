@@ -216,7 +216,7 @@ function ListView({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       {/* Bande 7 jours */}
-      <div className="grid grid-cols-7 gap-2 rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div className="grid grid-cols-7 gap-1 rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         {weekCols.map((col) => {
           const rdvCount = rdvs.filter((r) => r.dateKey === col.iso).length;
           const isSelected = col.iso === selectedDayIso;
@@ -226,20 +226,20 @@ function ListView({
               type="button"
               onClick={() => onDaySelect(col.iso)}
               className={[
-                "flex flex-col items-center gap-1.5 rounded-xl px-1 py-2 transition-all",
+                "flex flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-all",
                 isSelected
                   ? "bg-[var(--ds-primary-soft)]"
                   : "hover:bg-[var(--ds-primary-soft)]/50",
               ].join(" ")}
             >
-              <span className="text-sm font-medium uppercase tracking-[0.8px] text-[var(--ds-text-muted)]">
+              <span className="text-[10px] font-medium uppercase tracking-[0.8px] text-[var(--ds-text-muted)]">
                 {col.weekdayShort}
               </span>
               <span
                 className={[
-                  "flex h-8 w-8 items-center justify-center text-[18px] font-bold leading-none",
+                  "flex h-7 w-7 items-center justify-center text-[14px] font-bold leading-none",
                   isSelected
-                    ? "rounded-[10px] bg-[var(--ds-primary)] text-white"
+                    ? "rounded-[8px] bg-[var(--ds-primary)] text-white"
                     : "text-[var(--ds-text)]",
                 ].join(" ")}
               >
@@ -669,9 +669,9 @@ function PlanningPageContent() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* ── Header ── */}
-      <div className="mb-6 flex shrink-0 flex-col gap-4 border-b border-[var(--ds-primary-border)]/50 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="mb-4 flex shrink-0 flex-col gap-2 border-b border-[var(--ds-primary-border)]/50 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 sm:flex-nowrap sm:gap-x-4">
-          <h1 className="shrink-0 text-3xl font-bold leading-none tracking-tight text-[var(--ds-text)]">
+          <h1 className="shrink-0 text-2xl font-bold text-[var(--ds-text)]">
             Planning
           </h1>
           <p className="ml-3 hidden min-w-0 truncate text-base text-[var(--ds-text-muted)] sm:block">
@@ -681,13 +681,20 @@ function PlanningPageContent() {
             <button
               type="button"
               onClick={goPrev}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 text-lg shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
               aria-label="Précédent"
             >
               <ChevronLeft className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
             </button>
-            <label className="flex h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2.5 shadow-lg transition-colors hover:bg-[var(--ds-bg)]">
+            <label className="relative flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-1.5 shadow-lg transition-colors hover:bg-[var(--ds-bg)]">
               <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ds-text-muted)]" aria-hidden />
+              <span className="text-sm font-medium text-[color:var(--ds-text)]">
+                {new Intl.DateTimeFormat("fr-DZ", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                }).format(activeDateForPicker)}
+              </span>
               <input
                 type="date"
                 value={formatDateKey(activeDateForPicker)}
@@ -705,13 +712,14 @@ function PlanningPageContent() {
                     setListSelectedDay(formatDateKey(nextDate));
                   }
                 }}
-                className="h-11 min-w-[120px] border-0 bg-transparent px-4 py-2.5 text-base font-medium text-[color:var(--ds-text)] outline-none [color-scheme:light]"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label="Sélectionner une date"
               />
             </label>
             <button
               type="button"
               onClick={goNext}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 text-lg shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
               aria-label="Suivant"
             >
               <ChevronRight className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
@@ -719,7 +727,7 @@ function PlanningPageContent() {
             <button
               type="button"
               onClick={goToday}
-              className="h-11 rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 px-4 py-2.5 text-base font-medium text-[color:var(--ds-text)] shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
+              className="rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 px-3 py-1.5 text-sm font-medium text-[color:var(--ds-text)] shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
             >
               Aujourd&apos;hui
             </button>

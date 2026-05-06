@@ -72,18 +72,18 @@ export function KpiCard({
   return (
     <div
       className={[
-        "rounded-2xl border px-6 py-6",
+        "rounded-2xl border px-4 py-3",
         t.card,
       ].join(" ")}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-base font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
           {label}
         </span>
         {icon ? (
           <div
             className={[
-              "flex h-12 w-12 items-center justify-center rounded-2xl",
+              "flex h-10 w-10 items-center justify-center rounded-xl",
               t.iconWrap,
               t.icon,
               "[&>svg]:h-4 [&>svg]:w-4",
@@ -95,7 +95,7 @@ export function KpiCard({
         ) : null}
       </div>
 
-      <p className="font-['DM_Mono',monospace] text-4xl font-bold text-[color:var(--ds-text)]">
+      <p className="font-['DM_Mono',monospace] text-3xl font-bold text-[color:var(--ds-text)]">
         {value}
         {unit ? (
           <span className="ml-1 font-['Sora',sans-serif] text-xs font-medium text-[var(--ds-text-muted)]">

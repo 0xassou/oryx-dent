@@ -883,7 +883,7 @@ export default function StocksPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 lg:grid-cols-3">
-        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-violet-200 bg-violet-50 px-6 py-6 shadow-sm">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-violet-200 bg-violet-50 px-6 py-3 shadow-sm">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-[color:var(--ds-primary)]">
             <Package className="h-5 w-5" />
           </span>
@@ -901,7 +901,7 @@ export default function StocksPage() {
           type="button"
           onClick={handleRuptureKpiClick}
           className={[
-            "kpi-card flex w-full items-center gap-4 rounded-2xl border px-6 py-6 shadow-sm text-left transition-shadow hover:shadow-md",
+            "kpi-card flex w-full items-center gap-4 rounded-2xl border px-6 py-3 shadow-sm text-left transition-shadow hover:shadow-md",
             showOnlyRupture
               ? "border-red-400 bg-red-100 ring-2 ring-red-300"
               : "border-red-200 bg-red-50",
@@ -921,7 +921,7 @@ export default function StocksPage() {
           </div>
         </button>
 
-        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-6 shadow-sm">
+        <div className="kpi-card flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-3 shadow-sm">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
             <Clock className="h-5 w-5" />
           </span>

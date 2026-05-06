@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
+import { KpiCard } from "@/components/dashboard/KpiCard";
 import { LabWhatsAppButton } from "@/components/laboratoire/LabWhatsAppButton";
 import { PatientCombobox } from "@/components/laboratoire/PatientCombobox";
 import { StatusBadge } from "@/components/laboratoire/StatusBadge";
@@ -441,34 +442,27 @@ export default function LaboratoirePage() {
 
       <div className="grid grid-cols-1 gap-3 pb-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          icon={<ClipboardList className="h-5 w-5" strokeWidth={1.8} />}
-          iconClass="bg-violet-100 text-[color:var(--ds-primary)]"
-          valueClass="text-[22px] text-[color:var(--ds-text)]"
-          bgClass="border-violet-200 bg-violet-50"
+          kpi="rdv"
+          icon={<ClipboardList />}
           value={commandes.length}
           label="Total commandes"
         />
         <KpiCard
-          icon={<AlertTriangle className="h-5 w-5" strokeWidth={1.8} />}
-          iconClass="bg-red-100 text-red-600"
-          valueClass="text-[22px] text-red-600"
-          bgClass="border-red-200 bg-red-50"
+          kpi="stock"
+          icon={<AlertTriangle />}
           value={urgentCommandes.length}
           label="Urgences"
+          stockAlertCount={urgentCommandes.length}
         />
         <KpiCard
-          icon={<Clock className="h-5 w-5" strokeWidth={1.8} />}
-          iconClass="bg-cyan-100 text-cyan-700"
-          valueClass="text-[22px] text-cyan-700"
-          bgClass="border-cyan-200 bg-cyan-50"
+          kpi="patients"
+          icon={<Clock />}
           value={fabricationCommandes.length}
           label="En fabrication"
         />
         <KpiCard
-          icon={<CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />}
-          iconClass="bg-emerald-100 text-emerald-700"
-          valueClass="text-[22px] text-emerald-700"
-          bgClass="border-emerald-200 bg-emerald-50"
+          kpi="kits"
+          icon={<CheckCircle2 />}
           value={recuCommandes.length}
           label="Reçu au cabinet"
         />
@@ -963,53 +957,6 @@ export default function LaboratoirePage() {
   );
 }
 
-function KpiCard({
-  icon,
-  iconClass,
-  valueClass,
-  value,
-  label,
-  bgClass,
-}: {
-  icon: React.ReactNode;
-  iconClass: string;
-  valueClass: string;
-  value: number | string;
-  label: string;
-  bgClass?: string;
-}) {
-  return (
-    <div
-      className={[
-        "flex items-center gap-4 rounded-2xl border px-6 py-6",
-        bgClass ?? "border-[var(--ds-border)] bg-[var(--ds-surface)]",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
-          iconClass,
-        ].join(" ")}
-        aria-hidden
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-base font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-          {label}
-        </p>
-        <p
-          className={[
-            "mt-1 font-['DM_Mono'] text-4xl font-bold leading-none",
-            valueClass,
-          ].join(" ")}
-        >
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function StatusBadgeInline({ statut }: { statut: string }) {
   const styles: Record<string, string> = {

@@ -43,6 +43,7 @@ import {
   readPatientsFromStorage,
 } from "@/utils/patientData";
 import { syncPatientToDBAction } from "@/app/actions/patients";
+import { toTitleCase } from "@/utils/formatters";
 import { syncAppointmentToDBAction } from "@/app/actions/appointments";
 import {
   appendDirectEntryAppointment,
@@ -418,6 +419,18 @@ function ActesTooltip({
 
 function ActesDoughnutChart({ data }: { data: ActeChartDatum[] }) {
   const totalPatients = data.reduce((a, b) => a + b.value, 0);
+
+  if (totalPatients === 0) {
+    return (
+      <div className="flex w-full flex-col items-center justify-center py-10 text-center">
+        <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ds-bg)]">
+          <span className="text-2xl text-[var(--ds-text-muted)]/40">◔</span>
+        </div>
+        <p className="text-sm text-[var(--ds-text-muted)]">Aucun acte sur 30 j.</p>
+      </div>
+    );
+  }
+
   const dominant = [...data].sort((a, b) => b.value - a.value)[0];
   const dominantPct =
     dominant && totalPatients > 0
@@ -832,10 +845,12 @@ function getDoctorName() {
     const s = JSON.parse(
       localStorage.getItem("dental_settings") ?? "{}",
     ) as Record<string, unknown>;
-    const prenom =
-      typeof s.praticienPrenom === "string" ? s.praticienPrenom : "";
-    const nom =
-      typeof s.praticienNom === "string" ? s.praticienNom : "Assil";
+    const prenom = toTitleCase(
+      typeof s.praticienPrenom === "string" ? s.praticienPrenom : "",
+    );
+    const nom = toTitleCase(
+      typeof s.praticienNom === "string" ? s.praticienNom : "Assil",
+    );
     const initiales = [prenom, nom]
       .filter(Boolean)
       .map((n) => n.charAt(0).toUpperCase())
@@ -1156,7 +1171,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Daily Briefing — 3 métriques inline */}
-          <div className="hidden items-center gap-5 rounded-2xl bg-[var(--ds-bg)]/70 px-5 py-3 sm:flex">
+          <div className="flex shrink-0 items-center gap-5 rounded-2xl bg-[var(--ds-bg)]/70 px-5 py-3">
             <div className="text-center">
               <p className="text-lg font-bold tabular-nums text-[color:var(--ds-text)]">
                 {Math.max(0, rdvCount - rdvToConfirmCount)}
