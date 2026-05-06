@@ -282,10 +282,15 @@ export default function StatistiquesPage() {
           ] as const
         ).map((kpi, i) => {
           const Icon = kpi.icon;
+          const isRecouvrementAlarm = kpi.label === "Recouvrement" && tauxRecouvrement < 30;
           return (
             <div
               key={i}
-              className="kpi-card rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-5 shadow-sm"
+              className={`kpi-card rounded-2xl border p-5 shadow-sm ${
+                isRecouvrementAlarm
+                  ? "border-orange-200 bg-orange-50"
+                  : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)]"
+              }`}
             >
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-xs font-medium text-[var(--ds-text-muted)]">{kpi.label}</p>
@@ -293,7 +298,7 @@ export default function StatistiquesPage() {
                   <Icon className={`h-4 w-4 ${kpi.color}`} />
                 </div>
               </div>
-              <p className="text-2xl font-bold leading-none tabular-nums text-[var(--ds-text)]">
+              <p className={`text-2xl font-bold leading-none tabular-nums ${isRecouvrementAlarm ? "text-orange-700" : "text-[var(--ds-text)]"}`}>
                 {kpi.value}
               </p>
               <p className="mt-1 text-xs text-[var(--ds-text-muted)]">{kpi.sub}</p>
@@ -342,6 +347,8 @@ export default function StatistiquesPage() {
                 contentStyle={{
                   borderRadius: "12px",
                   border: "1px solid #ede9fe",
+                  backgroundColor: "var(--ds-surface)",
+                  color: "var(--ds-text)",
                   fontSize: "12px",
                 }}
                 formatter={(v) => {
