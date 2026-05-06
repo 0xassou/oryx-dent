@@ -254,7 +254,7 @@ function SubTopbar({
   const ghost =
     "inline-flex items-center gap-1.5 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3.5 py-2 text-[13px] font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]";
   const danger =
-    "inline-flex items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-[13px] font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface-2)] hover:text-[var(--ds-text)]";
+    "inline-flex items-center justify-center rounded-xl border border-red-200 bg-[var(--ds-surface)] px-3 py-2 text-[13px] font-medium text-red-600 transition-colors hover:bg-red-50";
   const primary =
     "inline-flex items-center gap-1.5 rounded-xl bg-[var(--ds-primary)] px-3.5 py-2 text-[13px] font-medium text-[var(--ds-bg)] transition-colors hover:bg-[var(--ds-primary-hover)] shadow-sm";
 
@@ -315,32 +315,11 @@ function PatientHero({
 
   return (
     <section
-      className="relative z-0 overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]"
+      className={`relative z-0 overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] border-l-4 ${statut.actif ? "border-l-emerald-500" : "border-l-slate-300"}`}
       style={{ isolation: "isolate" }}
     >
-      {/* Bandeau — hauteur + offset avatar (44px banner + 28px réservés pour l'avatar) */}
-      <div
-        className="relative h-[72px] overflow-hidden"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--ds-primary-hover) 0%, var(--ds-primary) 50%, var(--ds-primary-hover) 100%)",
-        }}
-      >
-        <span
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(45deg, transparent 0 8px, color-mix(in srgb, var(--ds-bg) 22%, transparent) 8px 9px)",
-          }}
-          aria-hidden
-        />
-        <span
-          className="pointer-events-none absolute bottom-1 right-4 select-none font-serif text-[52px] font-bold leading-none tracking-tight text-[var(--ds-bg)] opacity-[0.12]"
-          aria-hidden
-        >
-          ORYX
-        </span>
-      </div>
+      {/* Spacer pour maintenir le positionnement de l'avatar flottant */}
+      <div className="h-8" />
 
       {/* Corps — l'avatar est positionné en absolu pour rester confiné à la card. */}
       <div className="relative px-5 pb-5 pt-10">
