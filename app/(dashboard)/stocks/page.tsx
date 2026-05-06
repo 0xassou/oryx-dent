@@ -245,11 +245,11 @@ function progressBarClass(p: Produit) {
 function badgeClass(statut: Statut) {
   switch (statut) {
     case "En stock":
-      return "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-300";
+      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/45 dark:text-emerald-300 dark:ring-emerald-400/20";
     case "Faible":
-      return "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-400/20";
     case "Rupture":
-      return "border border-red-200 bg-red-100 text-red-800 font-semibold shadow-sm dark:border-red-800/40 dark:bg-red-950/50 dark:text-red-200";
+      return "bg-red-50 text-red-700 ring-1 ring-red-600/20 font-semibold dark:bg-red-950/50 dark:text-red-200 dark:ring-red-400/20";
   }
 }
 

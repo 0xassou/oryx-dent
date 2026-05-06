@@ -771,9 +771,9 @@ function PrimaryButton({
     <button
       type={type}
       disabled={disabled}
-      className="relative mt-1 h-[46px] w-full overflow-hidden rounded-[12px] text-[14px] font-bold tracking-[0.01em] text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+      className="relative mt-1 h-[46px] w-full overflow-hidden rounded-[12px] text-[14px] font-bold tracking-[0.01em] text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(0,0,0,0.22)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
       style={{
-        background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
+        background: "linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-hover) 100%)",
       }}
     >
       {children}
