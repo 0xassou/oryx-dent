@@ -382,7 +382,9 @@ function PatientHero({
               Groupe sanguin
             </dt>
             <dd className="mt-0.5 text-[13px] font-medium text-[var(--ds-text)]">
-              {patient.groupeSanguin ?? "—"}
+              {patient.groupeSanguin && patient.groupeSanguin !== "—"
+                ? patient.groupeSanguin
+                : <span className="text-[12px] font-normal text-[var(--ds-text-muted)]">+ Compléter</span>}
             </dd>
           </div>
           <div>
@@ -390,7 +392,9 @@ function PatientHero({
               Mutuelle
             </dt>
             <dd className="mt-0.5 text-[13px] font-medium text-[var(--ds-text)]">
-              {patient.mutuelle ?? "—"}
+              {patient.mutuelle && patient.mutuelle !== "—"
+                ? patient.mutuelle
+                : <span className="text-[12px] font-normal text-[var(--ds-text-muted)]">+ Compléter</span>}
             </dd>
           </div>
           <div>
