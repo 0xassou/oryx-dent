@@ -16,7 +16,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  GitBranch,
   List,
   Plus,
 } from "lucide-react";
@@ -37,8 +36,8 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// "liste" est la nouvelle vue ajoutée — vue par défaut
-type ViewMode = "liste" | "calendar" | "tree";
+// "liste" est la vue par défaut
+type ViewMode = "liste" | "calendar";
 
 // ─── Helpers date ─────────────────────────────────────────────────────────────
 
@@ -191,69 +190,6 @@ function scrollDayColumnIntoView(scrollRoot: HTMLElement, columnHeaderEl: HTMLEl
   const rootRect = scrollRoot.getBoundingClientRect();
   const left = rect.left - rootRect.left + scrollRoot.scrollLeft - HOUR_COL_WIDTH_PX;
   scrollRoot.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
-}
-
-// ─── Composant Branch (Vue Arbre) ─────────────────────────────────────────────
-
-function Branch({ label, items }: { label: string; items: Rdv[] }) {
-  return (
-    <div className="relative mt-4">
-      <div className="relative mb-4 ml-6 flex items-center gap-6">
-        <div className="flex w-10 shrink-0 justify-center">
-          <span className="relative z-10 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--ds-primary)]/70" />
-        </div>
-        <h3 className="text-sm font-semibold tracking-widest text-[var(--ds-primary)]/70">
-          {label}
-        </h3>
-      </div>
-      <div className="space-y-3">
-        {items.length === 0 && (
-          <div className="ml-12 flex items-start gap-4">
-            <div className="flex w-10 shrink-0 justify-center" aria-hidden />
-            <p className="text-xs text-[var(--ds-text-muted)]">Aucun rendez-vous</p>
-          </div>
-        )}
-        {items.map((rdv) => {
-          const c = rdvColor(rdv);
-          return (
-            <div key={rdv.id} className="relative ml-12 flex items-start gap-4">
-              <div className="flex w-10 shrink-0 justify-center">
-                <span className="relative z-10 mt-1.5 h-3 w-3 flex-shrink-0 rounded-full bg-[var(--ds-primary)]/50" />
-              </div>
-              <div className={["flex-1 rounded-2xl border px-4 py-3", "shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-sm", actBg(rdv.soin), c.border].join(" ")}>
-                <div className="flex items-center gap-3">
-                  <p className="text-sm font-semibold tracking-tight text-[var(--ds-text)]">
-                    {rdv.start}
-                  </p>
-                  <div className="h-px flex-1 rounded-full bg-[var(--ds-primary-border)]/70" />
-                </div>
-                <div className="mt-1 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="text-xs font-semibold tracking-tight text-[color:var(--ds-text)]">
-                        {rdv.patient}
-                      </p>
-                      {rdv.rdvType === "direct" && (
-                        <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-800">
-                          Direct
-                        </span>
-                      )}
-                    </div>
-                    <p className={`mt-0.5 text-xs font-medium ${c.text}`}>
-                      {rdv.soin}
-                    </p>
-                  </div>
-                  <p className="mt-0.5 text-[10px] text-[var(--ds-text-muted)]">
-                    {rdv.durationMinutes} min
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 // ─── Vue Liste ────────────────────────────────────────────────────────────────
@@ -619,40 +555,6 @@ function CalendarView({
   );
 }
 
-// ─── Vue Arbre ────────────────────────────────────────────────────────────────
-
-function TreeView({ rdvs, currentDate }: { rdvs: Rdv[]; currentDate: Date }) {
-  const dayLabel = formatDateLong(safeDate(currentDate));
-  const todayRdvs = rdvs.filter((r) => r.dateKey === formatDateKey(safeDate(currentDate)));
-  const matin = todayRdvs.filter((r) => Number(r.start.split(":")[0]) < 12);
-  const apresmidi = todayRdvs.filter((r) => Number(r.start.split(":")[0]) >= 12);
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-[var(--ds-surface)] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="pointer-events-none absolute left-[19px] top-4 bottom-4 w-0.5 bg-[var(--ds-primary)]/30 lg:left-[23px]" aria-hidden />
-        <div className="relative mb-4 flex shrink-0 items-center gap-6">
-          <div className="flex w-10 shrink-0 justify-center">
-            <span className="relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--ds-primary)] text-white shadow-lg shadow-[var(--ds-primary)]/30">
-              <span className="h-2 w-2 rounded-full bg-white" />
-            </span>
-          </div>
-          <p className="text-sm font-semibold tracking-tight text-[color:var(--ds-text)]">
-            {dayLabel}
-          </p>
-          <span className="rounded-full bg-[var(--ds-primary-soft)] px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--ds-primary)]">
-            {todayRdvs.length} RDV
-          </span>
-        </div>
-        <div className="mt-2 min-h-0 flex-1 space-y-8 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-[var(--ds-primary-border)] scrollbar-track-[var(--ds-primary-soft)]">
-          <Branch label="Matin" items={matin} />
-          <Branch label="Après-midi" items={apresmidi} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Helpers header ───────────────────────────────────────────────────────────
 
 function formatSlidingRange(centerDate: Date, count: number): string {
@@ -676,7 +578,6 @@ function PlanningPageContent() {
   const [view, setView] = useState<ViewMode>("liste");
 
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
-  const [treeViewDate, setTreeViewDate] = useState<Date>(() => new Date());
   const [listSelectedDay, setListSelectedDay] = useState<string>(() =>
     formatDateKey(new Date())
   );
@@ -725,10 +626,7 @@ function PlanningPageContent() {
   function goPrev() {
     if (view === "calendar") {
       setCurrentDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
-    } else if (view === "tree") {
-      setTreeViewDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
     } else {
-      // vue liste : décale le centre d'un jour, sélectionne le jour précédent
       setCurrentDate((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; });
       setListSelectedDay((prev) => {
         const d = new Date(`${prev}T12:00:00`);
@@ -741,8 +639,6 @@ function PlanningPageContent() {
   function goNext() {
     if (view === "calendar") {
       setCurrentDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
-    } else if (view === "tree") {
-      setTreeViewDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
     } else {
       setCurrentDate((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; });
       setListSelectedDay((prev) => {
@@ -757,17 +653,14 @@ function PlanningPageContent() {
     const now = new Date();
     const todayIso = formatDateKey(now);
     setCurrentDate(now);
-    setTreeViewDate(now);
     setListSelectedDay(todayIso);
   }
 
   // Date affichée dans le picker selon la vue active
   const activeDateForPicker =
-    view === "tree"
-      ? treeViewDate
-      : view === "liste"
-        ? safeDate(new Date(`${listSelectedDay}T12:00:00`))
-        : currentDate;
+    view === "liste"
+      ? safeDate(new Date(`${listSelectedDay}T12:00:00`))
+      : currentDate;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -803,8 +696,6 @@ function PlanningPageContent() {
                   if (Number.isNaN(nextDate.getTime())) return;
                   if (view === "calendar") {
                     setCurrentDate(nextDate);
-                  } else if (view === "tree") {
-                    setTreeViewDate(nextDate);
                   } else {
                     setCurrentDate(nextDate);
                     setListSelectedDay(formatDateKey(nextDate));
@@ -838,9 +729,7 @@ function PlanningPageContent() {
             <button
               type="button"
               onClick={() => {
-                setListSelectedDay(formatDateKey(
-                  view === "tree" ? treeViewDate : currentDate
-                ));
+                setListSelectedDay(formatDateKey(currentDate));
                 setView("liste");
               }}
               className={[
@@ -859,11 +748,9 @@ function PlanningPageContent() {
             <button
               type="button"
               onClick={() => {
-                setCurrentDate(
-                  view === "tree" ? treeViewDate
-                  : view === "liste" ? safeDate(new Date(`${listSelectedDay}T12:00:00`))
-                  : currentDate
-                );
+                if (view === "liste") {
+                  setCurrentDate(safeDate(new Date(`${listSelectedDay}T12:00:00`)));
+                }
                 setView("calendar");
               }}
               className={[
@@ -876,29 +763,6 @@ function PlanningPageContent() {
             >
               <CalendarDays className="h-3 w-3" />
               <span>Calendrier</span>
-            </button>
-
-            {/* Vue Arbre */}
-            <button
-              type="button"
-              onClick={() => {
-                setTreeViewDate(
-                  view === "calendar" ? currentDate
-                  : view === "liste" ? safeDate(new Date(`${listSelectedDay}T12:00:00`))
-                  : treeViewDate
-                );
-                setView("tree");
-              }}
-              className={[
-                "flex h-11 items-center gap-1 rounded-lg px-4 py-2.5 text-base font-medium transition-all",
-                view === "tree"
-                  ? "bg-[color:var(--ds-primary)] text-white shadow-sm"
-                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
-              ].join(" ")}
-              aria-label="Vue arbre"
-            >
-              <GitBranch className="h-3 w-3" />
-              <span className="hidden sm:inline">Vue Arbre</span>
             </button>
           </div>
 
@@ -979,17 +843,18 @@ function PlanningPageContent() {
             />
           </div>
         )}
-        {/* Fallback mobile sur vue arbre si calendrier demandé */}
+        {/* Fallback mobile: afficher la liste si calendrier demandé */}
         {view === "calendar" && (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
-            <TreeView rdvs={appointments} currentDate={treeViewDate} />
-          </div>
-        )}
-
-        {/* Vue Arbre */}
-        {view === "tree" && (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <TreeView rdvs={appointments} currentDate={treeViewDate} />
+            <ListView
+              rdvs={appointments}
+              centerDate={currentDate}
+              selectedDayIso={listSelectedDay}
+              onDaySelect={(iso) => {
+                setListSelectedDay(iso);
+                setCurrentDate(safeDate(new Date(`${iso}T12:00:00`)));
+              }}
+            />
           </div>
         )}
 

@@ -646,17 +646,19 @@ export default function LaboratoirePage() {
                     <ActionButton
                       icon={<Phone className="h-3.5 w-3.5" strokeWidth={1.8} />}
                       onClick={() => setDrawerCommandId(cmd.id)}
-                      title="Contacter"
+                      title="Appeler"
                     />
                     <ActionButton
                       icon={<Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />}
                       onClick={() => setDrawerCommandId(cmd.id)}
                       title="Modifier"
                     />
-                    <LabWhatsAppButton
-                      patientName={cmd.patient}
-                      telephones={labPartner.telephones}
-                    />
+                    <div title="WhatsApp">
+                      <LabWhatsAppButton
+                        patientName={cmd.patient}
+                        telephones={labPartner.telephones}
+                      />
+                    </div>
                     {pretAPoser ? (
                       <button
                         type="button"
