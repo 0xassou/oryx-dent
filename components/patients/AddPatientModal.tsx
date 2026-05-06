@@ -42,7 +42,7 @@ const sectionTitle =
   "text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]";
 
 const checkboxBase =
-  "h-4 w-4 rounded-lg border border-[var(--ds-primary-border)] text-[color:var(--ds-primary)] transition-colors focus:ring-2 focus:ring-[color:var(--ds-primary)]/20 focus:ring-offset-0";
+  "h-4 w-4 rounded-lg border border-[var(--ds-primary-border)] accent-[color:var(--ds-primary)] text-[color:var(--ds-primary)] transition-colors focus:ring-2 focus:ring-[color:var(--ds-primary)]/20 focus:ring-offset-0";
 
 type FormErrors = {
   nom?: string;

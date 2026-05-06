@@ -32,12 +32,11 @@ export default function MobileNav() {
         style={{
           height: "72px",
           borderRadius: "36px",
-          background: "rgba(255,255,255,0.55)",
+          background: "color-mix(in srgb, var(--ds-surface) 60%, transparent)",
           backdropFilter: "blur(20px) saturate(200%)",
           WebkitBackdropFilter: "blur(20px) saturate(200%)",
-          border: "1px solid rgba(255,255,255,0.7)",
-          boxShadow:
-            "0 8px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9)",
+          border: "1px solid var(--ds-primary-border)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
           display: "flex",
           alignItems: "center",
           padding: "0 8px",
@@ -65,7 +64,7 @@ export default function MobileNav() {
                 gap: "2px",
                 borderRadius: "36px",
                 background: isActive
-                  ? "rgba(124,58,237,0.12)"
+                  ? "color-mix(in srgb, var(--ds-primary) 12%, transparent)"
                   : "transparent",
                 textDecoration: "none",
               }}
@@ -75,8 +74,8 @@ export default function MobileNav() {
                   width: "24px",
                   height: "24px",
                   color: isActive
-                    ? "var(--ds-primary, #7c3aed)"
-                    : "#64748b",
+                    ? "var(--ds-primary)"
+                    : "var(--ds-text-muted)",
                 }}
               />
               <span
@@ -84,8 +83,8 @@ export default function MobileNav() {
                   fontSize: "12px",
                   fontWeight: isActive ? 600 : 400,
                   color: isActive
-                    ? "var(--ds-primary, #7c3aed)"
-                    : "#64748b",
+                    ? "var(--ds-primary)"
+                    : "var(--ds-text-muted)",
                   lineHeight: 1,
                 }}
               >
@@ -97,7 +96,7 @@ export default function MobileNav() {
                     width: "4px",
                     height: "2px",
                     borderRadius: "1px",
-                    background: "var(--ds-primary, #7c3aed)",
+                    background: "var(--ds-primary)",
                     marginTop: "1px",
                   }}
                 />
@@ -131,11 +130,11 @@ export default function MobileNav() {
               width: "52px",
               height: "52px",
               borderRadius: "50%",
-              background: "var(--ds-primary, #7c3aed)",
+              background: "var(--ds-primary)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 4px 16px rgba(124,58,237,0.45)",
+              boxShadow: "0 4px 16px color-mix(in srgb, var(--ds-primary) 45%, transparent)",
               marginTop: "-8px",
             }}
           >
@@ -151,7 +150,7 @@ export default function MobileNav() {
             style={{
               fontSize: "12px",
               fontWeight: 400,
-              color: "#64748b",
+              color: "var(--ds-text-muted)",
               lineHeight: 1,
               marginTop: "2px",
             }}
@@ -182,7 +181,7 @@ export default function MobileNav() {
                 gap: "2px",
                 borderRadius: "36px",
                 background: isActive
-                  ? "rgba(124,58,237,0.12)"
+                  ? "color-mix(in srgb, var(--ds-primary) 12%, transparent)"
                   : "transparent",
                 textDecoration: "none",
               }}
@@ -192,8 +191,8 @@ export default function MobileNav() {
                   width: "24px",
                   height: "24px",
                   color: isActive
-                    ? "var(--ds-primary, #7c3aed)"
-                    : "#64748b",
+                    ? "var(--ds-primary)"
+                    : "var(--ds-text-muted)",
                 }}
               />
               <span
@@ -201,8 +200,8 @@ export default function MobileNav() {
                   fontSize: "12px",
                   fontWeight: isActive ? 600 : 400,
                   color: isActive
-                    ? "var(--ds-primary, #7c3aed)"
-                    : "#64748b",
+                    ? "var(--ds-primary)"
+                    : "var(--ds-text-muted)",
                   lineHeight: 1,
                 }}
               >
@@ -214,7 +213,7 @@ export default function MobileNav() {
                     width: "4px",
                     height: "2px",
                     borderRadius: "1px",
-                    background: "var(--ds-primary, #7c3aed)",
+                    background: "var(--ds-primary)",
                     marginTop: "1px",
                   }}
                 />
