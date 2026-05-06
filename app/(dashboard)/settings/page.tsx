@@ -34,7 +34,7 @@ const labelClass = "text-sm font-medium text-[var(--ds-text)]";
 const labelClassMuted = "text-sm font-medium text-[var(--ds-text-muted)]";
 
 const inputBase =
-  "w-full min-w-0 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] p-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-soft)] placeholder:text-[var(--ds-text-muted)]";
+  "w-full min-w-0 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus-visible:ring-2 focus-visible:ring-[color:var(--ds-primary)]/20 placeholder:text-[var(--ds-text-muted)]";
 
 /** Grille section Clinique & légal (infos + fiscal). */
 const clinicGrid = "grid w-full min-w-0 grid-cols-1 gap-6 md:grid-cols-2";

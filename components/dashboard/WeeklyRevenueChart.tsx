@@ -36,6 +36,7 @@ export function WeeklyRevenueChart({
   badgeLabel = "▲ 12%",
 }: WeeklyRevenueChartProps) {
   const max = Math.max(...data.map((d) => d.value));
+  const isEmpty = max === 0;
 
   return (
     <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4">
@@ -50,7 +51,7 @@ export function WeeklyRevenueChart({
       {/* Barres */}
       <div className="flex h-16 items-end gap-1">
         {data.map((day) => {
-          const heightPct = max > 0 ? (day.value / max) * 100 : 0;
+          const heightPct = isEmpty ? 0 : (day.value / max) * 100;
           return (
             <div
               key={day.label}
@@ -59,16 +60,20 @@ export function WeeklyRevenueChart({
               <div
                 className={[
                   "w-full rounded-t-[4px] transition-all duration-200",
-                  day.isToday
-                    ? "bg-[var(--ds-primary)]"
-                    : "bg-[var(--ds-primary-soft)] group-hover:bg-[color-mix(in_srgb,var(--ds-primary)_45%,var(--ds-surface))]",
+                  isEmpty
+                    ? "bg-[var(--ds-primary-border)]"
+                    : day.isToday
+                      ? "bg-[var(--ds-primary)]"
+                      : "bg-[var(--ds-primary-soft)] group-hover:bg-[color-mix(in_srgb,var(--ds-primary)_45%,var(--ds-surface))]",
                 ].join(" ")}
-                style={{ height: `${heightPct}%` }}
+                style={{ height: isEmpty ? "4px" : `${heightPct}%` }}
               />
-              {/* Tooltip au hover */}
-              <div className="absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--ds-text)] px-2 py-1 text-[10px] text-[var(--ds-bg)] group-hover:block">
-                {(day.value / 1000).toFixed(0)}k DA
-              </div>
+              {/* Tooltip au hover — masqué si vide */}
+              {!isEmpty && (
+                <div className="absolute -top-7 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[var(--ds-text)] px-2 py-1 text-[10px] text-[var(--ds-bg)] group-hover:block">
+                  {(day.value / 1000).toFixed(0)}k DA
+                </div>
+              )}
             </div>
           );
         })}
@@ -81,7 +86,7 @@ export function WeeklyRevenueChart({
             key={day.label}
             className={[
               "flex-1 text-center text-[10px]",
-              day.isToday
+              !isEmpty && day.isToday
                 ? "font-semibold text-[var(--ds-primary)]"
                 : "text-[var(--ds-text-subtle)]",
             ].join(" ")}
@@ -90,6 +95,13 @@ export function WeeklyRevenueChart({
           </span>
         ))}
       </div>
+
+      {/* Légende état vide */}
+      {isEmpty && (
+        <p className="mt-2 text-center text-[10px] italic text-[var(--ds-text-muted)]">
+          Aucune recette enregistrée cette semaine
+        </p>
+      )}
     </div>
   );
 }
