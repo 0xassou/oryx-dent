@@ -530,6 +530,7 @@ export default function SterilisationPage() {
     null,
   );
   const [drawerTypeId, setDrawerTypeId] = useState<KitTypeId | null>(null);
+  const [reportCycle, setReportCycle] = useState<AutoclaveCycle | null>(null);
   const [expandedHistoryKitIds, setExpandedHistoryKitIds] = useState<
     Set<string>
   >(() => new Set());
@@ -1341,17 +1342,24 @@ export default function SterilisationPage() {
                           )}
                         </td>
                         <td className="py-3 pr-4 text-right">
-                          {!c.valide ? (
+                          <div className="inline-flex items-center gap-2">
+                            {!c.valide && (
+                              <button
+                                type="button"
+                                onClick={() => validerCycle(c)}
+                                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+                              >
+                                Terminer / Valider
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => validerCycle(c)}
-                              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+                              onClick={() => setReportCycle(c)}
+                              className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary)] hover:text-white"
                             >
-                              Terminer / Valider
+                              Voir rapport
                             </button>
-                          ) : (
-                            <span className="text-xs text-[var(--ds-text-muted)]">—</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1539,6 +1547,87 @@ export default function SterilisationPage() {
           onClose={() => setDrawerTypeId(null)}
         />
       ) : null}
+
+      {reportCycle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl bg-[var(--ds-surface)] p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-muted)]">
+                  Rapport autoclave
+                </p>
+                <h3 className="mt-0.5 text-lg font-semibold text-[color:var(--ds-text)]">
+                  Cycle #{reportCycle.numero}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportCycle(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-2xl text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 divide-y divide-[var(--ds-primary-border)] text-sm">
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--ds-text-muted)]">Date</span>
+                <span className="font-medium text-[var(--ds-text)]">{formatDateShort(reportCycle.date)}</span>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--ds-text-muted)]">Opérateur</span>
+                <span className="font-medium text-[var(--ds-text)]">{reportCycle.operateur}</span>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--ds-text-muted)]">Bowie-Dick</span>
+                <TestBadge result={reportCycle.bowieDick} />
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--ds-text-muted)]">Helix</span>
+                <TestBadge result={reportCycle.helix} />
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--ds-text-muted)]">Kits traités</span>
+                <span className="text-right font-medium text-[var(--ds-text)]">
+                  {KIT_TYPES.map((kt) => {
+                    const n = reportCycle.qtyByType[kt.id] ?? 0;
+                    return n > 0 ? `${n} ${kt.label}` : null;
+                  }).filter(Boolean).join(", ") || "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-3">
+                <span className="text-[var(--ds-text-muted)]">Statut</span>
+                {reportCycle.valide ? (
+                  reportCycle.helix === "non-conforme" ? (
+                    <span className="inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-700 ring-1 ring-orange-200">
+                      Terminé / Anomalie
+                    </span>
+                  ) : (
+                    <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-100">
+                      Terminé / Validé
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex rounded-full bg-[var(--ds-primary-soft)] px-2 py-0.5 text-xs font-medium text-[var(--ds-primary-hover)] ring-1 ring-[var(--ds-primary-border)]">
+                    En cours
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setReportCycle(null)}
+                className="rounded-2xl px-5 py-2.5 text-sm font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

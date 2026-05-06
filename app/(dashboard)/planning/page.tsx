@@ -418,6 +418,19 @@ function CalendarView({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
 
+  const [nowMinutes, setNowMinutes] = useState(() => {
+    const n = new Date();
+    return n.getHours() * 60 + n.getMinutes();
+  });
+  useEffect(() => {
+    const id = setInterval(() => {
+      const n = new Date();
+      setNowMinutes(n.getHours() * 60 + n.getMinutes());
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const todayIso = formatDateKey(new Date());
+
   useLayoutEffect(() => {
     if (todayScrollDoneRef.current) return;
     const scrollRoot = scrollRef.current;
@@ -587,6 +600,16 @@ function CalendarView({
                     </div>
                   );
                 })}
+                {col.iso === todayIso && nowMinutes >= startMinutes && nowMinutes <= endMinutes && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute left-0 right-0 z-30 flex items-center"
+                    style={{ top: ((nowMinutes - startMinutes) / GRID_STEP) * SLOT_HEIGHT_PX }}
+                  >
+                    <div className="h-2 w-2 shrink-0 -translate-x-1 rounded-full bg-red-500" />
+                    <div className="flex-1 border-t-2 border-red-500" />
+                  </div>
+                )}
               </div>
             );
           })}
