@@ -169,27 +169,27 @@ const CATEGORY_CONFIG: Record<
     label: "Endodontie",
   },
   Chirurgie: {
-    dotStyle: "bg-[var(--ds-primary-hover)]",
+    dotStyle: "bg-orange-500",
     tagClasses:
-      "bg-[var(--ds-surface-2)] text-[var(--ds-primary-hover)] border border-[var(--ds-primary-border)]",
+      "bg-orange-50 text-orange-700 border border-orange-200",
     label: "Chirurgie",
   },
   Orthopédie: {
-    dotStyle: "bg-[var(--ds-text-muted)]",
+    dotStyle: "bg-emerald-500",
     tagClasses:
-      "bg-[var(--ds-bg)] text-[var(--ds-text-muted)] border border-[var(--ds-primary-border)]",
+      "bg-emerald-50 text-emerald-700 border border-emerald-200",
     label: "Orthopédie",
   },
   Autres: {
-    dotStyle: "bg-[var(--ds-text-subtle)]",
+    dotStyle: "bg-slate-400",
     tagClasses:
-      "bg-[var(--ds-primary-soft)] text-[var(--ds-text)] border border-[var(--ds-primary-border)]",
+      "bg-slate-50 text-slate-600 border border-slate-200",
     label: "Autres",
   },
   Absente: {
-    dotStyle: "bg-[var(--ds-text-subtle)]",
+    dotStyle: "bg-slate-400",
     tagClasses:
-      "bg-[var(--ds-surface-2)] text-[var(--ds-text-muted)] border border-[var(--ds-primary-border)]",
+      "bg-slate-50 text-slate-500 border border-slate-200",
     label: "Absente",
   },
 };
@@ -560,7 +560,7 @@ function StatsCard({
               ].join(" ")}
               title={stats.presenceTooltip ?? undefined}
             >
-              {stats.presence || "—"}
+              {(!stats.presence || stats.presence === "—") ? "Aucun RDV" : stats.presence}
             </div>
             <div className="mt-0.5 text-[10.5px] uppercase tracking-wider text-[var(--ds-text-muted)]">
               Présence
@@ -672,7 +672,7 @@ export function PatientSoinsTimeline({
   return (
     <div className="relative pl-5">
       <div
-        className="pointer-events-none absolute bottom-0 left-[7px] top-2 w-px bg-[var(--ds-primary-border)]"
+        className="pointer-events-none absolute bottom-0 left-[9px] top-2 w-0.5 rounded-full bg-slate-200"
         aria-hidden
       />
       <ul className="space-y-4">
