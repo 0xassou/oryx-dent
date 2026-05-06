@@ -439,7 +439,7 @@ export default function LaboratoirePage() {
         </AnimatedButton>
       </header>
 
-      <div className="grid grid-cols-1 gap-2.5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 pb-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           icon={<ClipboardList className="h-5 w-5" strokeWidth={1.8} />}
           iconClass="bg-violet-100 text-[color:var(--ds-primary)]"
@@ -981,7 +981,7 @@ function KpiCard({
   return (
     <div
       className={[
-        "flex items-center gap-4 rounded-2xl border px-6 py-6 shadow-sm",
+        "flex items-center gap-4 rounded-2xl border px-6 py-6",
         bgClass ?? "border-[var(--ds-border)] bg-[var(--ds-surface)]",
       ].join(" ")}
     >
@@ -995,7 +995,7 @@ function KpiCard({
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+        <p className="text-base font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
           {label}
         </p>
         <p

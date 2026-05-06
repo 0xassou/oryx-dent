@@ -1274,7 +1274,7 @@ export default function DashboardPage() {
       <div className="rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
             <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <h2 className="text-base font-semibold tracking-tight text-[color:var(--ds-text)]">
+                <h2 className="text-sm font-semibold text-[color:var(--ds-text)]">
                   Flux de la journée
                 </h2>
                 <button
@@ -1445,7 +1445,7 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                   <div className="mb-3 flex items-center gap-2">
                     <ClipboardList className="h-4 w-4 shrink-0 text-[color:var(--ds-primary)]" />
-                    <span className="text-[13px] font-semibold text-[var(--ds-text)]">
+                    <span className="text-sm font-semibold text-[var(--ds-text)]">
                       Actions Prioritaires
                     </span>
                   </div>
@@ -1517,7 +1517,7 @@ export default function DashboardPage() {
                 <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                   <div className="mb-3 flex items-center gap-2">
                     <Bell className="h-4 w-4 shrink-0 text-[color:var(--ds-primary)]" />
-                    <span className="text-[13px] font-semibold text-[var(--ds-text)]">
+                    <span className="text-sm font-semibold text-[var(--ds-text)]">
                       À recontacter
                     </span>
                   </div>
