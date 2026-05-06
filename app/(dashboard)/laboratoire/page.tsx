@@ -475,14 +475,23 @@ export default function LaboratoirePage() {
       </div>
 
       {urgentCommandes.length > 0 ? (
-        <div className="mx-0 mb-5 flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-          <p className="text-base text-amber-800">
-            <span className="font-bold">
-              {urgentCommandes.length} commande{urgentCommandes.length > 1 ? "s" : ""}
-            </span>{" "}
-            ont une date de pose prévue avant le retour du labo — action requise.
-          </p>
+        <div className="mx-0 mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+            <p className="text-base text-amber-800">
+              <span className="font-bold">
+                {urgentCommandes.length} commande{urgentCommandes.length > 1 ? "s" : ""}
+              </span>{" "}
+              ont une date de pose prévue avant le retour du labo — action requise.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab("urgent")}
+            className="shrink-0 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200"
+          >
+            Voir les commandes urgentes
+          </button>
         </div>
       ) : null}
 

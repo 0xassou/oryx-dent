@@ -292,6 +292,21 @@ function getRowTrClassName(statut: Statut, peremptionProche: boolean): string {
   return base;
 }
 
+/** Retourne l'urgence de péremption : "rouge" (<30j), "orange" (<90j), null sinon. */
+function getPeremptionUrgency(peremption: string): "rouge" | "orange" | null {
+  if (!peremption || peremption === "—") return null;
+  const d = parsePeremptionDisplayToDate(peremption);
+  if (!d) return null;
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const exp = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = (exp.getTime() - start.getTime()) / 86400000;
+  if (diffDays < 0) return null;
+  if (diffDays < 30) return "rouge";
+  if (diffDays < 90) return "orange";
+  return null;
+}
+
 function peremptionProcheCount(produits: Produit[]) {
   return produits.filter((p) => isPeremptionProche(p)).length;
 }
@@ -1010,18 +1025,31 @@ export default function StocksPage() {
 
                             {/* Péremption */}
                             <td className="px-5 py-4">
-                              {peremptionProche &&
-                              formatPeremptionForDisplay(p.peremption) !==
-                                "—" ? (
-                                <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800 dark:border-orange-800/40 dark:bg-orange-950/45 dark:text-orange-200">
-                                  <Clock className="h-3.5 w-3.5" aria-hidden />
-                                  {formatPeremptionForDisplay(p.peremption)}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-[var(--ds-text-muted)]">
-                                  {formatPeremptionForDisplay(p.peremption)}
-                                </span>
-                              )}
+                              {(() => {
+                                const urgency = getPeremptionUrgency(p.peremption);
+                                const label = formatPeremptionForDisplay(p.peremption);
+                                if (urgency === "rouge") {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:border-red-800/40 dark:bg-red-950/45 dark:text-red-300">
+                                      <Clock className="h-3.5 w-3.5" aria-hidden />
+                                      {label}
+                                    </span>
+                                  );
+                                }
+                                if (urgency === "orange") {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800 dark:border-orange-800/40 dark:bg-orange-950/45 dark:text-orange-200">
+                                      <Clock className="h-3.5 w-3.5" aria-hidden />
+                                      {label}
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="text-sm text-[var(--ds-text-muted)]">
+                                    {label}
+                                  </span>
+                                );
+                              })()}
                             </td>
 
                             {/* Édition */}
