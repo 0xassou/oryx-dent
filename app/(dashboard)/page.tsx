@@ -1215,7 +1215,7 @@ export default function DashboardPage() {
                     refreshFluxPatientCandidates();
                     setDirectEntryOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary)] hover:text-white"
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                   + Entrée Directe

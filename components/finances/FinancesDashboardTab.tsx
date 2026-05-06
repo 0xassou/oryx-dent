@@ -301,6 +301,11 @@ export function FinancesDashboardTab() {
 
   const realTransactions = useMemo(() => getRealTransactions(), [mounted]);
 
+  const showModePaiement = useMemo(
+    () => realTransactions.some((t) => t.modePaiement && t.modePaiement !== "—"),
+    [realTransactions],
+  );
+
   const croissanceCA = useMemo(() => {
     if (typeof window === "undefined") return 0;
     try {
@@ -1029,9 +1034,11 @@ export function FinancesDashboardTab() {
                 <th className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Montant
                 </th>
-                <th className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
-                  Mode de paiement
-                </th>
+                {showModePaiement && (
+                  <th className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                    Mode de paiement
+                  </th>
+                )}
                 <th className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Statut
                 </th>
@@ -1042,7 +1049,7 @@ export function FinancesDashboardTab() {
               realTransactions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={showModePaiement ? 6 : 5}
                     className="py-12 text-center text-sm text-[var(--ds-text-muted)]"
                   >
                     Aucune recette enregistrée. Ajoutez des factures depuis
@@ -1095,9 +1102,11 @@ export function FinancesDashboardTab() {
                           : formatDZD(t.montant)}
                       </p>
                     </td>
-                    <td className="px-4 py-3">
-                      <BadgeModePaiement mode={t.modePaiement} />
-                    </td>
+                    {showModePaiement && (
+                      <td className="px-4 py-3">
+                        <BadgeModePaiement mode={t.modePaiement} />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <BadgeStatut statut={t.statut} />
                     </td>
