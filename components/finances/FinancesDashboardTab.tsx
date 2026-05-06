@@ -923,7 +923,7 @@ export function FinancesDashboardTab() {
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-[var(--ds-text)]">
-                  Palmarès de Rentabilité
+                  Top Patients · CA
                 </h2>
                 <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
                   Top 3 patients · CA total

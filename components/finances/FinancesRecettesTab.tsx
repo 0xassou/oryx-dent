@@ -383,18 +383,18 @@ export function FinancesRecettesTab() {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
-        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Rechercher un patient ou n° facture..."
-                className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--ds-text)] placeholder:text-[var(--ds-text-muted)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
-              />
-            </div>
+        <div className="flex flex-col gap-3 p-5">
+          <div className="relative min-w-0">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ds-text-muted)]" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un patient ou n° facture..."
+              className="w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--ds-text)] placeholder:text-[var(--ds-text-muted)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary-border)]/20"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <div
               className="flex shrink-0 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] p-0.5"
               role="group"
@@ -425,28 +425,27 @@ export function FinancesRecettesTab() {
                 Cette semaine
               </button>
             </div>
-          </div>
 
-          <div className="flex w-full justify-start overflow-x-auto sm:w-auto">
-            <div className="flex min-w-max border-b border-[var(--ds-primary-border)]">
-              {TABS.map(({ key, label }) => {
-                const active = activeTab === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setActiveTab(key)}
-                    className={[
-                      "whitespace-nowrap px-3 pb-3 text-sm font-medium transition-colors sm:px-4",
-                      active
-                        ? "border-b-2 border-[var(--ds-primary)] text-[var(--ds-primary)]"
-                        : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+            <div
+              className="flex shrink-0 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] p-0.5"
+              role="group"
+              aria-label="Filtrer par statut"
+            >
+              {TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveTab(key)}
+                  className={[
+                    "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                    activeTab === key
+                      ? "bg-[var(--ds-surface)] text-[var(--ds-primary)] shadow-sm ring-1 ring-[var(--ds-primary-border)]/80"
+                      : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
