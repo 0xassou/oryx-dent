@@ -19,7 +19,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Sparkles,
+  Star,
   Users,
   X,
 } from "lucide-react";
@@ -390,7 +390,7 @@ function PremiumBadge({ className = "" }: { className?: string }) {
         className,
       ].join(" ")}
     >
-      <Sparkles className="h-3 w-3" />
+      <Star className="h-3 w-3" />
       Premium
     </span>
   );
@@ -1241,8 +1241,25 @@ export default function DashboardPage() {
             </p>
 
             {fluxRows.length === 0 ? (
-              <div className="py-12 text-center text-sm text-[var(--ds-text-muted)]">
-                Aucun rendez-vous aujourd&apos;hui
+              <div className="flex flex-col items-center justify-center gap-4 py-16">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--ds-primary-soft)]">
+                  <Calendar className="h-8 w-8 text-[color:var(--ds-primary)]" strokeWidth={1.5} />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-[var(--ds-text)]">
+                    Aucun rendez-vous aujourd&apos;hui
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
+                    Votre agenda est libre pour cette journée.
+                  </p>
+                </div>
+                <Link
+                  href="/planning?newRdv=true"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  Planifier un RDV
+                </Link>
               </div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-[var(--ds-primary-border)]/80">
