@@ -209,6 +209,10 @@ export default function LaboratoirePage() {
   const [modalPoseApptId, setModalPoseApptId] = useState("");
   const [modalRetourApptId, setModalRetourApptId] = useState("");
   const [travail, setTravail] = useState<string>("Couronne Céramique");
+  const [modalDent, setModalDent] = useState<string>("");
+  const [modalMateriau, setModalMateriau] = useState<string>("");
+  const [modalTeinte, setModalTeinte] = useState<string>("");
+  const [modalCoutLaboDa, setModalCoutLaboDa] = useState<number>(0);
   const [retourIso, setRetourIso] = useState<string>("");
   const [rdvPatientIso, setRdvPatientIso] = useState<string>("");
 
@@ -287,6 +291,10 @@ export default function LaboratoirePage() {
     setModalPoseApptId("");
     setModalRetourApptId("");
     setRdvPatientIso("");
+    setModalDent("");
+    setModalMateriau("");
+    setModalTeinte("");
+    setModalCoutLaboDa(0);
     setTravail("Couronne Céramique");
     const t0 = "Couronne Céramique";
     setRetourIso(
@@ -647,7 +655,7 @@ export default function LaboratoirePage() {
                 adresse: "",
               };
 
-            const dent = parseDentFromTravail(cmd.travail);
+            const dent = cmd.dent ?? parseDentFromTravail(cmd.travail);
             const acte = travailWithoutDent(cmd.travail);
 
             const statutLabel = laboratoireStatutLabel(cmd.statut);
@@ -848,6 +856,12 @@ export default function LaboratoirePage() {
                   patient: displayPatientName(pr),
                   patientId: pr.id,
                   travail,
+                  ...(modalDent.trim() ? { dent: modalDent.trim() } : {}),
+                  ...(modalTeinte.trim() ? { teinte: modalTeinte.trim() } : {}),
+                  ...(modalMateriau ? { materiau: modalMateriau } : {}),
+                  coutLaboDa: Number.isFinite(modalCoutLaboDa)
+                    ? Math.max(0, modalCoutLaboDa)
+                    : 0,
                   labo: lab.nom,
                   retourIso: retourIso.trim(),
                   statut: "EN_ATTENTE",
@@ -934,6 +948,80 @@ export default function LaboratoirePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Champs ajoutés (homogénéité fiche détail) */}
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Dent (numéro)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ex: 46"
+                  value={modalDent}
+                  onChange={(e) => setModalDent(e.target.value)}
+                  className="mt-2 w-full rounded-[var(--radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm font-normal text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary-border)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Matériau
+                </label>
+                <select
+                  value={modalMateriau}
+                  onChange={(e) => setModalMateriau(e.target.value)}
+                  className="mt-2 w-full rounded-[var(--radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm font-normal text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary-border)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
+                >
+                  <option value="">Sélectionner un matériau</option>
+                  {[
+                    "Zircone",
+                    "Céramique",
+                    "Métal-Céramique",
+                    "Composite",
+                    "Résine",
+                    "Alliage métallique",
+                    "E-max",
+                    "Autre",
+                  ].map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Teinte
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: A2, B1, C3..."
+                  value={modalTeinte}
+                  onChange={(e) => setModalTeinte(e.target.value)}
+                  className="mt-2 w-full rounded-[var(--radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm font-normal text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary-border)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Coût labo (DA)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={String(modalCoutLaboDa)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setModalCoutLaboDa(Number.isFinite(n) ? Math.max(0, n) : 0);
+                  }}
+                  className="mt-2 w-full rounded-[var(--radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm font-normal text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary-border)] focus:ring-1 focus:ring-[var(--ds-primary-border)]/80"
+                />
               </div>
 
               <div>
@@ -1222,7 +1310,7 @@ function CommandeDrawer({
       telephones: [],
       adresse: "",
     };
-  const dent = parseDentFromTravail(cmd.travail);
+  const dent = cmd.dent ?? parseDentFromTravail(cmd.travail);
   const acte = travailWithoutDent(cmd.travail);
   const conflit = isRdvPatientBeforeRetourLabo(
     cmd.rdvPatientIso,
@@ -1429,6 +1517,41 @@ function CommandeDrawer({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Dent (numéro)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ex: 46"
+                  value={cmd.dent ?? ""}
+                  onChange={(e) =>
+                    onPatch({
+                      ...cmd,
+                      dent: e.target.value.trim() || undefined,
+                    })
+                  }
+                  className={inputSubtle + " mt-1.5 font-mono tabular-nums"}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Teinte
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: A2, B1, C3..."
+                  value={cmd.teinte ?? ""}
+                  onChange={(e) =>
+                    onPatch({
+                      ...cmd,
+                      teinte: e.target.value.trim() || undefined,
+                    })
+                  }
+                  className={inputSubtle + " mt-1.5"}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Retour labo
                 </label>
                 <input
@@ -1455,6 +1578,37 @@ function CommandeDrawer({
                   }
                   className={inputSubtle + " mt-1.5"}
                 />
+              </div>
+              <div className="col-span-2">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
+                  Matériau
+                </label>
+                <select
+                  value={cmd.materiau ?? ""}
+                  onChange={(e) =>
+                    onPatch({
+                      ...cmd,
+                      materiau: e.target.value || undefined,
+                    })
+                  }
+                  className={inputSubtle + " mt-1.5"}
+                >
+                  <option value="">— Sélectionner un matériau —</option>
+                  {[
+                    "Zircone",
+                    "Céramique",
+                    "Métal-Céramique",
+                    "Composite",
+                    "Résine",
+                    "Alliage métallique",
+                    "E-max",
+                    "Autre",
+                  ].map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="col-span-2">
                 <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">

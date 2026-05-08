@@ -75,6 +75,8 @@ export type LaboratoireCommande = {
   patient: string;
   /** Référence `patientData` lorsque la commande est liée à un dossier patient. */
   patientId?: string;
+  /** Dent concernée (FDI 1-48, ex: "46"). */
+  dent?: string;
   travail: string;
   labo: string;
   retourIso: string;
@@ -176,6 +178,7 @@ function parseCommande(raw: unknown): LaboratoireCommande | null {
   if (typeof o.retourIso !== "string") return null;
   const statut = normalizeLaboratoireStatut(o.statut);
   if (!statut) return null;
+  const dent = typeof o.dent === "string" ? o.dent.trim() : "";
   const cout =
     typeof o.coutLaboDa === "number" && Number.isFinite(o.coutLaboDa)
       ? Math.max(0, o.coutLaboDa)
@@ -198,6 +201,7 @@ function parseCommande(raw: unknown): LaboratoireCommande | null {
     travail: o.travail,
     labo: o.labo,
     retourIso: o.retourIso,
+    ...(dent ? { dent } : {}),
     teinte: typeof o.teinte === "string" ? o.teinte : undefined,
     materiau: typeof o.materiau === "string" ? o.materiau : undefined,
     rdvPatientIso:
@@ -218,6 +222,7 @@ function seedCommandes(): LaboratoireCommande[] {
       id: "cmd1",
       patient: "Marie Dupont",
       patientId: "3",
+      dent: "46",
       travail: "Couronne Céramo-Métallique sur 46",
       teinte: "A2",
       materiau: "Zircone",
@@ -229,6 +234,7 @@ function seedCommandes(): LaboratoireCommande[] {
     {
       id: "cmd2",
       patient: "Jean Martin",
+      dent: "16",
       travail: "Inlay-Onlay (Composite) sur 16",
       teinte: "B1",
       materiau: "Emax",
@@ -240,6 +246,7 @@ function seedCommandes(): LaboratoireCommande[] {
     {
       id: "cmd3",
       patient: "Sophie Bernard",
+      dent: "24-25-26",
       travail: "Bridge Zircone 24-25-26",
       teinte: "C3",
       materiau: "Zircone",
