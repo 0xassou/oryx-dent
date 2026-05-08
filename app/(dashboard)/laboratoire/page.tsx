@@ -55,15 +55,19 @@ import {
   laboratoireStatutToastPhrase,
   type LaboratoireCommande,
   type LaboratoireStatut,
-  readLabCommandesFromStorage,
   todayIsoLocal,
-  writeLabCommandesToStorage,
 } from "@/utils/laboratoireCommandes";
 import { getPatientsAction } from "@/app/actions/patients";
 import {
   getAppointmentsAction,
   updateAppointmentAction,
 } from "@/app/actions/appointments";
+import {
+  createCommandeLaboAction,
+  deleteCommandeLaboAction,
+  getCommandesLaboAction,
+  updateCommandeLaboAction,
+} from "@/app/actions/laboratoire";
 import {
   displayPatientName,
   patientRowToDentalPatientRecord,
@@ -73,10 +77,6 @@ import { generateLabBonPDF } from "@/utils/generateLabBonPDF";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function uid() {
-  return Math.random().toString(16).slice(2);
 }
 
 function capitalizeToastPhrase(s: string) {
@@ -242,7 +242,32 @@ export default function LaboratoirePage() {
       }
     })();
     setLabs(readLabsDirectoryFromStorage());
-    setCommandes(readLabCommandesFromStorage());
+    void (async () => {
+      const res = await getCommandesLaboAction();
+      if (!res.ok) {
+        console.error(res.error);
+        setCommandes([]);
+        return;
+      }
+      setCommandes(
+        res.data.map((r) => ({
+          id: r.id,
+          patient: r.patientNom ?? "—",
+          patientId: r.patientId,
+          travail: r.travail,
+          labo: r.laboratoire ?? "",
+          retourIso: r.dateRetour ?? todayIsoLocal(),
+          rdvPatientIso: r.datePose,
+          teinte: r.teinte,
+          materiau: r.materiau,
+          dent: r.dent,
+          coutLaboDa: r.coutLabo ?? 0,
+          statut: r.statut,
+          linkedPoseAppointmentId: r.rdvPoseId,
+          linkedRetourAppointmentId: r.rdvRetourId,
+        })),
+      );
+    })();
     setHydrated(true);
   }, [refreshPatients]);
 
@@ -280,10 +305,7 @@ export default function LaboratoirePage() {
       window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, onAppt);
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    writeLabCommandesToStorage(commandes);
-  }, [commandes, hydrated]);
+  // Plus de persistance localStorage pour les commandes labo (PostgreSQL).
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -333,9 +355,25 @@ export default function LaboratoirePage() {
   }, [appointments, modalPatientId, modalPatientRecord]);
 
   const patchCommand = useCallback((id: string, next: LaboratoireCommande) => {
-    setCommandes((prev) =>
-      prev.map((c) => (c.id === id ? next : c)),
-    );
+    setCommandes((prev) => prev.map((c) => (c.id === id ? next : c)));
+    void (async () => {
+      const up = await updateCommandeLaboAction(id, {
+        patient_id: next.patientId ?? null,
+        patient_nom: next.patient || null,
+        travail: next.travail,
+        laboratoire: next.labo || null,
+        dent: next.dent ?? null,
+        materiau: next.materiau ?? null,
+        teinte: next.teinte ?? null,
+        cout_labo: next.coutLaboDa ?? 0,
+        statut: next.statut,
+        date_retour: next.retourIso ?? null,
+        date_pose: next.rdvPatientIso ?? null,
+        rdv_pose_id: next.linkedPoseAppointmentId ?? null,
+        rdv_retour_id: next.linkedRetourAppointmentId ?? null,
+      });
+      if (!up.ok) console.error(up.error);
+    })();
     void (async () => {
       const appsRes = await getAppointmentsAction();
       if (!appsRes.ok) return;
@@ -432,6 +470,10 @@ export default function LaboratoirePage() {
           return next;
         }),
       );
+      void (async () => {
+        const up = await updateCommandeLaboAction(cmd.id, { statut: s });
+        if (!up.ok) console.error(up.error);
+      })();
       showAppToast(
         `Statut mis à jour : ${capitalizeToastPhrase(
           laboratoireStatutToastPhrase(s),
@@ -452,6 +494,10 @@ export default function LaboratoirePage() {
     setCommandes((prev) => prev.filter((c) => c.id !== cmd.id));
     setDrawerCommandId(null);
     showAppToast("Commande supprimée");
+    void (async () => {
+      const del = await deleteCommandeLaboAction(cmd.id);
+      if (!del.ok) console.error(del.error);
+    })();
   }, []);
 
   const drawerCommand = useMemo(
@@ -851,8 +897,7 @@ export default function LaboratoirePage() {
                 const lab = findLabById(modalLabId, labs);
                 if (!pr || !lab || !retourIso.trim()) return;
 
-                const next: LaboratoireCommande = {
-                  id: `cmd-${uid()}`,
+                const baseNext: Omit<LaboratoireCommande, "id"> = {
                   patient: displayPatientName(pr),
                   patientId: pr.id,
                   travail,
@@ -879,7 +924,9 @@ export default function LaboratoirePage() {
                   const ap = appointments.find((x) => x.id === modalPoseApptId);
                   if (ap) poseIso = ap.dateKey;
                 }
-                if (poseIso) next.rdvPatientIso = poseIso;
+                const next: Omit<LaboratoireCommande, "id"> = poseIso
+                  ? { ...baseNext, rdvPatientIso: poseIso }
+                  : baseNext;
 
                 if (modalRetourApptId) {
                   const ar = appointments.find(
@@ -888,12 +935,52 @@ export default function LaboratoirePage() {
                   if (ar) next.retourIso = ar.dateKey;
                 }
 
-                setCommandes((prev) => {
-                  const withNew = [next, ...prev];
-                  return pullAgendaDatesIntoLabCommandes(withNew, appointments);
-                });
                 setIsModalOpen(false);
                 void (async () => {
+                  const created = await createCommandeLaboAction({
+                    patient_id: next.patientId ?? null,
+                    patient_nom: next.patient || null,
+                    travail: next.travail,
+                    laboratoire: next.labo || null,
+                    dent: next.dent ?? null,
+                    materiau: next.materiau ?? null,
+                    teinte: next.teinte ?? null,
+                    cout_labo: next.coutLaboDa ?? 0,
+                    statut: next.statut,
+                    date_retour: next.retourIso ?? null,
+                    date_pose: next.rdvPatientIso ?? null,
+                    rdv_pose_id: next.linkedPoseAppointmentId ?? null,
+                    rdv_retour_id: next.linkedRetourAppointmentId ?? null,
+                  });
+                  if (!created.ok) {
+                    console.error(created.error);
+                    return;
+                  }
+
+                  const inserted: LaboratoireCommande = {
+                    id: created.data.id,
+                    patient: created.data.patientNom ?? next.patient,
+                    patientId: created.data.patientId ?? next.patientId,
+                    travail: created.data.travail,
+                    labo: created.data.laboratoire ?? next.labo,
+                    retourIso: created.data.dateRetour ?? next.retourIso,
+                    rdvPatientIso: created.data.datePose ?? next.rdvPatientIso,
+                    teinte: created.data.teinte ?? next.teinte,
+                    materiau: created.data.materiau ?? next.materiau,
+                    dent: created.data.dent ?? next.dent,
+                    coutLaboDa: created.data.coutLabo ?? next.coutLaboDa,
+                    statut: created.data.statut,
+                    linkedPoseAppointmentId:
+                      created.data.rdvPoseId ?? next.linkedPoseAppointmentId,
+                    linkedRetourAppointmentId:
+                      created.data.rdvRetourId ?? next.linkedRetourAppointmentId,
+                  };
+
+                  setCommandes((prev) => {
+                    const withNew = [inserted, ...prev];
+                    return pullAgendaDatesIntoLabCommandes(withNew, appointments);
+                  });
+
                   const appsRes = await getAppointmentsAction();
                   if (!appsRes.ok) return;
                   const appsFromServer = appsRes.data.map(
@@ -901,7 +988,7 @@ export default function LaboratoirePage() {
                   );
                   const moves = computeLinkedAppointmentDateMovesFromLab(
                     appsFromServer,
-                    next,
+                    inserted,
                   );
                   for (const m of moves) {
                     const up = await updateAppointmentAction(m.appointmentId, {
