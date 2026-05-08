@@ -172,7 +172,7 @@ export function KpiCard({
         ) : null}
       </div>
 
-      <p className="font-mono text-3xl font-medium text-[color:var(--ds-text)]">
+      <p className="font-mono text-3xl font-bold text-[color:var(--ds-text)]">
         {value}
         {unit ? (
           <span className="ml-1 font-sans text-xs font-normal text-[var(--ds-text-muted)]">

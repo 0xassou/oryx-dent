@@ -69,7 +69,7 @@ import {
   QuickStats,
   RecentPatients,
 } from "@/components/dashboard/QuickStatsAndPatients";
-import { RecentActivityWidget } from "@/components/dashboard/RecentActivityWidget";
+import { getDashboardStatsAction } from "@/app/actions/dashboard";
 import {
   LAB_COMMANDES_UPDATED_EVENT,
   listLogisticsAlerts,
@@ -867,6 +867,10 @@ export default function DashboardPage() {
   const router = useRouter();
   const annulationsCount = 0;
   const [mounted, setMounted] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [dashboardStats, setDashboardStats] = useState<Awaited<
+    ReturnType<typeof getDashboardStatsAction>
+  > | null>(null);
   const [doctorInfo, setDoctorInfo] = useState({
     nom: "Assil",
     initiales: "A",
@@ -965,6 +969,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setDoctorInfo(getDoctorName());
+  }, []);
+
+  useEffect(() => {
+    setStatsLoading(true);
+    void (async () => {
+      try {
+        const s = await getDashboardStatsAction();
+        setDashboardStats(s);
+        setPatientCount(s.totalPatients);
+        setRdvCount(s.rdvAujourdHui);
+        setStockCriticalCount(s.stocksEnRupture);
+      } catch (e) {
+        console.error("[getDashboardStatsAction]", e);
+        setDashboardStats(null);
+      } finally {
+        setStatsLoading(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -1243,46 +1265,52 @@ export default function DashboardPage() {
 
       {/* ── KPI 4 colonnes (KpiCard design system) ───────────────────── */}
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard
-          kpi="rdv"
-          label="RDV du jour"
-          value={rdvCount}
-          change={`${rdvToConfirmCount} à confirmer`}
-          icon={<Calendar />}
-        />
-        <KpiCard
-          kpi="patients"
-          label="Nouveaux patients"
-          value={patientCount}
-          change={`+${patientsThisMonthCount} ce mois-ci`}
-          icon={<Users />}
-        />
-        <Link
-          href="/sterilisation"
-          className="block rounded-xl transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed] focus-visible:ring-offset-2"
-        >
-          <KpiCard
-            kpi="kits"
-            label="Kits stériles"
-            value={sterileTotal}
-            change="Module stérilisation"
-            icon={<ShieldCheck />}
-          />
-        </Link>
-        <Link
-          href="/stocks"
-          className="block rounded-xl transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed] focus-visible:ring-offset-2"
-        >
-          <KpiCard
-            kpi="stock"
-            stockAlertCount={stockCriticalCount}
-            label="Stock faible"
-            value={stockCriticalCount}
-            unit="alertes"
-            change="Sous le seuil sécurité"
-            icon={<AlertTriangle />}
-          />
-        </Link>
+        {statsLoading ? (
+          <>
+            <div className="h-[92px] animate-pulse rounded-2xl bg-muted" />
+            <div className="h-[92px] animate-pulse rounded-2xl bg-muted" />
+            <div className="h-[92px] animate-pulse rounded-2xl bg-muted" />
+            <div className="h-[92px] animate-pulse rounded-2xl bg-muted" />
+          </>
+        ) : (
+          <>
+            <KpiCard
+              kpi="patients"
+              label="Patients"
+              value={dashboardStats?.totalPatients ?? 0}
+              change={`+${patientsThisMonthCount} ce mois-ci`}
+              icon={<Users />}
+            />
+            <KpiCard
+              kpi="rdv"
+              label="RDV du jour"
+              value={dashboardStats?.rdvAujourdHui ?? rdvCount}
+              change={`${rdvToConfirmCount} à confirmer`}
+              icon={<Calendar />}
+            />
+            <KpiCard
+              kpi="rdv"
+              label="RDV ce mois"
+              value={dashboardStats?.rdvCeMois ?? 0}
+              change="Période en cours"
+              icon={<Calendar />}
+            />
+            <Link
+              href="/stocks"
+              className="block rounded-xl transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7c3aed] focus-visible:ring-offset-2"
+            >
+              <KpiCard
+                kpi="stock"
+                stockAlertCount={dashboardStats?.stocksEnRupture ?? stockCriticalCount}
+                label="Stocks en rupture"
+                value={dashboardStats?.stocksEnRupture ?? stockCriticalCount}
+                unit="alertes"
+                change="Quantité ≤ seuil"
+                icon={<AlertTriangle />}
+              />
+            </Link>
+          </>
+        )}
       </div>
 
       {logisticsAlerts.length > 0 ? (
@@ -1602,7 +1630,57 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-          <RecentActivityWidget />
+          <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[13px] font-semibold text-[var(--ds-text)]">
+                Activité récente
+              </p>
+              <span className="text-[11px] text-[var(--ds-text-subtle)]">
+                À venir
+              </span>
+            </div>
+
+            {statsLoading ? (
+              <div className="flex flex-col gap-2">
+                <div className="h-10 animate-pulse rounded-[10px] bg-muted" />
+                <div className="h-10 animate-pulse rounded-[10px] bg-muted" />
+                <div className="h-10 animate-pulse rounded-[10px] bg-muted" />
+                <div className="h-10 animate-pulse rounded-[10px] bg-muted" />
+                <div className="h-10 animate-pulse rounded-[10px] bg-muted" />
+              </div>
+            ) : (dashboardStats?.prochainsRdv?.length ?? 0) > 0 ? (
+              <div className="flex flex-col gap-2">
+                {dashboardStats!.prochainsRdv.map((rdv) => {
+                  const patient = [rdv.patient_prenom, rdv.patient_nom]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
+                  return (
+                    <div
+                      key={rdv.id}
+                      className="flex items-start gap-3 rounded-[10px] p-2.5 transition-colors hover:bg-[var(--ds-primary-soft)]"
+                    >
+                      <span className="mt-0.5 flex-shrink-0 font-['DM_Mono',monospace] text-[11px] font-bold text-[var(--ds-text-subtle)]">
+                        {rdv.heure || "—"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-bold text-[var(--ds-text)]">
+                          {patient || "Patient"}
+                        </p>
+                        <p className="truncate text-[12px] font-normal text-[var(--ds-text-muted)]">
+                          {rdv.type_acte || "—"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[12px] text-[var(--ds-text-subtle)]">
+                Aucun rendez-vous à venir
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">
