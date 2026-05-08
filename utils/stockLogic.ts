@@ -277,30 +277,18 @@ export const INITIAL_STOCK_FALLBACK: StockLine[] = [
   },
 ];
 
-export function loadDentalStock(): StockLine[] {
-  if (typeof window === "undefined") return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
-  try {
-    const raw = localStorage.getItem(DENTAL_STOCK_LS_KEY);
-    if (!raw) return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
-    return parsed as StockLine[];
-  } catch (e) {
-    console.error("Storage error:", e);
-    return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
-  }
+export function notifyStockUpdated(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(STOCK_UPDATED_EVENT));
 }
 
-export function saveDentalStock(stock: StockLine[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(DENTAL_STOCK_LS_KEY, JSON.stringify(stock));
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(STOCK_UPDATED_EVENT));
-    }
-  } catch (e) {
-    console.error("Storage error:", e);
-  }
+export function loadDentalStock(): StockLine[] {
+  if (typeof window === "undefined") return INITIAL_STOCK_FALLBACK.map((p) => ({ ...p }));
+  return [];
+}
+
+export function saveDentalStock(_stock: StockLine[]): void {
+  notifyStockUpdated();
 }
 
 /**

@@ -1,11 +1,13 @@
 /**
- * Rendez-vous partagés (Planning ↔ Dashboard).
- * Clé localStorage : dental_appointments_data
+ * Rendez-vous synchronisés sur PostgreSQL (Server Actions).
+ * `APPOINTMENTS_UPDATED_EVENT` notifie les vues après mutation.
  */
+
+import type { AppointmentRowJoined } from "@/lib/types/appointments-db";
 
 export const DENTAL_APPOINTMENTS_STORAGE_KEY = "dental_appointments_data";
 
-/** Émis après chaque écriture du planning (sync module Laboratoire, etc.). */
+/** Émis après chaque création / mise à jour / suppression de RDV côté serveur. */
 export const APPOINTMENTS_UPDATED_EVENT = "dental-appointments-updated";
 
 export type AppointmentRdv = {
@@ -21,7 +23,163 @@ export type AppointmentRdv = {
   rdvType?: "planned" | "direct";
   patientId?: string;
   status?: "pending" | "confirmed" | "done";
+  /** Affichage planning (dent concernée), optionnel — ne change pas la logique agenda. */
+  dent?: string;
 };
+
+const APPT_META_SEP = "\n---oryx-appt-meta\n";
+
+export type AppointmentParsedNotesMeta = {
+  dent?: string;
+  rdvType?: "planned" | "direct";
+  urgence?: boolean;
+  /** Affichage lorsque `patient_id` est absent (nom saisi librement). */
+  displayPatient?: string;
+};
+
+export function composeAppointmentNotes(
+  userText: string | undefined,
+  meta: AppointmentParsedNotesMeta,
+): string | null {
+  const t = userText?.trim() ?? "";
+  const hasMeta =
+    Boolean(meta.dent?.trim()) ||
+    Boolean(meta.displayPatient?.trim()) ||
+    meta.rdvType != null ||
+    meta.urgence === true;
+  if (!hasMeta && !t) return null;
+  if (!hasMeta) return t;
+  const json = JSON.stringify(meta);
+  return t ? `${t}${APPT_META_SEP}${json}` : `${APPT_META_SEP}${json}`;
+}
+
+export function parseAppointmentNotes(notes: string | null): {
+  userText: string;
+  meta: AppointmentParsedNotesMeta;
+} {
+  if (!notes?.trim()) return { userText: "", meta: {} };
+  const idx = notes.lastIndexOf(APPT_META_SEP);
+  if (idx === -1)
+    return { userText: notes.trim(), meta: {} };
+  const userText = notes.slice(0, idx).trim();
+  const raw = notes.slice(idx + APPT_META_SEP.length).trim();
+  try {
+    const meta = JSON.parse(raw) as AppointmentParsedNotesMeta;
+    if (!meta || typeof meta !== "object") return { userText: notes.trim(), meta: {} };
+    return {
+      userText,
+      meta: {
+        ...(typeof meta.dent === "string" ? { dent: meta.dent } : {}),
+        ...(typeof meta.displayPatient === "string"
+          ? { displayPatient: meta.displayPatient }
+          : {}),
+        ...(meta.rdvType === "direct" || meta.rdvType === "planned"
+          ? { rdvType: meta.rdvType }
+          : {}),
+        ...(meta.urgence === true ? { urgence: true } : {}),
+      },
+    };
+  } catch {
+    return { userText: notes.trim(), meta: {} };
+  }
+}
+
+/** PostgreSQL statut ↔ pastilles planning (inchangées). */
+export function statutUiFromDb(
+  raw: string | null | undefined,
+): NonNullable<AppointmentRdv["status"]> | undefined {
+  const x = (raw ?? "").toLowerCase().trim();
+  if (x === "en_attente" || x === "pending") return "pending";
+  if (x === "termine" || x === "realise" || x === "done") return "done";
+  return "confirmed";
+}
+
+export function statutDbFromUi(
+  s?: AppointmentRdv["status"],
+): string | null {
+  if (s === "pending") return "en_attente";
+  if (s === "done") return "termine";
+  return null;
+}
+
+/** Ligne PG + JOIN patients → format UI legacy. */
+export function appointmentJoinedRowToRdv(
+  row: AppointmentRowJoined,
+): AppointmentRdv {
+  const { userText, meta } = parseAppointmentNotes(row.notes);
+  const prenom = (row.prenom ?? "").trim();
+  const nom = (row.nom ?? "").trim();
+  const joined = `${prenom} ${nom}`.trim();
+  const display =
+    joined ||
+    meta.displayPatient?.trim() ||
+    "(Patient)";
+  const typeActe = row.type_acte?.trim() ?? "";
+  const id = row.id;
+  const dateKey =
+    typeof row.date === "string"
+      ? row.date.slice(0, 10)
+      : `${row.date}`;
+  const start = row.heure.length >= 5 ? row.heure.slice(0, 5) : row.heure;
+  return {
+    id,
+    dateKey,
+    start,
+    durationMinutes: Number(row.duree) || 30,
+    patient: display,
+    soin: typeActe || "Consultation",
+    urgence:
+      meta.urgence === true ||
+      /urgence/i.test(typeActe) ||
+      /\burgence\b/i.test(userText ?? ""),
+    rdvType: meta.rdvType === "direct" ? "direct" : "planned",
+    patientId: row.patient_id ?? undefined,
+    status: statutUiFromDb(row.statut),
+    dent: meta.dent,
+  };
+}
+
+export function notifyAppointmentsUpdated() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(APPOINTMENTS_UPDATED_EVENT));
+}
+
+/** @deprecated Liste en base ; gardé pour éviter les erreurs d’import. */
+export function readAppointmentsFromStorage(): AppointmentRdv[] {
+  return [];
+}
+
+/** @deprecated Persistance serveur uniquement. */
+export function writeAppointmentsToStorage(
+  _items: AppointmentRdv[],
+  _options?: { silent?: boolean },
+) {}
+
+/** Objet RDV avant persistance PostgreSQL (entrée directe dashboard). */
+export function buildDirectEntryAppointmentPreview(args: {
+  patientName: string;
+  patientId?: string | null;
+  visitKind: "consultation" | "urgence";
+  at?: Date;
+}): Omit<AppointmentRdv, "id"> & { id?: string } {
+  const d = safeDate(args.at ?? undefined);
+  const dateKey = formatDateKeyLocal(d);
+  const start = formatTimeHHmmLocal(d);
+  return {
+    dateKey,
+    start,
+    durationMinutes: 30,
+    patient: args.patientName.trim(),
+    soin:
+      args.visitKind === "urgence"
+        ? "Urgence (entrée directe)"
+        : "Consultation (entrée directe)",
+    urgence: args.visitKind === "urgence",
+    rdvType: "direct",
+    status: "pending",
+    ...(args.patientId ? { patientId: args.patientId } : {}),
+  };
+}
 
 /** Date valide pour calculs ; sinon aujourd'hui (évite Invalid Date / crash toISOString). */
 export function safeDate(d: Date | null | undefined): Date {
@@ -81,100 +239,6 @@ export function roundStartTimeToNextTenMinutes(d: Date = new Date()): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function parseRdv(raw: unknown): AppointmentRdv | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  const dateKeyRaw =
-    typeof o.dateKey === "string" ? o.dateKey.trim() : "";
-  if (
-    typeof o.id !== "string" ||
-    !dateKeyRaw ||
-    !isValidDateKeyString(dateKeyRaw) ||
-    typeof o.start !== "string" ||
-    typeof o.patient !== "string" ||
-    typeof o.soin !== "string"
-  ) {
-    return null;
-  }
-  const duration =
-    typeof o.durationMinutes === "number"
-      ? o.durationMinutes
-      : Number(o.durationMinutes) || 30;
-  return {
-    id: o.id,
-    dateKey: dateKeyRaw,
-    start: o.start.length >= 5 ? o.start.slice(0, 5) : o.start,
-    durationMinutes: duration,
-    patient: o.patient,
-    soin: o.soin,
-    urgence: o.urgence === true,
-    rdvType:
-      o.rdvType === "direct"
-        ? "direct"
-        : o.rdvType === "planned"
-          ? "planned"
-          : undefined,
-    patientId: typeof o.patientId === "string" ? o.patientId : undefined,
-    status:
-      o.status === "done"
-        ? "done"
-        : o.status === "confirmed"
-          ? "confirmed"
-          : o.status === "pending"
-            ? "pending"
-            : undefined,
-  };
-}
-
-export function readAppointmentsFromStorage(): AppointmentRdv[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DENTAL_APPOINTMENTS_STORAGE_KEY);
-    if (raw == null || raw === "") return [];
-    const data = JSON.parse(raw) as unknown;
-    if (!Array.isArray(data)) return [];
-    const out: AppointmentRdv[] = [];
-    for (const item of data) {
-      const r = parseRdv(item);
-      if (r) out.push(r);
-    }
-    if (out.length !== data.length) {
-      writeAppointmentsToStorage(out);
-    }
-    return out;
-  } catch (e) {
-    console.error("Storage error:", e);
-    return [];
-  }
-}
-
-export function writeAppointmentsToStorage(
-  items: AppointmentRdv[],
-  options?: { silent?: boolean },
-) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(
-      DENTAL_APPOINTMENTS_STORAGE_KEY,
-      JSON.stringify(items),
-    );
-    if (!options?.silent) {
-      window.dispatchEvent(new CustomEvent(APPOINTMENTS_UPDATED_EVENT));
-    }
-  } catch (e) {
-    console.error("Storage error:", e);
-  }
-}
-
-/** Si le stockage est vide, initialise avec la graine (ex. démo planning). */
-export function ensureAppointmentsSeeded(seed: AppointmentRdv[]): AppointmentRdv[] {
-  if (typeof window === "undefined") return seed;
-  const cur = readAppointmentsFromStorage();
-  if (cur.length > 0) return cur;
-  writeAppointmentsToStorage(seed);
-  return seed;
-}
-
 /** Heure locale HH:mm */
 export function formatTimeHHmmLocal(d: Date): string {
   return safeDate(d).toLocaleTimeString("fr-FR", {
@@ -182,37 +246,4 @@ export function formatTimeHHmmLocal(d: Date): string {
     minute: "2-digit",
     hour12: false,
   });
-}
-
-/**
- * Ajoute un créneau « entrée directe » à l’agenda (aujourd’hui, heure actuelle).
- */
-export function appendDirectEntryAppointment(args: {
-  patientName: string;
-  patientId?: string | null;
-  visitKind: "consultation" | "urgence";
-  at?: Date;
-}): AppointmentRdv {
-  const d = safeDate(args.at ?? undefined);
-  const dateKey = formatDateKeyLocal(d);
-  const start = formatTimeHHmmLocal(d);
-  const rdv: AppointmentRdv = {
-    id: `direct-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    dateKey,
-    start,
-    durationMinutes: 30,
-    patient: args.patientName.trim(),
-    soin:
-      args.visitKind === "urgence"
-        ? "Urgence (entrée directe)"
-        : "Consultation (entrée directe)",
-    urgence: args.visitKind === "urgence",
-    rdvType: "direct",
-    status: "pending",
-    ...(args.patientId ? { patientId: args.patientId } : {}),
-  };
-  const list = readAppointmentsFromStorage();
-  list.push(rdv);
-  writeAppointmentsToStorage(list);
-  return rdv;
 }

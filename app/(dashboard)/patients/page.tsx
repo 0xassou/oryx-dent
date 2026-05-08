@@ -10,7 +10,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, ChevronRight, MoreVertical, Search, FileText, UserPlus } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
-import { syncPatientToDBAction } from "@/app/actions/patients";
+import { createPatientAction, getPatientsAction } from "@/app/actions/patients";
 import {
   AddPatientModal,
   type AddPatientPayload,
@@ -19,12 +19,9 @@ import { formatDate, formatPhoneNumber, toTitleCase } from "@/utils/formatters";
 import {
   computeAgeFromDateIso,
   displayPatientName,
-  ensurePatientsHydrated,
   initializeEmptyDentalChart,
-  newPatientId,
-  readPatientsFromStorage,
   type DentalPatientRecord,
-  upsertPatientInStorage,
+  patientRowToDentalPatientRecord,
   writeMinimalPatientProfile,
 } from "@/utils/patientData";
 
@@ -60,15 +57,21 @@ function PatientsPageContent() {
   const [statusFilter, setStatusFilter] = useState<"tous" | "actifs" | "inactifs">("tous");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
 
-  const reload = useCallback(() => {
-    setPatients(readPatientsFromStorage());
+  const reload = useCallback(async () => {
+    const res = await getPatientsAction();
+    if (!res.ok) {
+      console.error(res.error);
+      return;
+    }
+    setPatients(res.data.map(patientRowToDentalPatientRecord));
   }, []);
 
   useEffect(() => {
-    ensurePatientsHydrated();
-    setPatients(readPatientsFromStorage());
-    setHydrated(true);
-  }, []);
+    void (async () => {
+      await reload();
+      setHydrated(true);
+    })();
+  }, [reload]);
 
   useEffect(() => {
     const q = searchParams.get("search");
@@ -78,7 +81,7 @@ function PatientsPageContent() {
   useEffect(() => {
     function onFocus() {
       if (typeof window === "undefined") return;
-      reload();
+      void reload();
     }
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
@@ -118,26 +121,26 @@ function PatientsPageContent() {
     setOpenActionsId(null);
   }
 
-  function handleAddPatient(payload: AddPatientPayload) {
+  async function handleAddPatient(payload: AddPatientPayload) {
     if (!payload.nom.trim() || !payload.prenom.trim() || !payload.telephone.trim())
       return;
-    const newId = newPatientId();
-    const record: DentalPatientRecord = {
-      id: newId,
+    const dob = payload.dateNaissance.trim();
+    const created = await createPatientAction({
       nom: payload.nom.trim(),
       prenom: payload.prenom.trim(),
       telephone: payload.telephone.trim() || "—",
-      derniereVisite: new Date().toISOString(),
-    };
-    upsertPatientInStorage(record);
-
-    // Sync PostgreSQL
-    syncPatientToDBAction({
-      id: record.id,
-      prenom: record.prenom,
-      nom: record.nom,
-      telephone: record.telephone,
-    }).catch(console.error);
+      email: payload.email.trim() || null,
+      date_naissance: dob || null,
+      sexe: payload.sexe === "F" ? "F" : payload.sexe === "M" ? "M" : null,
+      adresse: payload.adresse.trim() || null,
+      antecedents: payload.allergies.trim() || null,
+    });
+    if (!created.ok) {
+      console.error(created.error);
+      return;
+    }
+    const record = patientRowToDentalPatientRecord(created.data);
+    const newId = record.id;
 
     const genreLabel =
       payload.sexe === "F"
@@ -163,7 +166,7 @@ function PatientsPageContent() {
 
     initializeEmptyDentalChart(newId);
 
-    reload();
+    await reload();
     setIsModalOpen(false);
     router.push(`/patients/${newId}`);
   }

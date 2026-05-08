@@ -1,37 +1,59 @@
-import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import { NextResponse, type NextRequest } from "next/server";
 
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET ?? "oryx-secret-change-me"
-);
+/**
+ * Lecture de session Better Auth sans toucher PostgreSQL depuis l’Edge :
+ * même contrat JSON que `/get-session`.
+ */
+async function hasBetterAuthSession(request: NextRequest): Promise<boolean> {
+  try {
+    const url = new URL("/api/auth/get-session", request.nextUrl.origin);
+    const response = await fetch(url, {
+      headers: { cookie: request.headers.get("cookie") ?? "" },
+      cache: "no-store",
+    });
+    let data: unknown = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+    if (!data || typeof data !== "object") return false;
+    const rec = data as { session?: unknown; user?: unknown };
+    return rec.session != null && rec.user != null;
+  } catch {
+    return false;
+  }
+}
 
-const PUBLIC_PATHS = ["/login", "/invitation"];
+function isPublicPath(pathname: string): boolean {
+  if (pathname === "/login" || pathname.startsWith("/login/")) return true;
+  if (pathname.startsWith("/api/auth")) return true;
+  /** Invitation par lien token (sans compte Better Auth). */
+  if (pathname.startsWith("/invitation")) return true;
+  return false;
+}
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const pathname = req.nextUrl.pathname;
 
-  // Laisser passer les routes publiques
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+  if (pathname === "/login" || pathname.startsWith("/login/")) {
+    if (await hasBetterAuthSession(req)) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
     return NextResponse.next();
   }
 
-  // Vérifier le cookie de session
-  const token = req.cookies.get("oryx-session")?.value;
-  
-  if (!token) {
-    return NextResponse.redirect(
-      new URL("/login", req.url)
-    );
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
   }
 
-  try {
-    await jwtVerify(token, SECRET);
-    return NextResponse.next();
-  } catch {
-    return NextResponse.redirect(
-      new URL("/login", req.url)
-    );
+  const authed = await hasBetterAuthSession(req);
+
+  if (!authed) {
+    return NextResponse.redirect(new URL("/login", req.url));
   }
+
+  return NextResponse.next();
 }
 
 export const config = {

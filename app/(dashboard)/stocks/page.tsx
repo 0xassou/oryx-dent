@@ -19,10 +19,19 @@ import {
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
-  DENTAL_STOCK_LS_KEY,
-  saveDentalStock,
+  createStockAction,
+  deleteStockAction,
+  getStocksAction,
+  updateStockAction,
+} from "@/app/actions/stocks";
+import {
+  notifyStockUpdated,
   type StockLine,
 } from "@/utils/stockLogic";
+import {
+  stockRowToStockLine,
+  stockLineToStockInput,
+} from "@/utils/stockDbMapping";
 
 const CATEGORIES = [
   "Composites & Ciments",
@@ -187,6 +196,33 @@ const INITIAL_PRODUITS: Produit[] = [
 
 function uid() {
   return Math.random().toString(16).slice(2);
+}
+
+function produitToStockLine(p: Produit): StockLine {
+  return {
+    id: p.id,
+    nom: p.nom,
+    quantite: p.quantite,
+    quantiteMax: p.quantiteMax,
+    categorie: p.categorie,
+    peremption: p.peremption,
+    gestion: p.gestion,
+  };
+}
+
+function stockLineToProduit(line: StockLine): Produit {
+  return {
+    id: line.id,
+    nom: line.nom,
+    categorie: normalizeCategorie(line.categorie),
+    gestion: line.gestion === "multidose" ? "multidose" : "unitaire",
+    quantite: line.quantite,
+    quantiteMax: line.quantiteMax,
+    peremption:
+      !line.peremption || line.peremption === "—"
+        ? "—"
+        : line.peremption.trim(),
+  };
 }
 
 function parsePeremptionDisplayToIso(display: string): string {
@@ -598,42 +634,44 @@ export default function StocksPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const modalMode = editingProduct ? "edit" : "create";
 
-  // Hydratation Next.js-safe : on recharge le stock (et l'historique) depuis localStorage au montage.
+  // PostgreSQL pour le stock ; historique conserve le localStorage (comportement existant).
   useEffect(() => {
-    try {
-      const rawStock = localStorage.getItem(DENTAL_STOCK_LS_KEY);
-      if (!rawStock) {
-        setProduits(INITIAL_PRODUITS);
-      } else {
-        const parsed = JSON.parse(rawStock);
-        if (Array.isArray(parsed)) {
-          setProduits(
-            (parsed as Produit[]).map((row) => ({
-              ...row,
-              categorie: normalizeCategorie(row.categorie),
-              gestion:
-                row.gestion === "multidose" ? "multidose" : "unitaire",
-            })),
-          );
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rawHistory = localStorage.getItem(STOCK_HISTORY_LS_KEY);
+        if (!rawHistory) {
+          if (!cancelled) setStockHistory([]);
+        } else {
+          const parsedHistory = JSON.parse(rawHistory);
+          if (Array.isArray(parsedHistory) && !cancelled) {
+            setStockHistory(parsedHistory as StockHistoryItem[]);
+          }
         }
-      }
 
-      const rawHistory = localStorage.getItem(STOCK_HISTORY_LS_KEY);
-      if (!rawHistory) {
-        setStockHistory([]);
-      } else {
-        const parsedHistory = JSON.parse(rawHistory);
-        if (Array.isArray(parsedHistory)) {
-          setStockHistory(parsedHistory as StockHistoryItem[]);
+        const res = await getStocksAction();
+        if (cancelled) return;
+        if (res.ok && res.data.length > 0) {
+          setProduits(
+            res.data.map((row) =>
+              stockLineToProduit(stockRowToStockLine(row)),
+            ),
+          );
+        } else if (res.ok) {
+          setProduits(INITIAL_PRODUITS);
         }
+      } catch {
+        if (!cancelled) {
+          setProduits(INITIAL_PRODUITS);
+          setStockHistory([]);
+        }
+      } finally {
+        if (!cancelled) setHasHydrated(true);
       }
-    } catch {
-      // En cas d'erreur (JSON invalide), on retombe sur les mocks.
-      setProduits(INITIAL_PRODUITS);
-      setStockHistory([]);
-    } finally {
-      setHasHydrated(true);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -652,16 +690,6 @@ export default function StocksPage() {
       /* ignore */
     }
   }, []);
-
-  // Persistance : sauvegarde à chaque modification.
-  useEffect(() => {
-    if (!hasHydrated) return;
-    try {
-      localStorage.setItem(DENTAL_STOCK_LS_KEY, JSON.stringify(produits));
-    } catch {
-      // Ignore : quota / navigateur privé, etc.
-    }
-  }, [produits, hasHydrated]);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -815,11 +843,15 @@ export default function StocksPage() {
     ) {
       return;
     }
-    setProduits((prev) => {
-      const next = prev.filter((x) => x.id !== p.id);
-      saveDentalStock(next as StockLine[]);
-      return next;
-    });
+    void (async () => {
+      const res = await deleteStockAction(p.id);
+      if (!res.ok) {
+        console.error(res.error);
+        return;
+      }
+      setProduits((prev) => prev.filter((x) => x.id !== p.id));
+      notifyStockUpdated();
+    })();
   }
 
   function handleSaveProduct(draft: Omit<Produit, "id">, id?: string) {
@@ -829,38 +861,63 @@ export default function StocksPage() {
       gestion: draft.gestion === "multidose" ? "multidose" : "unitaire",
     };
 
-    if (id) {
-      setProduits((prev) => {
-        const next = prev.map((p) =>
-          p.id === id ? { ...p, ...merged } : p,
+    void (async () => {
+      if (id) {
+        const line = produitToStockLine({ id, ...merged } as Produit);
+        const payload = stockLineToStockInput(line);
+        const res = await updateStockAction(id, payload);
+        if (!res.ok) {
+          console.error(res.error);
+          return;
+        }
+        setProduits((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? stockLineToProduit(stockRowToStockLine(res.data))
+              : p,
+          ),
         );
-        saveDentalStock(next as StockLine[]);
-        return next;
-      });
-    } else {
-      setProduits((prev) => {
-        const newId = `p-${uid()}`;
-        const next = [{ id: newId, ...merged }, ...prev];
-        saveDentalStock(next as StockLine[]);
-        return next;
-      });
-    }
-    setIsProductModalOpen(false);
+      } else {
+        const tmp = produitToStockLine({
+          id: "",
+          ...merged,
+        } as Produit);
+        const payload = stockLineToStockInput(tmp);
+        const res = await createStockAction(payload);
+        if (!res.ok) {
+          console.error(res.error);
+          return;
+        }
+        const produit = stockLineToProduit(stockRowToStockLine(res.data));
+        setProduits((prev) => [produit, ...prev]);
+      }
+      notifyStockUpdated();
+      setIsProductModalOpen(false);
+    })();
   }
 
   function handleOpenMultidoseUnit(productId: string) {
-    setProduits((prev) => {
-      const item = prev.find((x) => x.id === productId);
-      if (!item) return prev;
-
+    void (async () => {
+      const item = produits.find((x) => x.id === productId);
+      if (!item) return;
       const newQty = Math.max(0, item.quantite - 1);
-      const next = prev.map((prod) =>
-        prod.id === productId ? { ...prod, quantite: newQty } : prod,
+      const res = await updateStockAction(productId, {
+        quantite: newQty,
+      });
+      if (!res.ok) {
+        console.error(res.error);
+        return;
+      }
+      setProduits((prev) =>
+        prev.map((prod) =>
+          prod.id === productId
+            ? stockLineToProduit(stockRowToStockLine(res.data))
+            : prod,
+        ),
       );
-      saveDentalStock(next as StockLine[]);
-      return next;
-    });
-    setStockToast("Une unité a été retirée du stock central.");
+      notifyStockUpdated();
+      setStockToast("Une unité a été retirée du stock central.");
+    })();
   }
 
   return (

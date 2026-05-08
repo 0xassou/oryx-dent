@@ -3,20 +3,26 @@
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, ChevronDown, LogOut, Menu, Search } from "lucide-react";
-import { logoutAction } from "@/app/actions/auth";
+import { authClient } from "@/lib/auth-client";
 import { ToastProvider } from "@/components/ToastProvider";
 import MobileNav from "@/components/layout/MobileNav";
 import Sidebar from "@/components/layout/Sidebar";
 import VoiceAssistant from "@/components/ui/VoiceAssistant";
 import { RouteGuard } from "@/components/auth/RouteGuard";
 import { useRole } from "@/hooks/useRole";
-import { clearSession, getInitials, ROLE_LABEL } from "@/utils/roles";
+import { clearSession, getInitials, ROLE_LABEL, setCurrentRole, setCurrentUser } from "@/utils/roles";
 import {
-  DENTAL_APPOINTMENTS_STORAGE_KEY,
+  APPOINTMENTS_UPDATED_EVENT,
   formatDateKeyLocal,
 } from "@/utils/appointmentData";
 import { applyTheme, getStoredTheme } from "@/utils/theme";
 import { toTitleCase } from "@/utils/formatters";
+import { getAppointmentsByDateAction } from "@/app/actions/appointments";
+import { getStocksAction } from "@/app/actions/stocks";
+import { getFacturesAction } from "@/app/actions/factures";
+import { stockRowToStockLine } from "@/utils/stockDbMapping";
+import { STOCK_UPDATED_EVENT } from "@/utils/stockLogic";
+import { FACTURES_UPDATED_EVENT } from "@/utils/factureDocuments";
 
 type LayoutNotification = {
   id: string;
@@ -26,84 +32,12 @@ type LayoutNotification = {
   color: "orange" | "red" | "violet";
 };
 
-function getNotifications(): LayoutNotification[] {
-  if (typeof window === "undefined") return [];
-  const notifs: LayoutNotification[] = [];
-
-  try {
-    const stock = JSON.parse(
-      localStorage.getItem("dental_stock") ?? "[]",
-    ) as unknown;
-    if (Array.isArray(stock)) {
-      stock
-        .filter((p: { quantite?: number; seuil?: number }) =>
-          (p.quantite ?? 0) <= (p.seuil ?? 5),
-        )
-        .forEach((p: { nom?: string; quantite?: number }) => {
-          notifs.push({
-            id: `stock-${String(p.nom ?? "x")}`,
-            type: "stock",
-            message: `Stock faible : ${p.nom}`,
-            detail: `${p.quantite ?? 0} unités restantes`,
-            color: "orange",
-          });
-        });
-    }
-
-    const docs = JSON.parse(
-      localStorage.getItem("dental_dashboard_docs") ?? "[]",
-    ) as unknown;
-    if (Array.isArray(docs)) {
-      docs
-        .filter(
-          (f: { montantTotal?: number; montantPaye?: number }) =>
-            (f.montantTotal ?? 0) > (f.montantPaye ?? 0),
-        )
-        .slice(0, 3)
-        .forEach(
-          (f: {
-            patient?: string;
-            montantTotal?: number;
-            montantPaye?: number;
-            id?: string;
-          }) => {
-            notifs.push({
-              id: `facture-${f.id ?? ""}`,
-              type: "facture",
-              message: `Impayé : ${f.patient}`,
-              detail: `${(
-                (f.montantTotal ?? 0) - (f.montantPaye ?? 0)
-              ).toLocaleString("fr-DZ")} DA restants`,
-              color: "red",
-            });
-          },
-        );
-    }
-
-    const rdvs = JSON.parse(
-      localStorage.getItem(DENTAL_APPOINTMENTS_STORAGE_KEY) ?? "[]",
-    ) as unknown;
-    if (Array.isArray(rdvs)) {
-      const todayKey = formatDateKeyLocal(new Date());
-      const rdvAujourdhui = rdvs.filter(
-        (r: { dateKey?: string; status?: string }) =>
-          r.dateKey === todayKey && r.status === "pending",
-      );
-      if (rdvAujourdhui.length > 0) {
-        notifs.push({
-          id: "rdv-today",
-          type: "rdv",
-          message: `${rdvAujourdhui.length} RDV à confirmer`,
-          detail: "Aujourd'hui",
-          color: "violet",
-        });
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return notifs;
+function isStockLineCritical(line: {
+  quantite: number;
+  quantiteMax: number;
+}): boolean {
+  if (line.quantiteMax <= 0) return line.quantite <= 0;
+  return (line.quantite / line.quantiteMax) * 100 < 50;
 }
 
 export default function DashboardLayout({
@@ -131,7 +65,135 @@ export default function DashboardLayout({
   }, []);
 
   useEffect(() => {
-    setNotifications(getNotifications());
+    let cancelled = false;
+    async function refreshNotifications() {
+      const extras: LayoutNotification[] = [];
+
+      try {
+        const stocksRes = await getStocksAction();
+        if (stocksRes.ok) {
+          for (const row of stocksRes.data) {
+            const line = stockRowToStockLine(row);
+            if (!isStockLineCritical(line)) continue;
+            extras.push({
+              id: `stock-${line.id}`,
+              type: "stock",
+              message: `Stock faible : ${line.nom}`,
+              detail: `${line.quantite} unités restantes`,
+              color: "orange",
+            });
+          }
+        }
+      } catch {
+        /* noop */
+      }
+
+      try {
+        const factRes = await getFacturesAction();
+        if (factRes.ok) {
+          const unpaid = factRes.data
+            .filter((r) => {
+              const mt =
+                Number.parseFloat(String(r.montant ?? "0")) || 0;
+              const pay =
+                Number.parseFloat(String(r.montant_paye ?? "0")) || 0;
+              return mt > pay;
+            })
+            .slice(0, 3);
+          for (const f of unpaid) {
+            const mt =
+              Number.parseFloat(String(f.montant ?? "0")) || 0;
+            const pay =
+              Number.parseFloat(String(f.montant_paye ?? "0")) || 0;
+            const patient =
+              `${f.prenom ?? ""} ${f.nom ?? ""}`.trim() ||
+              "Patient";
+            extras.push({
+              id: `facture-${f.id}`,
+              type: "facture",
+              message: `Impayé : ${patient}`,
+              detail: `${(mt - pay).toLocaleString(
+                "fr-DZ",
+              )} DA restants`,
+              color: "red",
+            });
+          }
+        }
+      } catch {
+        /* noop */
+      }
+
+      try {
+        const res = await getAppointmentsByDateAction(
+          formatDateKeyLocal(new Date()),
+        );
+        if (res.ok) {
+          const pending = res.data.filter((r) => {
+            const s = (r.statut ?? "").toLowerCase();
+            return s === "en_attente" || s === "pending";
+          });
+          const count = pending.length;
+          if (count > 0) {
+            extras.push({
+              id: "rdv-today",
+              type: "rdv",
+              message: `${count} RDV à confirmer`,
+              detail: "Aujourd'hui",
+              color: "violet",
+            });
+          }
+        }
+      } catch {
+        /* noop */
+      }
+      if (!cancelled) setNotifications(extras);
+    }
+    void refreshNotifications();
+    const h = () => {
+      void refreshNotifications();
+    };
+    window.addEventListener(APPOINTMENTS_UPDATED_EVENT, h);
+    window.addEventListener(STOCK_UPDATED_EVENT, h);
+    window.addEventListener(FACTURES_UPDATED_EVENT, h);
+    window.addEventListener("focus", h);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, h);
+      window.removeEventListener(STOCK_UPDATED_EVENT, h);
+      window.removeEventListener(FACTURES_UPDATED_EVENT, h);
+      window.removeEventListener("focus", h);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/get-session", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data: unknown = await res.json().catch(() => null);
+        if (cancelled || data === null || typeof data !== "object") return;
+        const typed = data as {
+          session?: unknown;
+          user?: { email?: string; name?: string | null };
+        };
+        if (!typed.session || !typed.user) return;
+        const u = typed.user;
+        setCurrentUser({
+          email: u.email ?? "",
+          nom: u.name?.trim() ? u.name.trim() : "Administrateur",
+          role: "admin",
+        });
+        setCurrentRole("admin");
+      } catch {
+        /* noop */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -299,9 +361,14 @@ export default function DashboardLayout({
                   {profileOpen && (
                     <div className="absolute right-4 top-14 z-50 w-48 overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-lg">
                       <button
+                        type="button"
                         onClick={() => {
-                          clearSession();
-                          logoutAction();
+                          void (async () => {
+                            await authClient.signOut();
+                            clearSession();
+                            setProfileOpen(false);
+                            router.replace("/login");
+                          })();
                         }}
                         className="w-full flex items-center gap-2 
            px-4 py-3 text-sm text-red-600

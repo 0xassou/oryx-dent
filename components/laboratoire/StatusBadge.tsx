@@ -51,7 +51,7 @@ export function StatusBadge({ statut, className = "" }: StatusBadgeProps) {
   return (
     <span
       className={[
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold tracking-wide",
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium tracking-wide",
         cfg.className,
         cfg.blink ? "animate-lab-retouche" : "",
         className,

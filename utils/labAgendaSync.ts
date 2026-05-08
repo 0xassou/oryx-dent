@@ -1,8 +1,4 @@
-import {
-  readAppointmentsFromStorage,
-  writeAppointmentsToStorage,
-  type AppointmentRdv,
-} from "@/utils/appointmentData";
+import type { AppointmentRdv } from "@/utils/appointmentData";
 import type { LaboratoireCommande } from "@/utils/laboratoireCommandes";
 
 /** RDV du patient (nom ou id dossier). */
@@ -31,49 +27,49 @@ export function formatToastLongDate(iso: string): string {
   });
 }
 
-/**
- * Pousse les dates Pose / Retour labo vers les RDV liés dans l’agenda.
- * Retourne un message toast si au moins un RDV a été modifié.
- */
-export function pushLabDatesToLinkedAppointments(
-  _prev: LaboratoireCommande | undefined,
-  next: LaboratoireCommande,
-): string | null {
-  const apps = readAppointmentsFromStorage();
-  const messages: string[] = [];
-  let mutated = false;
+/** Mises à jour agenda à appliquer côté serveur quand une commande labo impose une date de RDV liée. */
+export type LabLinkedAppointmentMove = {
+  appointmentId: string;
+  newDateIso: string;
+  toast: string;
+};
 
-  const nextApps = apps.map((a) => {
+/**
+ * Détermine les déplacements de RDV (PostgreSQL via `updateAppointmentAction`) après sauvegarde d’une commande labo.
+ */
+export function computeLinkedAppointmentDateMovesFromLab(
+  appointments: AppointmentRdv[],
+  next: LaboratoireCommande,
+): LabLinkedAppointmentMove[] {
+  const moves: LabLinkedAppointmentMove[] = [];
+
+  if (next.linkedPoseAppointmentId) {
+    const a = appointments.find((x) => x.id === next.linkedPoseAppointmentId);
     if (
-      next.linkedPoseAppointmentId &&
-      a.id === next.linkedPoseAppointmentId &&
+      a &&
       next.rdvPatientIso &&
       next.rdvPatientIso !== a.dateKey
     ) {
-      mutated = true;
-      messages.push(
-        `Le rendez-vous de ${next.patient} a été déplacé au ${formatToastLongDate(next.rdvPatientIso)} pour correspondre à la date de pose.`,
-      );
-      return { ...a, dateKey: next.rdvPatientIso };
+      moves.push({
+        appointmentId: next.linkedPoseAppointmentId,
+        newDateIso: next.rdvPatientIso,
+        toast: `Le rendez-vous de ${next.patient} a été déplacé au ${formatToastLongDate(next.rdvPatientIso)} pour correspondre à la date de pose.`,
+      });
     }
-    if (
-      next.linkedRetourAppointmentId &&
-      a.id === next.linkedRetourAppointmentId &&
-      next.retourIso &&
-      next.retourIso !== a.dateKey
-    ) {
-      mutated = true;
-      messages.push(
-        `Le rendez-vous de ${next.patient} a été déplacé au ${formatToastLongDate(next.retourIso)} pour correspondre au retour labo.`,
-      );
-      return { ...a, dateKey: next.retourIso };
-    }
-    return a;
-  });
+  }
 
-  if (!mutated) return null;
-  writeAppointmentsToStorage(nextApps, { silent: true });
-  return messages[0] ?? null;
+  if (next.linkedRetourAppointmentId) {
+    const a = appointments.find((x) => x.id === next.linkedRetourAppointmentId);
+    if (a && next.retourIso && next.retourIso !== a.dateKey) {
+      moves.push({
+        appointmentId: next.linkedRetourAppointmentId,
+        newDateIso: next.retourIso,
+        toast: `Le rendez-vous de ${next.patient} a été déplacé au ${formatToastLongDate(next.retourIso)} pour correspondre au retour labo.`,
+      });
+    }
+  }
+
+  return moves;
 }
 
 /** Recopie les dates agenda → fiche labo (déplacement dans le planning). */

@@ -17,21 +17,29 @@ import {
   ChevronLeft,
   ChevronRight,
   List,
+  Pencil,
+  Phone,
   Plus,
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
-import { syncAppointmentToDBAction } from "@/app/actions/appointments";
+import {
+  createAppointmentAction,
+  getAppointmentsAction,
+  updateAppointmentAction,
+} from "@/app/actions/appointments";
 import {
   NewAppointmentModal,
   type NewAppointmentPayload,
 } from "@/components/planning/NewAppointmentModal";
 import {
   type AppointmentRdv as Rdv,
-  ensureAppointmentsSeeded,
+  APPOINTMENTS_UPDATED_EVENT,
+  appointmentJoinedRowToRdv,
+  composeAppointmentNotes,
   formatDateKeyLocal,
   isValidDateKeyString,
+  notifyAppointmentsUpdated,
   safeDate,
-  writeAppointmentsToStorage,
 } from "@/utils/appointmentData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,16 +47,11 @@ import {
 // "liste" est la vue par défaut
 type ViewMode = "liste" | "calendar";
 
-// ─── Helpers date ─────────────────────────────────────────────────────────────
-
-function formatDateLong(d: Date): string {
-  return d.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+function cn(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
 }
+
+// ─── Helpers date ─────────────────────────────────────────────────────────────
 
 function formatDateKey(d: Date): string {
   return formatDateKeyLocal(safeDate(d));
@@ -104,52 +107,68 @@ function buildWeekColumns(centerDate: Date): SlidingDayColumn[] {
   return columns;
 }
 
-// ─── Données fictives ─────────────────────────────────────────────────────────
+// ─── Helpers date ─────────────────────────────────────────────────────────────
+type CareAccentKind = "soin" | "chirurgie" | "ortho";
 
-function mkDateKey(offsetDays: number): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + offsetDays);
-  return formatDateKey(d);
+function careAccentFromSoin(soin: string): CareAccentKind {
+  const s = soin.toLowerCase();
+  if (/orthodont|bague|gouttier|visalign|réduit|orthop/.test(s)) return "ortho";
+  if (/\bextract|implant|greffe|chirurg|apicect/.test(s)) return "chirurgie";
+  return "soin";
 }
 
-const INITIAL_APPOINTMENTS: Rdv[] = [
-  { id: "1", dateKey: mkDateKey(-2), start: "08:30", durationMinutes: 30, patient: "Marie Dupont", soin: "Détartrage", rdvType: "planned" },
-  { id: "2", dateKey: mkDateKey(-2), start: "10:00", durationMinutes: 45, patient: "Jean Martin", soin: "Extraction", urgence: true, rdvType: "planned" },
-  { id: "3", dateKey: mkDateKey(-1), start: "11:30", durationMinutes: 60, patient: "Isabelle Roux", soin: "Couronne", rdvType: "planned" },
-  { id: "4", dateKey: mkDateKey(0), start: "14:00", durationMinutes: 90, patient: "Sophie Bernard", soin: "Blanchiment", rdvType: "planned" },
-  { id: "5", dateKey: mkDateKey(0), start: "09:00", durationMinutes: 30, patient: "Pierre Leroy", soin: "Détartrage", rdvType: "planned" },
-  { id: "6", dateKey: mkDateKey(1), start: "14:30", durationMinutes: 45, patient: "Lucas Garnier", soin: "Consultation", rdvType: "planned" },
-  { id: "7", dateKey: mkDateKey(2), start: "10:30", durationMinutes: 60, patient: "Claire Moreau", soin: "Implant", urgence: true, rdvType: "planned" },
-  { id: "8", dateKey: mkDateKey(3), start: "09:30", durationMinutes: 30, patient: "Thomas Petit", soin: "Blanchiment", rdvType: "planned" },
-  { id: "9", dateKey: mkDateKey(4), start: "11:00", durationMinutes: 45, patient: "Marie Dupont", soin: "Contrôle", rdvType: "planned" },
-];
+const CARE_BAND_COLOR: Record<CareAccentKind, string> = {
+  soin: "#06b6d4",
+  chirurgie: "#f97316",
+  ortho: "#10b981",
+};
 
-// ─── Helpers couleurs ─────────────────────────────────────────────────────────
+/** Plage affichée sous le titre (lun. xx → yy mai), Sora 400 / muted — sans nombre de RDV. */
+function formatPlanningDateRangeSubtitle(centerDate: Date): string {
+  const cols = buildSlidingDayColumns(safeDate(centerDate));
+  const d0 = safeDate(new Date(`${cols[0].iso}T12:00:00`));
+  const d1 = safeDate(new Date(`${cols[cols.length - 1].iso}T12:00:00`));
+  const w0 = cols[0].weekdayShort.toLowerCase().replace(/\.$/, "");
+  const mo0short = d0
+    .toLocaleDateString("fr-FR", { month: "short" })
+    .replace(/\.$/, "")
+    .toLowerCase();
+  const mo1long = d1
+    .toLocaleDateString("fr-FR", { month: "long" })
+    .replace(/^./, (c) => c.toUpperCase());
+  const left = `${w0}. ${d0.getDate()} ${mo0short}`;
+  let right = `${d1.getDate()} ${mo1long}`;
+  if (d0.getFullYear() !== d1.getFullYear()) {
+    right += ` ${d1.getFullYear()}`;
+  } else if (d1.getFullYear() !== new Date().getFullYear()) {
+    right += ` ${d1.getFullYear()}`;
+  }
+  return `${left} → ${right}`;
+}
 
-function rdvColor(rdv: Rdv) {
-  if (rdv.rdvType === "direct") {
+function appointmentStatusBadge(
+  rdv: Rdv,
+): { label: string; className: string } | null {
+  const st = rdv.status ?? "confirmed";
+  if (st === "pending") {
     return {
-      bg: "bg-violet-50",
-      text: "text-violet-700",
-      dot: "bg-violet-500",
-      border: "border-violet-200/70",
-      accent: "#7c3aed",
+      label: "En attente",
+      className:
+        "border border-[#fde68a] bg-[#fffbeb] px-2.5 py-0.5 text-[11px] font-medium text-[#d97706]",
     };
   }
-  return rdv.urgence
-    ? { bg: "bg-red-50", text: "text-red-600", dot: "bg-red-400", border: "border-red-200/60", accent: "#ef4444" }
-    : { bg: "bg-[color:var(--ds-primary-soft)]/60", text: "text-[color:var(--ds-primary)]", dot: "bg-[var(--ds-primary)]", border: "border-[var(--ds-primary-border)]/40", accent: "#7c3aed" };
-}
-
-function actBg(soin: string) {
-  const s = soin.toLowerCase();
-  if (s.includes("détartr")) return "bg-[color:var(--ds-primary-soft)]/60";
-  if (s.includes("extract")) return "bg-red-50/70";
-  if (s.includes("couronne") || s.includes("implant") || s.includes("proth"))
-    return "bg-amber-50/80";
-  if (s.includes("blanch")) return "bg-[var(--ds-primary-soft)]/70";
-  return "bg-[var(--ds-bg)]/70";
+  if (st === "done") {
+    return {
+      label: "Au fauteuil",
+      className:
+        "border border-[#a5f3fc] bg-[#ecfeff] px-2.5 py-0.5 text-[11px] font-medium text-[#0891b2]",
+    };
+  }
+  return {
+    label: "Confirmé",
+    className:
+      "border border-[#bbf7d0] bg-[#f0fdf4] px-2.5 py-0.5 text-[11px] font-medium text-[#16a34a]",
+  };
 }
 
 const GRID_STEP = 30;
@@ -179,10 +198,24 @@ function calendarRdvSurfaceStyle(rdv: Rdv): {
     timeStyle: { color: "rgba(255,255,255,0.95)" } satisfies CSSProperties,
     motifStyle: { color: "rgba(255,255,255,0.9)", fontWeight: 600 } satisfies CSSProperties,
   };
+  if (rdv.rdvType === "direct") {
+    return {
+      ...text,
+      backgroundColor: "rgba(124, 58, 237, 0.78)",
+      borderLeft: "3px solid #7c3aed",
+    };
+  }
   if (rdv.urgence) {
     return { ...text, backgroundColor: "rgba(239, 68, 68, 0.75)", borderLeft: "3px solid rgba(239, 68, 68, 1)" };
   }
-  return { ...text, backgroundColor: "rgba(124, 58, 237, 0.75)", borderLeft: "3px solid rgba(124, 58, 237, 1)" };
+  const care = careAccentFromSoin(rdv.soin);
+  const acc = CARE_BAND_COLOR[care];
+  const bgTint: Record<CareAccentKind, string> = {
+    soin: "rgba(6, 182, 212, 0.82)",
+    chirurgie: "rgba(249, 115, 22, 0.82)",
+    ortho: "rgba(16, 185, 129, 0.82)",
+  };
+  return { ...text, backgroundColor: bgTint[care], borderLeft: `3px solid ${acc}` };
 }
 
 function scrollDayColumnIntoView(scrollRoot: HTMLElement, columnHeaderEl: HTMLElement): void {
@@ -212,49 +245,75 @@ function ListView({
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const selectedDate = safeDate(new Date(`${selectedDayIso}T12:00:00`));
+  const todayIso = formatDateKey(new Date());
+  const dayTitleUpper = selectedDate
+    .toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    })
+    .toUpperCase();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-      {/* Bande 7 jours */}
-      <div className="grid grid-cols-7 gap-1 rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      {/* Bande 7 jours — compacte (densité type Linear) */}
+      <div className="grid grid-cols-7 gap-0.5 rounded-[20px] border border-[var(--ds-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         {weekCols.map((col) => {
           const rdvCount = rdvs.filter((r) => r.dateKey === col.iso).length;
           const isSelected = col.iso === selectedDayIso;
+          const isTodayStrip = col.iso === todayIso;
           return (
             <button
               key={col.iso}
               type="button"
               onClick={() => onDaySelect(col.iso)}
               className={[
-                "flex flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-all",
+                "flex flex-col items-center gap-0.5 rounded-lg px-0.5 py-1 transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#06b6d4]/35 focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--ds-bg)]",
                 isSelected
-                  ? "bg-[var(--ds-primary-soft)]"
-                  : "hover:bg-[var(--ds-primary-soft)]/50",
+                  ? "bg-[color:var(--ds-primary)] text-white shadow-[0_2px_8px_rgba(124,58,237,0.2)]"
+                  : cn(
+                      "hover:bg-[var(--ds-primary-soft)]/65",
+                      isTodayStrip &&
+                        !isSelected &&
+                        "ring-[1px] ring-inset ring-[#06b6d4]/40",
+                    ),
               ].join(" ")}
             >
-              <span className="text-[10px] font-medium uppercase tracking-[0.8px] text-[var(--ds-text-muted)]">
-                {col.weekdayShort}
+              <span
+                className={cn(
+                  "text-xs font-medium uppercase leading-none tracking-widest text-[var(--ds-text-subtle)]",
+                  isSelected && "text-white/95",
+                )}
+              >
+                {col.weekdayShort.toUpperCase()}
               </span>
               <span
-                className={[
-                  "flex h-7 w-7 items-center justify-center text-[14px] font-bold leading-none",
+                className={cn(
+                  "flex h-6 min-w-[1.375rem] items-center justify-center rounded-md text-[13px] font-medium tabular-nums leading-none font-mono",
                   isSelected
-                    ? "rounded-[8px] bg-[var(--ds-primary)] text-white"
+                    ? "text-white"
                     : "text-[var(--ds-text)]",
-                ].join(" ")}
+                )}
               >
                 {col.dayOfMonth}
               </span>
-              <span
-                className={[
-                  "h-1.5 w-1.5 rounded-full transition-colors",
-                  rdvCount === 0
-                    ? "bg-emerald-500"
-                    : rdvCount <= 2
-                    ? "bg-orange-400"
-                    : "bg-red-500",
-                ].join(" ")}
-              />
+              {rdvCount > 0 ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-medium leading-tight",
+                    isSelected
+                      ? "bg-white/25 text-white ring-1 ring-white/30"
+                      : "bg-[#ecfeff] text-[#0891b2] ring-1 ring-[#a5f3fc]/70",
+                  )}
+                >
+                  <span className="font-mono font-medium tabular-nums">{rdvCount}</span>
+                  <span className="font-sans"> RDV</span>
+                </span>
+              ) : (
+                <span className="flex h-3 items-center" aria-hidden>
+                  <span className="h-0.5 w-0.5 rounded-full bg-[var(--ds-border)] opacity-80" />
+                </span>
+              )}
             </button>
           );
         })}
@@ -262,72 +321,94 @@ function ListView({
 
       {/* Liste des RDV */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <p className="mb-4 text-xs font-bold uppercase tracking-[1px] text-[var(--ds-text-muted)]">
-          Rendez-vous —{" "}
-          {selectedDate.toLocaleDateString("fr-FR", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })}
+        <p className="mb-4 flex items-center gap-2 border-l-[3px] border-[#06b6d4] pl-4 text-sm font-semibold uppercase tracking-[0.08em] text-[color:var(--ds-primary)]">
+          <span>Rendez-vous — {dayTitleUpper}</span>
         </p>
 
         {dayRdvs.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center py-16">
-            <p className="text-sm text-[var(--ds-text-muted)]/60">
+          <div className="flex flex-1 items-center justify-center rounded-[20px] border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/70 py-16 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <p className="font-normal text-sm text-[var(--ds-text-muted)]">
               Aucun rendez-vous ce jour
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {dayRdvs.map((rdv) => {
-              const c = rdvColor(rdv);
+              const care = careAccentFromSoin(rdv.soin);
+              const stBadge = appointmentStatusBadge(rdv);
               return (
                 <div
                   key={rdv.id}
-                  className={[
-                    "flex items-center gap-3 rounded-2xl border px-5 py-4",
-                    "bg-[var(--ds-surface)] shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
-                    "cursor-pointer transition-all hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:translate-x-0.5",
-                    "border-[var(--ds-border)]",
-                  ].join(" ")}
+                  role="presentation"
+                  style={{
+                    borderLeftWidth: 4,
+                    borderLeftStyle: "solid",
+                    borderLeftColor: CARE_BAND_COLOR[care],
+                  }}
+                  className={cn(
+                    "group relative flex gap-4 rounded-[20px] border-y border-r border-[var(--ds-border)] bg-[var(--ds-surface)] py-4 pl-[18px] pr-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+                    "transition-all hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]",
+                    "cursor-pointer",
+                  )}
                 >
-                  {/* Accent bar */}
-                  <div
-                    className="h-9 w-0.5 flex-shrink-0 rounded-full"
-                    style={{ background: c.accent }}
-                  />
-
-                  {/* Heure */}
-                  <span className="min-w-[38px] font-mono text-[13px] font-medium tabular-nums text-[var(--ds-text-muted)]">
-                    {rdv.start}
-                  </span>
-
-                  {/* Infos */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[14px] font-semibold tracking-tight text-[color:var(--ds-text)]">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-mono text-[14px] font-medium tabular-nums text-[var(--ds-text)]">
+                        {rdv.start}
+                      </span>
+                      <span className="text-[15px] font-bold tracking-tight text-[var(--ds-text)]">
                         {rdv.patient}
                       </span>
-                      {rdv.urgence && (
-                        <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-600">
+                      {rdv.urgence ? (
+                        <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-700">
                           Urgence
                         </span>
-                      )}
-                      {rdv.rdvType === "direct" && (
-                        <span className="rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[color:var(--ds-primary)]">
+                      ) : null}
+                      {rdv.rdvType === "direct" ? (
+                        <span className="rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--ds-primary)]">
                           Direct
                         </span>
-                      )}
+                      ) : null}
+                      {stBadge ? (
+                        <span
+                          className={[
+                            "shrink-0 rounded-full tracking-tight",
+                            stBadge.className,
+                          ].join(" ")}
+                        >
+                          {stBadge.label}
+                        </span>
+                      ) : null}
                     </div>
-                    <p className={`mt-0.5 text-xs font-medium ${c.text}`}>
-                      {rdv.soin}
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <p className="text-[13px] font-normal text-[var(--ds-text-muted)]">
+                        {rdv.soin}
+                      </p>
+                      <span className="font-mono text-[12px] font-normal tabular-nums text-[var(--ds-text-muted)]">
+                        Dent {rdv.dent ?? "—"}
+                      </span>
+                    </div>
+                    <span className="mt-3 inline-flex rounded-[12px] border border-[var(--ds-border)] bg-[var(--ds-bg)] px-2.5 py-1 font-mono text-[11px] font-medium tabular-nums text-[var(--ds-text-muted)]">
+                      {rdv.durationMinutes} min
+                    </span>
                   </div>
 
-                  {/* Durée */}
-                  <span className="rounded-lg border border-[var(--ds-border)] bg-[var(--ds-bg)] px-2.5 py-1 font-mono text-[10px] font-medium tabular-nums text-[var(--ds-text-muted)]">
-                    {rdv.durationMinutes} min
-                  </span>
+                  <div className="flex shrink-0 items-start gap-1 pt-0.5 opacity-85 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--ds-text-subtle)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
+                      aria-label="Appeler"
+                    >
+                      <Phone className="h-4 w-4 stroke-[1.75]" />
+                    </button>
+                    <button
+                      type="button"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl text-[var(--ds-text-subtle)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
+                      aria-label="Modifier"
+                    >
+                      <Pencil className="h-4 w-4 stroke-[1.75]" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -346,12 +427,18 @@ function CalendarView({
   columns,
   scrollAnchorIso,
   onScrollAnchorConsumed,
+  persistMove,
 }: {
   items: Rdv[];
   onItemsChange: Dispatch<SetStateAction<Rdv[]>>;
   columns: SlidingDayColumn[];
   scrollAnchorIso: string | null;
   onScrollAnchorConsumed: () => void;
+  persistMove?: (
+    appointmentId: string,
+    columnIso: string,
+    slotStart: string,
+  ) => Promise<boolean>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayScrollDoneRef = useRef(false);
@@ -405,7 +492,7 @@ function CalendarView({
     }
   );
 
-  function handleDrop(columnIso: string, slotStart: string) {
+  async function handleDrop(columnIso: string, slotStart: string) {
     if (dragId === null) return;
     const moved = items.find((r) => r.id === dragId);
     if (!moved) return;
@@ -423,8 +510,22 @@ function CalendarView({
         return;
       }
     }
+    const timeNorm =
+      slotStart.length >= 5 ? slotStart.slice(0, 5) : slotStart;
+    if (persistMove) {
+      const ok = await persistMove(dragId, columnIso, timeNorm);
+      if (!ok) {
+        setDragId(null);
+        setDropKey(null);
+        return;
+      }
+    }
     onItemsChange((prev) =>
-      prev.map((r) => r.id === dragId ? { ...r, dateKey: columnIso, start: slotStart } : r)
+      prev.map((r) =>
+        r.id === dragId
+          ? { ...r, dateKey: columnIso, start: timeNorm }
+          : r,
+      ),
     );
     setDragId(null);
     setDropKey(null);
@@ -433,7 +534,7 @@ function CalendarView({
   const colCount = columns.length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-[0_8px_30px_rgba(0,0,0,0.04)]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-[var(--ds-border)] bg-[var(--ds-surface)] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]">
         <div
           className="grid w-max min-w-full"
@@ -456,10 +557,10 @@ function CalendarView({
               ].join(" ")}
               style={{ gridColumn: j + 2, gridRow: 1 }}
             >
-              <p className="text-[10px] font-medium uppercase tracking-tight text-[var(--ds-text-muted)]">
+              <p className="text-xs font-medium uppercase tracking-widest text-[var(--ds-text-subtle)]">
                 {col.weekdayShort}
               </p>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-[color:var(--ds-text)]">
+              <p className="font-mono text-sm font-medium tabular-nums leading-tight text-[color:var(--ds-text)]">
                 {col.dayOfMonth}
               </p>
             </div>
@@ -500,7 +601,7 @@ function CalendarView({
                       style={{ position: "absolute", left: 0, right: 0, top: slotIdx * SLOT_HEIGHT_PX, height: SLOT_HEIGHT_PX, zIndex: 10 }}
                       onDragOver={(e) => { e.preventDefault(); setDropKey(key); }}
                       onDragLeave={() => setDropKey(null)}
-                      onDrop={() => handleDrop(col.iso, slotStart)}
+                      onDrop={() => void handleDrop(col.iso, slotStart)}
                       aria-label={`Créneau ${slotStart}`}
                     />
                   );
@@ -519,7 +620,7 @@ function CalendarView({
                         backgroundColor: calStyle.backgroundColor,
                         borderLeft: calStyle.borderLeft,
                       }}
-                      className="absolute left-1.5 right-1.5 z-20 overflow-hidden rounded-lg p-1.5 lg:p-2 shadow-sm cursor-grab select-none active:cursor-grabbing"
+                      className="absolute left-1.5 right-1.5 z-20 overflow-hidden rounded-xl p-2 shadow-[0_1px_3px_rgba(0,0,0,0.08)] cursor-grab select-none active:cursor-grabbing"
                     >
                       <div className="flex min-w-0 flex-wrap items-baseline gap-1">
                         <p className="min-w-0 truncate text-xs leading-tight" style={calStyle.patientStyle}>
@@ -559,19 +660,6 @@ function CalendarView({
   );
 }
 
-// ─── Helpers header ───────────────────────────────────────────────────────────
-
-function formatSlidingRange(centerDate: Date, count: number): string {
-  const cols = buildSlidingDayColumns(safeDate(centerDate));
-  const first = cols[0];
-  const last = cols[cols.length - 1];
-  const d0 = safeDate(new Date(`${first.iso}T12:00:00`));
-  const d1 = safeDate(new Date(`${last.iso}T12:00:00`));
-  const a = d0.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
-  const b = d1.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  return `${a} → ${b} — ${count} rendez-vous`;
-}
-
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 function PlanningPageContent() {
@@ -587,20 +675,98 @@ function PlanningPageContent() {
   );
   const [isNewRdvModalOpen, setIsNewRdvModalOpen] = useState(false);
   const [newRdvDefaultPatientName, setNewRdvDefaultPatientName] = useState("");
-  const [appointments, setAppointments] = useState<Rdv[]>(INITIAL_APPOINTMENTS);
-  const setWindowCenter = setCurrentDate;
+  const [newRdvDefaultPatientId, setNewRdvDefaultPatientId] = useState<
+    string | undefined
+  >(undefined);
+  const [appointments, setAppointments] = useState<Rdv[]>([]);
+  const reloadAppointments = useCallback(async () => {
+    const res = await getAppointmentsAction();
+    if (!res.ok) return;
+    setAppointments(res.data.map(appointmentJoinedRowToRdv));
+  }, []);
+  const persistAppointmentMove = useCallback(
+    async (
+      appointmentId: string,
+      columnIso: string,
+      slotStart: string,
+    ): Promise<boolean> => {
+      const hhmm =
+        slotStart.length >= 5 ? slotStart.slice(0, 5) : slotStart;
+      const res = await updateAppointmentAction(appointmentId, {
+        date: columnIso,
+        heure: hhmm,
+      });
+      if (!res.ok) {
+        alert(`Impossible : ${res.error}`);
+        await reloadAppointments();
+        return false;
+      }
+      notifyAppointmentsUpdated();
+      return true;
+    },
+    [reloadAppointments],
+  );
+  const handleNewRdv = useCallback(
+    async (payload: NewAppointmentPayload) => {
+      const rawDate = payload.date?.trim() ?? "";
+      const dateKeyFinal =
+        rawDate && isValidDateKeyString(rawDate)
+          ? rawDate
+          : formatDateKeyLocal(new Date());
+      const timeNorm =
+        payload.time.length >= 5
+          ? payload.time.slice(0, 5)
+          : payload.time;
+      const pid = payload.patientId?.trim();
+      const notes = composeAppointmentNotes(payload.notes, {
+        urgence: payload.motifs.some((m) =>
+          m.toLowerCase().includes("urgence"),
+        ),
+        rdvType: "planned",
+        displayPatient: pid ? undefined : payload.patient.trim() || undefined,
+      });
+      const res = await createAppointmentAction({
+        patient_id: pid || null,
+        date: dateKeyFinal,
+        heure: timeNorm,
+        duree: Number(payload.dureeMinutes) || 30,
+        type_acte: payload.motifs.length
+          ? payload.motifs.join(", ")
+          : "Consultation",
+        notes,
+      });
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      const row = appointmentJoinedRowToRdv(res.data);
+      setAppointments((prev) => [...prev, row]);
+      notifyAppointmentsUpdated();
+      const [y, m, d] = dateKeyFinal.split("-").map(Number);
+      const center = new Date(y, m - 1, d);
+      if (dateKeyFinal && !isNaN(center.getTime())) {
+        setCurrentDate(center);
+        setListSelectedDay(dateKeyFinal);
+      } else {
+        setCurrentDate(new Date());
+      }
+      setScrollAnchorIso(dateKeyFinal);
+      if (view !== "calendar") setView("liste");
+    },
+    [view],
+  );
   const [scrollAnchorIso, setScrollAnchorIso] = useState<string | null>(null);
   const handleScrollAnchorConsumed = useCallback(() => setScrollAnchorIso(null), []);
 
   useEffect(() => {
     setMounted(true);
-    setAppointments(ensureAppointmentsSeeded(INITIAL_APPOINTMENTS));
-  }, []);
+    void reloadAppointments();
+  }, [reloadAppointments]);
 
   useEffect(() => {
-    const patientId = searchParams.get("patientId");
+    const patientId = searchParams.get("patientId")?.trim() || "";
     const patientName = searchParams.get("patientName");
-    void patientId;
+    setNewRdvDefaultPatientId(patientId || undefined);
     if (patientName) setNewRdvDefaultPatientName(patientName);
     else setNewRdvDefaultPatientName("");
     if (searchParams.get("newRdv") === "true") setIsNewRdvModalOpen(true);
@@ -608,22 +774,13 @@ function PlanningPageContent() {
 
   useEffect(() => {
     if (!mounted) return;
-    writeAppointmentsToStorage(appointments);
-    appointments.forEach((a) => {
-      syncAppointmentToDBAction({
-        id: a.id,
-        patientId: a.patientId,
-        patientName: a.patient,
-        dateKey: a.dateKey,
-        startTime: a.start,
-        durationMinutes: a.durationMinutes,
-        soin: a.soin,
-        rdvType: a.rdvType,
-        status: a.status,
-        urgence: a.urgence,
-      }).catch(console.error);
-    });
-  }, [mounted, appointments]);
+    const h = () => {
+      void reloadAppointments();
+    };
+    window.addEventListener(APPOINTMENTS_UPDATED_EVENT, h);
+    return () =>
+      window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, h);
+  }, [mounted, reloadAppointments]);
 
   const slidingColumns = buildSlidingDayColumns(currentDate);
 
@@ -667,28 +824,34 @@ function PlanningPageContent() {
       : currentDate;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--ds-bg)]">
       {/* ── Header ── */}
-      <div className="mb-4 flex shrink-0 flex-col gap-2 border-b border-[var(--ds-primary-border)]/50 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 sm:flex-nowrap sm:gap-x-4">
-          <h1 className="shrink-0 text-2xl font-bold text-[var(--ds-text)]">
-            Planning
-          </h1>
-          <p className="ml-3 hidden min-w-0 truncate text-base text-[var(--ds-text-muted)] sm:block">
-            {formatSlidingRange(currentDate, appointments.length)}
-          </p>
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <header className="mb-5 flex shrink-0 flex-col gap-3 pb-1 pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-4 gap-y-2 sm:flex-nowrap sm:items-center">
+          <div className="min-w-0">
+            <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[var(--ds-text)]">
+              Planning
+            </h1>
+            <p className="mt-0.5 font-normal text-sm text-[var(--ds-text-muted)] sm:text-base">
+              {formatPlanningDateRangeSubtitle(currentDate)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <button
               type="button"
               onClick={goPrev}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-transparent transition-colors hover:bg-[var(--ds-primary-soft)]"
               aria-label="Précédent"
             >
-              <ChevronLeft className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
+              <ChevronLeft className="h-4 w-4 text-[var(--ds-text-muted)]" />
             </button>
-            <label className="relative flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-1.5 shadow-lg transition-colors hover:bg-[var(--ds-bg)]">
-              <CalendarDays className="h-3.5 w-3.5 shrink-0 text-[var(--ds-text-muted)]" aria-hidden />
-              <span className="text-sm font-medium text-[color:var(--ds-text)]">
+            <label className="relative flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3.5 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors hover:border-[var(--ds-primary-border)]/80 hover:shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+              <CalendarDays
+                className="h-[18px] w-[18px] shrink-0 text-[#06b6d4]"
+                aria-hidden
+                strokeWidth={2}
+              />
+              <span className="text-[13px] font-medium tracking-tight text-[var(--ds-text)]">
                 {new Intl.DateTimeFormat("fr-DZ", {
                   day: "numeric",
                   month: "long",
@@ -712,51 +875,52 @@ function PlanningPageContent() {
                     setListSelectedDay(formatDateKey(nextDate));
                   }
                 }}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                className="absolute inset-0 h-full w-full cursor-pointer rounded-xl opacity-0"
                 aria-label="Sélectionner une date"
               />
             </label>
             <button
               type="button"
               onClick={goNext}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-transparent transition-colors hover:bg-[var(--ds-primary-soft)]"
               aria-label="Suivant"
             >
-              <ChevronRight className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" />
+              <ChevronRight className="h-4 w-4 text-[var(--ds-text-muted)]" />
             </button>
             <button
               type="button"
               onClick={goToday}
-              className="rounded-lg border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)]/80 px-3 py-1.5 text-sm font-medium text-[color:var(--ds-text)] shadow-sm backdrop-blur-md transition-colors hover:bg-[var(--ds-bg)]"
+              className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-2 text-[13px] font-medium text-[var(--ds-text-muted)] shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[var(--ds-text)]"
             >
               Aujourd&apos;hui
             </button>
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {/* Toggle 3 vues */}
-          <div className="flex rounded-xl border border-[var(--ds-primary-border)]/60 bg-[var(--ds-surface)] p-0.5 shadow-sm backdrop-blur-md">
-            {/* Vue Liste — visible sur tous les écrans, vue par défaut */}
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <div
+            className="inline-flex rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] p-1 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+            role="group"
+            aria-label="Vue planning"
+          >
             <button
               type="button"
               onClick={() => {
                 setListSelectedDay(formatDateKey(currentDate));
                 setView("liste");
               }}
-              className={[
-                "flex h-11 items-center gap-1 rounded-lg px-4 py-2.5 text-base font-medium transition-all",
+              className={cn(
+                "flex h-10 items-center gap-2 rounded-[10px] px-5 text-[13px] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#06b6d4]/35 focus-visible:ring-offset-2",
                 view === "liste"
-                  ? "bg-[color:var(--ds-primary)] text-white shadow-sm"
-                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
-              ].join(" ")}
+                  ? "bg-[color:var(--ds-primary)] font-semibold text-white shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
+                  : "font-medium text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]/55 hover:text-[var(--ds-text)]",
+              )}
               aria-label="Vue liste"
             >
-              <List className="h-3 w-3" />
+              <List className="h-4 w-4" strokeWidth={2} />
               <span className="hidden sm:inline">Liste</span>
             </button>
 
-            {/* Vue Calendrier — desktop uniquement */}
             <button
               type="button"
               onClick={() => {
@@ -765,66 +929,36 @@ function PlanningPageContent() {
                 }
                 setView("calendar");
               }}
-              className={[
-                "hidden h-11 items-center gap-1 rounded-lg px-4 py-2.5 text-base font-medium transition-all lg:flex",
+              className={cn(
+                "hidden h-10 items-center gap-2 rounded-[10px] px-5 text-[13px] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#06b6d4]/35 focus-visible:ring-offset-2 lg:flex",
                 view === "calendar"
-                  ? "bg-[color:var(--ds-primary)] text-white shadow-sm"
-                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
-              ].join(" ")}
+                  ? "bg-[color:var(--ds-primary)] font-semibold text-white shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
+                  : "font-medium text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]/55 hover:text-[var(--ds-text)]",
+              )}
               aria-label="Vue calendrier"
             >
-              <CalendarDays className="h-3 w-3" />
+              <CalendarDays className="h-4 w-4 text-[#06b6d4]" strokeWidth={2} />
               <span>Calendrier</span>
             </button>
           </div>
 
           <AnimatedButton
             onClick={() => setIsNewRdvModalOpen(true)}
-            className="h-11 px-5 py-2.5 text-base font-semibold"
+            className="h-11 rounded-xl px-6 text-[13px] font-semibold shadow-[0_4px_16px_rgba(124,58,237,0.25)] hover:shadow-[0_6px_20px_rgba(124,58,237,0.28)]"
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             Nouveau RDV
           </AnimatedButton>
         </div>
-      </div>
+      </header>
 
       {/* ── Modal ── */}
       <NewAppointmentModal
         open={isNewRdvModalOpen}
         onClose={() => setIsNewRdvModalOpen(false)}
         defaultPatientName={newRdvDefaultPatientName}
-        onConfirm={(payload: NewAppointmentPayload) => {
-          const p = payload;
-          const rawDate = p.date?.trim() ?? "";
-          const dateKeyFinal =
-            rawDate && isValidDateKeyString(rawDate)
-              ? rawDate
-              : formatDateKeyLocal(new Date());
-          const timeNorm = p.time.length >= 5 ? p.time.slice(0, 5) : p.time;
-          const newRdv: Rdv = {
-            id: `rdv-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-            dateKey: dateKeyFinal,
-            start: timeNorm,
-            durationMinutes: Number(p.dureeMinutes) || 30,
-            patient: p.patient,
-            soin: p.motifs.length ? p.motifs.join(", ") : "Consultation",
-            urgence: p.motifs.some((m) => m.toLowerCase().includes("urgence")),
-            rdvType: "planned",
-          };
-          setAppointments((prev) => [...prev, newRdv]);
-          const [y, m, d] = dateKeyFinal.split("-").map(Number);
-          const center = new Date(y, m - 1, d);
-          if (dateKeyFinal && !isNaN(center.getTime())) {
-            setWindowCenter(center);
-            // Sync la sélection liste aussi
-            setListSelectedDay(dateKeyFinal);
-          } else {
-            setWindowCenter(new Date());
-          }
-          setScrollAnchorIso(dateKeyFinal);
-          // Bascule vers la vue liste pour voir le nouveau RDV
-          if (view !== "calendar") setView("liste");
-        }}
+        defaultPatientId={newRdvDefaultPatientId}
+        onConfirm={(payload: NewAppointmentPayload) => void handleNewRdv(payload)}
       />
 
       {/* ── Contenu ── */}
@@ -852,6 +986,7 @@ function PlanningPageContent() {
               columns={slidingColumns}
               scrollAnchorIso={scrollAnchorIso}
               onScrollAnchorConsumed={handleScrollAnchorConsumed}
+              persistMove={persistAppointmentMove}
             />
           </div>
         )}

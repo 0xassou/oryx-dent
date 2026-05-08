@@ -20,6 +20,8 @@ const MOTIFS = [
 
 export interface NewAppointmentPayload {
   patient: string;
+  /** Lien dossier patient (ex. fiche ouverte avec `patientId=` dans l’URL). */
+  patientId?: string;
   date: string;
   time: string;
   dureeMinutes: number;
@@ -33,6 +35,8 @@ interface NewAppointmentModalProps {
   onConfirm: (payload: NewAppointmentPayload) => void;
   /** Pré-remplissage du champ patient (ex. query `patientName` depuis la fiche patient). */
   defaultPatientName?: string;
+  /** Id dossier lorsque la fiche ouvre « Nouveau RDV » depuis le patient. */
+  defaultPatientId?: string;
 }
 
 const inputBase =
@@ -45,6 +49,7 @@ export function NewAppointmentModal({
   onClose,
   onConfirm,
   defaultPatientName = "",
+  defaultPatientId,
 }: NewAppointmentModalProps) {
   const [patient, setPatient] = useState("");
   const [date, setDate] = useState(() => todayDateInputValue());
@@ -106,6 +111,9 @@ export function NewAppointmentModal({
     }
     onConfirm({
       patient: patient.trim(),
+      ...(defaultPatientId?.trim()
+        ? { patientId: defaultPatientId.trim() }
+        : {}),
       date: resolvedDate,
       time: resolvedTime,
       dureeMinutes: duree,

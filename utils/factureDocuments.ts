@@ -15,6 +15,13 @@ export type FactureDocument = {
 
 const LS_KEY = "dental_dashboard_docs";
 
+export const FACTURES_UPDATED_EVENT = "dental-factures-updated";
+
+export function notifyFacturesUpdated(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(FACTURES_UPDATED_EVENT));
+}
+
 export function deriveFactureStatut(
   montantTotal: number,
   montantPaye: number,
@@ -109,23 +116,10 @@ export function parseFacturesFromLocalStorage(
 }
 
 export function readFacturesFromStorage(): FactureDocument[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return parseFacturesFromLocalStorage(localStorage.getItem(LS_KEY));
-  } catch (e) {
-    console.error("Storage error:", e);
-    return [];
-  }
+  return [];
 }
 
-export function writeFacturesToStorage(docs: FactureDocument[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(docs));
-  } catch (e) {
-    console.error("Storage error:", e);
-  }
-}
+export function writeFacturesToStorage(_docs: FactureDocument[]) {}
 
 export function resteAPayer(doc: FactureDocument): number {
   return Math.max(0, doc.montantTotal - doc.montantPaye);

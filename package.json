@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:test-clinic": "node scripts/seed-test-clinic.cjs"
+    "seed:test-clinic": "node scripts/seed-test-clinic.cjs",
+    "create-admin": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "autoprefixer": "^10.4.27",
     "bcryptjs": "^3.0.3",
+    "better-auth": "^1.6.9",
     "framer-motion": "^12.38.0",
     "jose": "^6.2.2",
     "jspdf": "^4.2.1",
@@ -36,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
     "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

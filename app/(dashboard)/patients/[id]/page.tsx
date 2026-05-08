@@ -31,9 +31,10 @@ import {
 import { consumableLabelToStockProductId } from "@/lib/mapping/consumableNameToStockProductId";
 import {
   consumeStockForAct,
-  loadDentalStock,
+  STOCK_UPDATED_EVENT,
   loadProtocols,
-  saveDentalStock,
+  notifyStockUpdated,
+  type StockLine,
 } from "@/utils/stockLogic";
 import {
   PrescriptionModal,
@@ -43,20 +44,38 @@ import { RoleGate } from "@/components/auth/RoleGate";
 import { formatDZD, formatDate } from "@/utils/formatters";
 import { generateOrdonnancePDF } from "@/utils/generateOrdonnancePDF";
 import {
-  readFacturesFromStorage,
-  writeFacturesToStorage,
+  FACTURES_UPDATED_EVENT,
+  notifyFacturesUpdated,
 } from "@/utils/factureDocuments";
+import { stockRowToStockLine } from "@/utils/stockDbMapping";
+import {
+  extractFinanceLineIdFromActes,
+  montantsToStatutPostgreSQL,
+} from "@/utils/factureDbMapping";
+import type { FactureRowJoined } from "@/lib/types/factures-db";
+import { getStocksAction, updateStockAction } from "@/app/actions/stocks";
+import {
+  createFactureAction,
+  deleteFactureByFinanceLineIdAction,
+  getFacturesByPatientAction,
+  updateFactureAction,
+} from "@/app/actions/factures";
 import {
   ensureCatalogSeeded,
   readCatalogFromStorage,
   type DentalCatalogAct,
 } from "@/utils/dentalCatalogActs";
 import {
-  ensurePatientsHydrated,
-  readPatientsFromStorage,
-  syncPatientFromProfile,
-  touchPatientDerniereVisite,
-  writePatientsToStorage,
+  createPatientAction,
+  deletePatientAction,
+  getPatientByIdAction,
+  updatePatientAction,
+} from "@/app/actions/patients";
+import {
+  computeAgeFromDateIso,
+  patientRowToDentalPatientRecord,
+  resolvePatientDisplayParts,
+  splitNomComplet,
   type DentalPatientRecord,
 } from "@/utils/patientData";
 import {
@@ -77,9 +96,11 @@ import PatientFicheView, {
   type PatientFicheData,
   type PatientFicheTimelineItem,
 } from "@/components/patients/PatientFicheView";
+import { getAppointmentsByPatientAction } from "@/app/actions/appointments";
 import {
   APPOINTMENTS_UPDATED_EVENT,
-  readAppointmentsFromStorage,
+  appointmentJoinedRowToRdv,
+  type AppointmentRdv,
 } from "@/utils/appointmentData";
 
 function getSettings(): Record<string, unknown> {
@@ -459,22 +480,29 @@ function parseDateToISO(dateValue: string) {
   )}`;
 }
 
-function computeAgeFromDate(dateValue: string) {
-  if (!dateValue) return 0;
-  const dob = new Date(dateValue);
-  if (Number.isNaN(dob.getTime())) return 0;
-  const now = new Date();
-  let age = now.getFullYear() - dob.getFullYear();
-  const m = now.getMonth() - dob.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age -= 1;
-  return Math.max(0, age);
+function isoTimestampToFacturePgDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    const n = new Date();
+    const y = n.getFullYear();
+    const mo = String(n.getMonth() + 1).padStart(2, "0");
+    const dd = String(n.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${dd}`;
+  }
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${dd}`;
 }
 
-function formatDateDDMMYYYY(date: Date) {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yyyy = String(date.getFullYear());
-  return `${dd}/${mm}/${yyyy}`;
+function financeLineMontantPayeDb(
+  montantTotal: number,
+  resteACharge: number,
+): number {
+  return Math.min(
+    Math.max(0, montantTotal - resteACharge),
+    montantTotal,
+  );
 }
 
 function formatAmountDA(value: number) {
@@ -630,7 +658,13 @@ export default function PatientDetailPage() {
     statut: "actif",
     alerts: [],
   });
+  const [patientRecord, setPatientRecord] = useState<DentalPatientRecord | null>(
+    null,
+  );
   const [appointmentsTick, setAppointmentsTick] = useState(0);
+  const [patientAppointments, setPatientAppointments] = useState<
+    AppointmentRdv[]
+  >([]);
   const [editPatientName, setEditPatientName] = useState("");
   const [editPatientGender, setEditPatientGender] = useState("");
   const [editPatientProfession, setEditPatientProfession] = useState("");
@@ -682,7 +716,12 @@ export default function PatientDetailPage() {
   };
 
   const [finances, setFinances] = useState<FinanceLine[]>([]);
-  const [financesHydrated, setFinancesHydrated] = useState(false);
+
+  const [financesPgTick, setFinancesPgTick] = useState(0);
+  const [clinicalStockLines, setClinicalStockLines] = useState<StockLine[]>(
+    [],
+  );
+  const [stockReloadTick, setStockReloadTick] = useState(0);
 
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [editingFinance, setEditingFinance] = useState<FinanceLine | null>(
@@ -729,6 +768,19 @@ export default function PatientDetailPage() {
   }, []);
 
   useEffect(() => {
+    if (!id || !isMounted) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await getAppointmentsByPatientAction(id);
+      if (cancelled || !res.ok) return;
+      setPatientAppointments(res.data.map(appointmentJoinedRowToRdv));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isMounted, appointmentsTick]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const onUp = () => setAppointmentsTick((t) => t + 1);
     window.addEventListener(APPOINTMENTS_UPDATED_EVENT, onUp);
@@ -737,38 +789,61 @@ export default function PatientDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !id) return;
-    ensurePatientsHydrated();
-    const list = readPatientsFromStorage();
-    if (list.some((p) => p.id === id)) return;
-    const rawProfile = localStorage.getItem(`patient_profile_${id}`);
-    if (rawProfile) {
-      try {
-        const p = JSON.parse(rawProfile) as {
-          nom?: string;
-          telephone?: string;
-        };
-        if (typeof p.nom === "string") {
-          syncPatientFromProfile({
-            id,
-            nomComplet: p.nom,
-            telephone:
-              typeof p.telephone === "string" ? p.telephone : "—",
-          });
-        }
-      } catch {
-        /* ignore */
+    if (!id) return;
+    let cancelled = false;
+    void (async () => {
+      let r = await getPatientByIdAction(id);
+      if (cancelled) return;
+      if (r.ok && r.data) {
+        setPatientRecord(patientRowToDentalPatientRecord(r.data));
+        return;
       }
-      return;
-    }
-    const mock = MOCK_PROFILES[id];
-    if (mock) {
-      syncPatientFromProfile({
-        id,
-        nomComplet: mock.nom,
-        telephone: mock.telephone,
-      });
-    }
+      if (typeof window !== "undefined") {
+        const rawProfile = localStorage.getItem(`patient_profile_${id}`);
+        if (rawProfile) {
+          try {
+            const p = JSON.parse(rawProfile) as {
+              nom?: string;
+              telephone?: string;
+            };
+            if (typeof p.nom === "string") {
+              const { prenom, nom } = splitNomComplet(p.nom);
+              await createPatientAction({
+                id,
+                prenom: prenom || p.nom.trim(),
+                nom: nom || "",
+                telephone:
+                  typeof p.telephone === "string" ? p.telephone : "—",
+              });
+            }
+          } catch {
+            /* ignore */
+          }
+        } else {
+          const mock = MOCK_PROFILES[id];
+          if (mock) {
+            const { prenom, nom } = splitNomComplet(mock.nom);
+            await createPatientAction({
+              id,
+              prenom: prenom || mock.nom.trim(),
+              nom: nom || "",
+              telephone: mock.telephone,
+            });
+          }
+        }
+      }
+      if (cancelled) return;
+      r = await getPatientByIdAction(id);
+      if (cancelled) return;
+      if (r.ok && r.data) {
+        setPatientRecord(patientRowToDentalPatientRecord(r.data));
+      } else {
+        setPatientRecord(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -822,27 +897,85 @@ export default function PatientDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !id) return;
-    const savedFinances = localStorage.getItem(`patient_finances_${id}`);
-    if (savedFinances) {
-      try {
-        const parsed = JSON.parse(savedFinances) as FinanceLine[];
-        setFinances(
-          parsed.map((l) => ({
-            ...(l as FinanceLine),
-            statut: financeStatutFromReste(
-              (l as FinanceLine).montantTotal,
-              (l as FinanceLine).resteACharge,
-            ),
-          })),
-        );
-      } catch {
+    if (!isMounted || typeof window === "undefined") return;
+    let cancelled = false;
+    void (async () => {
+      const res = await getStocksAction();
+      if (cancelled || !res.ok) return;
+      setClinicalStockLines(res.data.map(stockRowToStockLine));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isMounted, stockReloadTick]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStock = () => setStockReloadTick((t) => t + 1);
+    window.addEventListener(STOCK_UPDATED_EVENT, onStock);
+    return () => window.removeEventListener(STOCK_UPDATED_EVENT, onStock);
+  }, []);
+
+  useEffect(() => {
+    if (!id || !isMounted) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await getFacturesByPatientAction(id);
+      if (cancelled) return;
+      if (!res.ok) {
+        console.error(res.error);
         setFinances([]);
+        return;
       }
-    } else {
-      setFinances([]);
-    }
-    setFinancesHydrated(true);
+
+      function joinedRowToFinanceLine(
+        r: FactureRowJoined,
+      ): FinanceLine | null {
+        const lineId = extractFinanceLineIdFromActes(r.actes);
+        if (!lineId) return null;
+        const act = r.actes as {
+          acteName?: unknown;
+          catalogActId?: unknown;
+        };
+        const mt = Number.parseFloat(String(r.montant ?? "0")) || 0;
+        const paye =
+          Number.parseFloat(String(r.montant_paye ?? "0")) || 0;
+        const reste = Math.max(0, mt - paye);
+        return {
+          id: lineId,
+          acteName:
+            typeof act.acteName === "string" ? act.acteName : "Acte",
+          catalogActId:
+            typeof act.catalogActId === "string"
+              ? act.catalogActId
+              : undefined,
+          date: `${r.date}T12:00:00.000Z`,
+          montantTotal: mt,
+          resteACharge: reste,
+          statut: financeStatutFromReste(mt, reste),
+        };
+      }
+
+      const lines = res.data
+        .map(joinedRowToFinanceLine)
+        .filter((l): l is FinanceLine => l != null)
+        .sort(
+          (a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
+      setFinances(lines);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isMounted, financesPgTick]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !id) return;
+    const onFactures = () => setFinancesPgTick((t) => t + 1);
+    window.addEventListener(FACTURES_UPDATED_EVENT, onFactures);
+    return () =>
+      window.removeEventListener(FACTURES_UPDATED_EVENT, onFactures);
   }, [id]);
 
   useEffect(() => {
@@ -853,11 +986,6 @@ export default function PatientDetailPage() {
       );
     }
   }, [allTreatments, isMounted, id]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !id || !financesHydrated) return;
-    localStorage.setItem(`patient_finances_${id}`, JSON.stringify(finances));
-  }, [finances, financesHydrated, id]);
 
   useEffect(() => {
     if (!isQuoteModalOpen || typeof window === "undefined") return;
@@ -919,33 +1047,29 @@ export default function PatientDetailPage() {
   const [newSeanceCout, setNewSeanceCout] = useState("");
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [patientRecord, setPatientRecord] = useState<DentalPatientRecord | null>(
-    null,
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !id) return;
-    const list = readPatientsFromStorage();
-    setPatientRecord(list.find((p) => p.id === id) ?? null);
-  }, [id, isMounted]);
 
   const handleConfirmDeletePatient = useCallback(() => {
     if (!id) return;
-    try {
-      const list = readPatientsFromStorage();
-      writePatientsToStorage(list.filter((p) => p.id !== id));
-      if (typeof window !== "undefined") {
-        localStorage.removeItem(`patient_profile_${id}`);
-        localStorage.removeItem(`patient_acts_${id}`);
-        localStorage.removeItem(`patient_finances_${id}`);
-        localStorage.removeItem(`oryx_watched_${id}`);
-        clearPatientDocuments(id);
+    void (async () => {
+      const del = await deletePatientAction(id);
+      if (!del.ok) {
+        console.error(del.error);
+        return;
       }
-    } catch {
-      /* ignore */
-    }
-    setDeleteConfirmOpen(false);
-    router.push("/patients");
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(`patient_profile_${id}`);
+          localStorage.removeItem(`patient_acts_${id}`);
+          localStorage.removeItem(`patient_finances_${id}`);
+          localStorage.removeItem(`oryx_watched_${id}`);
+          clearPatientDocuments(id);
+        }
+      } catch {
+        /* ignore */
+      }
+      setDeleteConfirmOpen(false);
+      router.push("/patients");
+    })();
   }, [id, router]);
 
   useEffect(() => {
@@ -1082,10 +1206,31 @@ export default function PatientDetailPage() {
     }));
   }, [clinicalProtocolsList]);
 
-  const displayFullName = `${capitalize(patientProfile.prenom ?? "")} ${capitalize(patientProfile.nom ?? "")}`.trim();
+  const resolvedName = useMemo(() => {
+    const { prenom, nom } = resolvePatientDisplayParts(
+      patientRecord,
+      patientProfile,
+    );
+    const displayFullName =
+      `${capitalize(prenom)} ${capitalize(nom)}`.trim() || "Patient";
+    const appointmentFullName = `${prenom} ${nom}`.trim();
+    return { prenom, nom, displayFullName, appointmentFullName };
+  }, [patientRecord, patientProfile]);
+
+  const displayFullName = resolvedName.displayFullName;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.title =
+      displayFullName && displayFullName !== "Patient"
+        ? `${displayFullName} · DentiSmart`
+        : `Fiche patient · DentiSmart`;
+  }, [displayFullName]);
 
   function openEditPatientModal() {
-    setEditPatientName(patientProfile.nom);
+    setEditPatientName(
+      resolvedName.appointmentFullName.trim() || patientProfile.nom,
+    );
     setEditPatientGender(patientProfile.genre);
     setEditPatientProfession(patientProfile.profession);
     setEditPatientAddress(patientProfile.adresse);
@@ -1121,7 +1266,7 @@ export default function PatientDetailPage() {
       groupeSanguin: editPatientGroupeSanguin.trim(),
       mutuelle: editPatientMutuelle.trim(),
       premiereVisite: editPatientPremiereVisite.trim(),
-      age: editPatientDob ? computeAgeFromDate(editPatientDob) : patientProfile.age,
+      age: editPatientDob ? computeAgeFromDateIso(editPatientDob) : patientProfile.age,
       alerts: editAlertsDraft.map((a) => ({
         label: a.label.trim(),
         level: a.level,
@@ -1130,11 +1275,31 @@ export default function PatientDetailPage() {
     };
     setPatientProfile(nextProfile);
     localStorage.setItem(`patient_profile_${id}`, JSON.stringify(nextProfile));
-    syncPatientFromProfile({
-      id,
-      nomComplet: nextProfile.nom,
-      telephone: nextProfile.telephone,
-    });
+    const { prenom, nom } = splitNomComplet(nextProfile.nom);
+    const g = nextProfile.genre.trim();
+    const sexe =
+      g === "Femme" ? "F" : g === "Homme" ? "M" : g === "—" ? null : g || null;
+    const antecedents =
+      nextProfile.alerts.map((a) => a.label.trim()).filter(Boolean).join("; ") ||
+      null;
+    void (async () => {
+      const res = await updatePatientAction(id, {
+        prenom: prenom || nextProfile.nom.trim(),
+        nom: nom || "",
+        telephone: nextProfile.telephone.trim() || "—",
+        email: nextProfile.email.trim() || null,
+        date_naissance: nextProfile.dateNaissance.trim() || null,
+        sexe,
+        adresse: nextProfile.adresse.trim() || null,
+        mutuelle: nextProfile.mutuelle.trim() || null,
+        antecedents,
+      });
+      if (!res.ok) {
+        console.error(res.error);
+        return;
+      }
+      setPatientRecord(patientRowToDentalPatientRecord(res.data));
+    })();
     setIsEditPatientModalOpen(false);
   }
 
@@ -1178,13 +1343,22 @@ export default function PatientDetailPage() {
       });
       if (res.ok) {
         const protocolsMap = loadProtocols();
-        const currentStock = loadDentalStock();
+        const currentStock = clinicalStockLines;
         const nextStock = consumeStockForAct(
           protocol.nom,
           currentStock,
           protocolsMap,
         );
-        saveDentalStock(nextStock);
+        for (const row of nextStock) {
+          const prev = currentStock.find((p) => p.id === row.id);
+          if (!prev || prev.quantite === row.quantite) continue;
+          const up = await updateStockAction(row.id, {
+            quantite: row.quantite,
+          });
+          if (!up.ok) console.error(up.error);
+        }
+        setClinicalStockLines(nextStock);
+        notifyStockUpdated();
 
         const kitDeduction = tryMarkSterilizationKitSale(protocol.categorie);
         const toastMessage = kitDeduction.used
@@ -1212,7 +1386,7 @@ export default function PatientDetailPage() {
           }
           return [row, ...prev];
         });
-        touchPatientDerniereVisite(id);
+        await updatePatientAction(id, {});
         const manualMontant = parseMoney(drawerMontant);
         const montantFinal =
           manualMontant > 0
@@ -1244,46 +1418,58 @@ export default function PatientDetailPage() {
     }
   }
 
-  /** Synchronise la liste globale des factures (même clé que l'onglet Recettes / Finances). */
+  /** Synchronise la facture PostgreSQL liée à une ligne finance (fiche patient). */
   function upsertGlobalFactureFromFinanceLine(line: FinanceLine) {
-    if (typeof window === "undefined") return;
-    const docs = readFacturesFromStorage();
-    const paye = Math.min(
-      Math.max(0, line.montantTotal - line.resteACharge),
-      line.montantTotal,
-    );
-    const idx = docs.findIndex((d) => d.financeLineId === line.id);
-    const dateStr = formatDateDDMMYYYY(new Date(line.date));
-    if (idx >= 0) {
-      docs[idx] = {
-        ...docs[idx],
-        patient: displayFullName,
-        patientId: id,
-        date: dateStr,
-        montantTotal: line.montantTotal,
-        montantPaye: paye,
+    if (typeof window === "undefined" || !id) return;
+    void (async () => {
+      const listRes = await getFacturesByPatientAction(id);
+      if (!listRes.ok) {
+        console.error(listRes.error);
+        return;
+      }
+      const paye = financeLineMontantPayeDb(
+        line.montantTotal,
+        line.resteACharge,
+      );
+      const pgDate = isoTimestampToFacturePgDate(line.date);
+      const statut = montantsToStatutPostgreSQL(line.montantTotal, paye);
+      const actes = {
         financeLineId: line.id,
+        acteName: line.acteName,
+        ...(line.catalogActId ? { catalogActId: line.catalogActId } : {}),
       };
-    } else {
-      docs.unshift({
-        id: `FCT-2026-${Math.floor(Math.random() * 900 + 100)}`,
-        date: dateStr,
-        patient: displayFullName,
-        patientId: id,
-        montantTotal: line.montantTotal,
-        montantPaye: paye,
-        financeLineId: line.id,
-      });
-    }
-    writeFacturesToStorage(docs);
+      const matched = listRes.data.find(
+        (r) => extractFinanceLineIdFromActes(r.actes) === line.id,
+      );
+
+      const patch = {
+        patient_id: id,
+        date: pgDate,
+        montant: line.montantTotal,
+        montant_paye: paye,
+        statut,
+        actes,
+      };
+
+      if (matched) {
+        const up = await updateFactureAction(matched.id, patch);
+        if (!up.ok) console.error(up.error);
+        else notifyFacturesUpdated();
+      } else {
+        const cr = await createFactureAction(patch);
+        if (!cr.ok) console.error(cr.error);
+        else notifyFacturesUpdated();
+      }
+    })();
   }
 
   function removeGlobalFactureByFinanceLineId(financeLineId: string) {
     if (typeof window === "undefined") return;
-    const docs = readFacturesFromStorage().filter(
-      (d) => d.financeLineId !== financeLineId,
-    );
-    writeFacturesToStorage(docs);
+    void (async () => {
+      const r = await deleteFactureByFinanceLineIdAction(financeLineId);
+      if (!r.ok) console.error(r.error);
+      else notifyFacturesUpdated();
+    })();
   }
 
   // ── Construction des données de la fiche (palette Oryx + 2 colonnes) ───────
@@ -1321,10 +1507,9 @@ export default function PatientDetailPage() {
     const consultations = allTreatments.length;
     let presence = "—";
     let presenceTooltip: string | undefined = undefined;
-    if (isMounted && typeof window !== "undefined") {
-      const all = readAppointmentsFromStorage();
-      const fullName = `${patientProfile.prenom ?? ""} ${patientProfile.nom}`.trim();
-      const mine = all.filter(
+    if (isMounted) {
+      const fullName = resolvedName.appointmentFullName;
+      const mine = patientAppointments.filter(
         (a) =>
           (a.patientId && a.patientId === id) ||
           (a.patient ?? "").toLowerCase() === fullName.toLowerCase(),
@@ -1356,16 +1541,15 @@ export default function PatientDetailPage() {
     allTreatments,
     isMounted,
     id,
-    patientProfile.prenom,
-    patientProfile.nom,
+    resolvedName.appointmentFullName,
     appointmentsTick,
+    patientAppointments,
   ]);
 
   const ficheProchainRdv = useMemo(() => {
-    if (!isMounted || typeof window === "undefined") return undefined;
-    const all = readAppointmentsFromStorage();
-    const fullName = `${patientProfile.prenom ?? ""} ${patientProfile.nom}`.trim();
-    const mine = all
+    if (!isMounted) return undefined;
+    const fullName = resolvedName.appointmentFullName;
+    const mine = patientAppointments
       .filter(
         (a) =>
           (a.patientId && a.patientId === id) ||
@@ -1390,7 +1574,13 @@ export default function PatientDetailPage() {
       acte: next.soin || "Rendez-vous",
       detail: `${next.start} — ${next.durationMinutes} min`,
     };
-  }, [isMounted, id, patientProfile.prenom, patientProfile.nom, appointmentsTick]);
+  }, [
+    isMounted,
+    id,
+    resolvedName.appointmentFullName,
+    appointmentsTick,
+    patientAppointments,
+  ]);
 
   const ficheTimeline = useMemo<PatientFicheTimelineItem[]>(() => {
     type Entry = { row: PatientTreatmentRow; src: "acts" };
@@ -1439,8 +1629,8 @@ export default function PatientDetailPage() {
   const ficheData: PatientFicheData = {
     patient: {
       id,
-      prenom: capitalize(patientProfile.prenom ?? ""),
-      nom: capitalize(patientProfile.nom ?? ""),
+      prenom: capitalize(resolvedName.prenom ?? ""),
+      nom: capitalize(resolvedName.nom ?? ""),
       genre: patientProfile.genre,
       age: patientProfile.age,
       dateNaissance: patientProfile.dateNaissance,
@@ -2378,9 +2568,7 @@ export default function PatientDetailPage() {
             `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
             undefined;
           generateOrdonnancePDF({
-            patient: patientProfile.prenom
-              ? `${patientProfile.prenom} ${patientProfile.nom}`
-              : patientProfile.nom,
+            patient: displayFullName,
             age:
               patientProfile.age != null && patientProfile.age > 0
                 ? patientProfile.age

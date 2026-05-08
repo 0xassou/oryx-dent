@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -24,23 +25,24 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { loginAction, loginAsMemberAction, registerAction } from "@/app/actions/auth";
+import { loginAsMemberAction } from "@/app/actions/auth";
 import {
   findMemberByCredentials,
   setCurrentRole,
   setCurrentUser,
 } from "@/utils/roles";
+import { authClient } from "@/lib/auth-client";
 
 type TabKey = "connexion" | "inscription";
-
-/** Clé localStorage pour le toggle light/dark de l'écran de connexion. */
 const STORAGE_KEY = "oryx_login_theme";
+
+type SignInEmailResponse =
+  | { error?: { message?: string } | null | undefined }
+  | { error?: null; data?: unknown };
 
 export default function LoginPage() {
   const [tab, setTab] = useState<TabKey>("connexion");
   const [isDark, setIsDark] = useState(false);
-
-  // Lecture du thème actif au montage (pour piloter les logos + le toggle).
   useEffect(() => {
     const root = document.documentElement;
     const saved =
@@ -48,7 +50,7 @@ export default function LoginPage() {
         ? window.localStorage.getItem(STORAGE_KEY)
         : null;
     const initial =
-      saved === "dark" ? "dark" : root.getAttribute("data-theme") ?? "violet";
+      saved === "dark" ? "dark" : (root.getAttribute("data-theme") ?? "violet");
     if (initial === "dark") {
       root.setAttribute("data-theme", "dark");
       setIsDark(true);
@@ -56,7 +58,6 @@ export default function LoginPage() {
       setIsDark(false);
     }
   }, []);
-
   const toggleTheme = useCallback(() => {
     const root = document.documentElement;
     const next = isDark ? "violet" : "dark";
@@ -68,20 +69,15 @@ export default function LoginPage() {
       /* noop */
     }
   }, [isDark]);
-
-  // Logo du panneau droit : blanc en dark, couleur en light.
   const rightLogo = isDark ? "/logo-white.svg" : "/logo.svg";
-
   return (
     <div className="fixed inset-0 grid min-h-screen grid-cols-1 overflow-auto bg-[var(--ds-bg)] md:grid-cols-2">
       <BrandPanel />
-
       <section className="relative flex flex-col items-center justify-center bg-[var(--ds-bg)] px-4 py-10 md:px-8">
         <button
           type="button"
           onClick={toggleTheme}
           aria-label="Changer le thème"
-          title="Changer le thème"
           className="absolute right-5 top-5 inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] shadow-sm transition-colors hover:border-[var(--ds-primary)] hover:text-[var(--ds-primary)]"
         >
           {isDark ? (
@@ -90,9 +86,7 @@ export default function LoginPage() {
             <Moon className="h-4 w-4" aria-hidden />
           )}
         </button>
-
         <div className="w-full max-w-[420px] rounded-[24px] border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-9 pb-7 shadow-[0_8px_40px_rgba(124,58,237,0.10),0_2px_8px_rgba(0,0,0,0.06)]">
-          {/* Mini logo + marque sur mobile (le panneau gauche est masqué < md). */}
           <div className="mb-5 flex items-center justify-center gap-2 md:hidden">
             <Image
               src={rightLogo}
@@ -106,8 +100,6 @@ export default function LoginPage() {
               Oryx
             </span>
           </div>
-
-          {/* Tabs */}
           <div
             role="tablist"
             aria-label="Authentification"
@@ -130,29 +122,23 @@ export default function LoginPage() {
               Inscription
             </TabButton>
           </div>
-
           {tab === "connexion" ? (
             <ConnexionPanel key="connexion" />
           ) : (
             <InscriptionPanel key="inscription" />
           )}
         </div>
-
         <footer className="mt-5 text-center text-[11px] leading-6 text-[var(--ds-text-subtle)]">
           © {new Date().getFullYear()} Oryx · Gestion Dentaire · Algérie
           <br />
-          <FooterLink href="#">Confidentialité</FooterLink>
-          {" · "}
-          <FooterLink href="#">Conditions d'utilisation</FooterLink>
-          {" · "}
+          <FooterLink href="#">Confidentialité</FooterLink> ·{" "}
+          <FooterLink href="#">Conditions d&apos;utilisation</FooterLink> ·{" "}
           <FooterLink href="#">Support</FooterLink>
         </footer>
       </section>
     </div>
   );
 }
-
-/* ───────────────────────── Brand panel (left) ───────────────────────── */
 
 function BrandPanel() {
   return (
@@ -162,9 +148,7 @@ function BrandPanel() {
         background:
           "linear-gradient(145deg, #4c1d95 0%, #7c3aed 40%, #5b21b6 70%, #2e1065 100%)",
       }}
-      aria-hidden={false}
     >
-      {/* Motif pointillé */}
       <span
         className="pointer-events-none absolute inset-0"
         style={{
@@ -174,7 +158,6 @@ function BrandPanel() {
         }}
         aria-hidden
       />
-      {/* Cercles décoratifs */}
       <span
         className="pointer-events-none absolute -right-[120px] -top-[100px] h-[480px] w-[480px] rounded-full border border-white/5"
         aria-hidden
@@ -191,16 +174,12 @@ function BrandPanel() {
         }}
         aria-hidden
       />
-      {/* Croix flottantes */}
       <Cross style={{ top: "8%", left: "5%", fontSize: 48, opacity: 0.5 }} />
       <Cross style={{ top: "18%", right: "8%" }} />
-      <Cross
-        style={{ bottom: "22%", left: "12%", fontSize: 40 }}
-      />
+      <Cross style={{ bottom: "22%", left: "12%", fontSize: 40 }} />
       <Cross
         style={{ bottom: "10%", right: "15%", fontSize: 32, opacity: 0.4 }}
       />
-
       <div className="relative z-10 w-full max-w-[380px] px-14 py-12 text-center">
         <div className="oryx-float mx-auto mb-6 flex h-[120px] w-[120px] items-center justify-center rounded-[20px] border border-white/25 bg-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur">
           <Image
@@ -212,20 +191,17 @@ function BrandPanel() {
             priority
           />
         </div>
-
         <div className="text-[36px] font-extrabold leading-none tracking-[-0.03em] text-white">
           Oryx
         </div>
         <div className="mt-1 text-[13px] font-medium uppercase tracking-[0.12em] text-white/55">
           Gestion Dentaire
         </div>
-
-        <p className="mt-8 text-[22px] font-semibold leading-[1.35] tracking-[-0.01em] text-white text-balance">
+        <p className="mt-8 text-[22px] font-semibold leading-[1.35] tracking-[-0.01em] text-balance text-white">
           La gestion dentaire
           <br />
           nouvelle génération
         </p>
-
         <div className="mt-9 flex flex-col gap-3 text-left">
           <Feature
             icon={<Users className="h-[17px] w-[17px]" strokeWidth={2} />}
@@ -248,7 +224,7 @@ function BrandPanel() {
   );
 }
 
-function Cross({ style }: { style: React.CSSProperties }) {
+function Cross({ style }: { style: CSSProperties }) {
   return (
     <span
       aria-hidden
@@ -283,8 +259,6 @@ function Feature({
     </div>
   );
 }
-
-/* ───────────────────────── Tabs & panels ───────────────────────── */
 
 function TabButton({
   active,
@@ -323,7 +297,6 @@ function ConnexionPanel() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -338,7 +311,6 @@ function ConnexionPanel() {
     }
     setLoading(true);
     const cleanEmail = email.trim();
-    // 1) Membre d’équipe (localStorage) 2) Administrateur (serveur)
     const member = findMemberByCredentials(cleanEmail, password);
     if (member) {
       const res = await loginAsMemberAction(member.id);
@@ -350,19 +322,54 @@ function ConnexionPanel() {
           role: member.role,
         });
         router.push("/");
+        router.refresh();
+        setLoading(false);
         return;
       }
       setError(res.error ?? "Erreur");
       setLoading(false);
       return;
     }
-    const res = await loginAction(cleanEmail, password);
-    if (res.ok) {
+    try {
+      const raw = await authClient.signIn.email({
+        email: cleanEmail.toLowerCase(),
+        password,
+      });
+      const res = raw as unknown as SignInEmailResponse;
+      if (res.error) {
+        const msg =
+          typeof res.error === "object" &&
+          res.error !== null &&
+          "message" in res.error &&
+          typeof (res.error as { message?: string }).message === "string"
+            ? (res.error as { message: string }).message
+            : null;
+        setError(msg ?? "Échec de la connexion.");
+        setLoading(false);
+        return;
+      }
+      type DataShape = {
+        user?: { name?: string | null; email?: string };
+      };
+      const data = "data" in res ? res.data : null;
+      const user =
+        data && typeof data === "object" && "user" in data
+          ? (data as DataShape).user
+          : undefined;
+      const displayName =
+        user?.name && user.name.trim().length > 0
+          ? user.name.trim()
+          : "Administrateur";
       setCurrentRole("admin");
-      setCurrentUser({ email: cleanEmail, nom: "Administrateur", role: "admin" });
+      setCurrentUser({
+        email: user?.email ?? cleanEmail,
+        nom: displayName,
+        role: "admin",
+      });
       router.push("/");
-    } else {
-      setError(res.error ?? "Erreur");
+      router.refresh();
+    } catch {
+      setError("Connexion impossible pour le moment.");
     }
     setLoading(false);
   }
@@ -386,7 +393,6 @@ function ConnexionPanel() {
         Un seul identifiant : praticien ou membre d&apos;équipe, nous
         appliquons le bon accès selon l&apos;email.
       </p>
-
       <Field label="Adresse e-mail" htmlFor="loginEmail">
         <InputWrap iconLeft={<Mail className="h-[15px] w-[15px]" strokeWidth={2} />}>
           <input
@@ -401,7 +407,6 @@ function ConnexionPanel() {
           />
         </InputWrap>
       </Field>
-
       <Field label="Mot de passe" htmlFor="loginPwd">
         <InputWrap
           iconLeft={<Lock className="h-[15px] w-[15px]" strokeWidth={2} />}
@@ -420,17 +425,7 @@ function ConnexionPanel() {
           />
         </InputWrap>
       </Field>
-
-      <div className="mb-5 mt-0.5 flex items-center justify-between">
-        <label className="inline-flex cursor-pointer select-none items-center gap-2 text-[12px] text-[var(--ds-text-muted)]">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
-            className="h-[15px] w-[15px] cursor-pointer rounded accent-[var(--ds-primary)]"
-          />
-          Se souvenir de moi
-        </label>
+      <div className="mb-5 mt-0.5 flex items-center justify-end">
         <a
           href="#"
           className="text-[12px] font-semibold text-[var(--ds-primary)] transition-opacity hover:opacity-75"
@@ -438,43 +433,28 @@ function ConnexionPanel() {
           Mot de passe oublié ?
         </a>
       </div>
-
       {error ? <FormError>{error}</FormError> : null}
-
       <PrimaryButton type="submit" disabled={loading}>
         {loading ? "Connexion…" : "Se connecter"}
       </PrimaryButton>
-
       <p className="mt-4 text-center">
         <button
           type="button"
-          onClick={() => {
-            setTeamHelpOpen((open) => {
-              const next = !open;
-              if (next) {
-                window.setTimeout(
-                  () => document.getElementById("loginEmail")?.focus(),
-                  0,
-                );
-              }
-              return next;
-            });
-          }}
+          onClick={() => setTeamHelpOpen((o) => !o)}
           className="text-center text-[12px] text-[var(--ds-text-subtle)] underline decoration-[var(--ds-primary-border)] underline-offset-2 transition-colors hover:text-[var(--ds-primary)]"
         >
           {teamHelpOpen
-            ? "Masquer l’aide membre"
-            : "Vous êtes un membre de l’équipe ? Connectez-vous ici"}
+            ? "Masquer l'aide membre"
+            : "Vous êtes un membre de l'équipe ? Connectez-vous ici"}
         </button>
       </p>
       {teamHelpOpen ? (
-        <p
-          className="mt-3 rounded-xl border border-[var(--ds-primary-border)]/80 bg-[var(--ds-primary-soft)]/35 px-3 py-2.5 text-center text-[11.5px] leading-snug text-[var(--ds-text-muted)]"
-          id="login-team-help"
-        >
-          Saisissez l&apos;email reçu à l&apos;invitation et le mot de passe que
-          vous avez choisi, puis cliquez sur{" "}
-          <span className="font-medium text-[var(--ds-text)]">Se connecter</span>
+        <p className="mt-3 rounded-xl border border-[var(--ds-primary-border)]/80 bg-[var(--ds-primary-soft)]/35 px-3 py-2.5 text-center text-[11.5px] leading-snug text-[var(--ds-text-muted)]">
+          Saisissez l&apos;email reçu à l&apos;invitation et le mot de passe que vous
+          avez choisi, puis cliquez sur{" "}
+          <span className="font-medium text-[var(--ds-text)]">
+            Se connecter
+          </span>
           . Vous n&apos;avez plus besoin du lien d&apos;invitation.
         </p>
       ) : null}
@@ -494,7 +474,6 @@ function InscriptionPanel() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-
   const strength = useMemo(() => computeStrength(pwd), [pwd]);
 
   async function onSubmit(e: FormEvent) {
@@ -506,18 +485,18 @@ function InscriptionPanel() {
       return;
     }
     setLoading(true);
-    const res = await registerAction({
-      cabinet: cabinet.trim(),
-      nom: nom.trim(),
-      prenom: prenom.trim(),
-      email: email.trim(),
-      telephone: phone.trim(),
+    const res = await authClient.signUp.email({
+      email: email.trim().toLowerCase(),
       password: pwd,
+      name: `${prenom.trim()} ${nom.trim()}`,
     });
-    if (res.ok) {
+
+    if (!res.error) {
       setSuccess("Compte créé. Vous pouvez maintenant vous connecter.");
     } else {
-      setError(res.error ?? "Erreur");
+      setError(
+        res.error.message ?? "Erreur lors de la création du compte.",
+      );
     }
     setLoading(false);
   }
@@ -537,7 +516,6 @@ function InscriptionPanel() {
       <p className="mb-4 mt-1 text-[12.5px] leading-[1.5] text-[var(--ds-text-muted)]">
         Commencez votre essai gratuit de 30 jours
       </p>
-
       <div className="mb-5 flex items-start gap-2 rounded-[10px] border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-2.5">
         <Info
           className="mt-[1px] h-[15px] w-[15px] shrink-0 text-[var(--ds-primary)]"
@@ -545,11 +523,10 @@ function InscriptionPanel() {
           aria-hidden
         />
         <p className="text-[11.5px] leading-[1.5] text-[var(--ds-primary)]">
-          <strong className="font-bold">Essai 30 jours gratuit</strong> — Aucune
-          carte bancaire requise. Accès complet à toutes les fonctionnalités.
+          <strong className="font-bold">Essai 30 jours gratuit</strong> —
+          Aucune carte bancaire requise.
         </p>
       </div>
-
       <Field label="Nom du cabinet" htmlFor="regCabinet">
         <InputWrap iconLeft={<Building2 className="h-[15px] w-[15px]" strokeWidth={2} />}>
           <input
@@ -563,12 +540,9 @@ function InscriptionPanel() {
           />
         </InputWrap>
       </Field>
-
       <div className="mb-3.5 grid grid-cols-2 gap-2.5">
         <Field label="Nom" htmlFor="regNom" compact>
-          <InputWrap
-            iconLeft={<User className="h-[15px] w-[15px]" strokeWidth={2} />}
-          >
+          <InputWrap iconLeft={<User className="h-[15px] w-[15px]" strokeWidth={2} />}>
             <input
               id="regNom"
               type="text"
@@ -594,7 +568,6 @@ function InscriptionPanel() {
           </InputWrap>
         </Field>
       </div>
-
       <Field label="E-mail professionnel" htmlFor="regEmail">
         <InputWrap iconLeft={<Mail className="h-[15px] w-[15px]" strokeWidth={2} />}>
           <input
@@ -608,7 +581,6 @@ function InscriptionPanel() {
           />
         </InputWrap>
       </Field>
-
       <Field label="Téléphone" htmlFor="regPhone">
         <InputWrap iconLeft={<Phone className="h-[15px] w-[15px]" strokeWidth={2} />}>
           <input
@@ -622,7 +594,6 @@ function InscriptionPanel() {
           />
         </InputWrap>
       </Field>
-
       <Field label="Mot de passe" htmlFor="regPwd">
         <InputWrap
           iconLeft={<Lock className="h-[15px] w-[15px]" strokeWidth={2} />}
@@ -642,7 +613,6 @@ function InscriptionPanel() {
         </InputWrap>
         <PwdStrength score={strength} />
       </Field>
-
       <Field label="Confirmation" htmlFor="regPwd2">
         <InputWrap iconLeft={<Check className="h-[15px] w-[15px]" strokeWidth={2} />}>
           <input
@@ -656,14 +626,12 @@ function InscriptionPanel() {
           />
         </InputWrap>
       </Field>
-
       {error ? <FormError>{error}</FormError> : null}
       {success ? (
         <p className="mb-3 rounded-[10px] border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-2 text-[12px] text-[var(--ds-primary)]">
           {success}
         </p>
       ) : null}
-
       <div className="mt-2">
         <PrimaryButton type="submit" disabled={loading}>
           {loading ? "Création…" : "Créer mon compte Oryx →"}
@@ -673,11 +641,8 @@ function InscriptionPanel() {
   );
 }
 
-/* ───────────────────────── Primitives UI ───────────────────────── */
-
 const INPUT_CLS =
   "h-11 w-full rounded-[12px] border-[1.5px] border-[var(--ds-primary-border)] bg-[var(--ds-bg)] pl-10 pr-10 text-[13px] text-[var(--ds-text)] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[var(--ds-text-subtle)] focus:border-[var(--ds-primary)] focus:bg-[var(--ds-surface)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ds-primary)_14%,transparent)]";
-
 const INPUT_CLS_NO_ICON =
   "h-11 w-full rounded-[12px] border-[1.5px] border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3.5 text-[13px] text-[var(--ds-text)] outline-none transition-[border-color,box-shadow,background-color] placeholder:text-[var(--ds-text-subtle)] focus:border-[var(--ds-primary)] focus:bg-[var(--ds-surface)] focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ds-primary)_14%,transparent)]";
 
@@ -734,13 +699,7 @@ function InputWrap({
   );
 }
 
-function PasswordToggle({
-  show,
-  onToggle,
-}: {
-  show: boolean;
-  onToggle: () => void;
-}) {
+function PasswordToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -771,9 +730,9 @@ function PrimaryButton({
     <button
       type={type}
       disabled={disabled}
-      className="relative mt-1 h-[46px] w-full overflow-hidden rounded-[12px] text-[14px] font-bold tracking-[0.01em] text-white shadow-[0_4px_14px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(0,0,0,0.22)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+      className="relative mt-1 h-[46px] w-full overflow-hidden rounded-[12px] text-[14px] font-bold tracking-[0.01em] text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
       style={{
-        background: "linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-hover) 100%)",
+        background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
       }}
     >
       {children}
@@ -785,7 +744,7 @@ function FormError({ children }: { children: ReactNode }) {
   return (
     <p
       role="alert"
-      className="mb-3 rounded-[10px] border border-[var(--ds-border-strong)] bg-[var(--ds-surface-2)] px-3 py-2 text-[12px] text-[var(--ds-primary-hover)]"
+      className="mb-3 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-600"
     >
       {children}
     </p>
@@ -793,7 +752,6 @@ function FormError({ children }: { children: ReactNode }) {
 }
 
 function PwdStrength({ score }: { score: number }) {
-  /** score: 0..4 */
   const colors = ["#ef4444", "#f97316", "#f59e0b", "#10b981"];
   return (
     <div className="mt-1.5 flex gap-1">
@@ -803,9 +761,7 @@ function PwdStrength({ score }: { score: number }) {
           className="h-[3px] flex-1 rounded-[2px] transition-colors"
           style={{
             backgroundColor:
-              i <= score && score > 0
-                ? colors[score - 1]
-                : "var(--ds-primary-border)",
+              i <= score && score > 0 ? colors[score - 1] : "var(--ds-primary-border)",
           }}
         />
       ))}
@@ -813,13 +769,7 @@ function PwdStrength({ score }: { score: number }) {
   );
 }
 
-function FooterLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) {
+function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <a
       href={href}
@@ -829,8 +779,6 @@ function FooterLink({
     </a>
   );
 }
-
-/* ───────────────────────── Icônes inline (match référence) ───────────────────────── */
 
 function CalendarIcon() {
   return (
@@ -872,9 +820,7 @@ function DollarIcon() {
   );
 }
 
-/* ───────────────────────── Helpers ───────────────────────── */
-
-function computeStrength(val: string) {
+function computeStrength(val: string): number {
   let score = 0;
   if (val.length >= 8) score++;
   if (/[A-Z]/.test(val)) score++;

@@ -18,12 +18,13 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { getAppointmentsByDateAction } from "@/app/actions/appointments";
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
   APPOINTMENTS_UPDATED_EVENT,
+  appointmentJoinedRowToRdv,
   formatDateKeyLocal,
-  readAppointmentsFromStorage,
   type AppointmentRdv,
 } from "@/utils/appointmentData";
 
@@ -613,14 +614,20 @@ export default function SterilisationPage() {
   useEffect(() => {
     if (!isMounted) return;
     const todayKey = formatDateKeyLocal(new Date());
+    let cancelled = false;
     const refresh = () => {
-      const all = readAppointmentsFromStorage();
-      setTodayAppointments(all.filter((r) => r.dateKey === todayKey));
+      void (async () => {
+        const res = await getAppointmentsByDateAction(todayKey);
+        if (cancelled || !res.ok) return;
+        setTodayAppointments(res.data.map(appointmentJoinedRowToRdv));
+      })();
     };
     refresh();
     window.addEventListener(APPOINTMENTS_UPDATED_EVENT, refresh);
-    return () =>
+    return () => {
+      cancelled = true;
       window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, refresh);
+    };
   }, [isMounted]);
 
   useEffect(() => {

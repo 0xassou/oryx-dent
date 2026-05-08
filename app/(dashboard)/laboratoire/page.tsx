@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -28,13 +29,14 @@ import { addExpenseToStorage } from "@/utils/expensesData";
 import { showAppToast } from "@/utils/appToast";
 import {
   APPOINTMENTS_UPDATED_EVENT,
-  readAppointmentsFromStorage,
+  appointmentJoinedRowToRdv,
+  notifyAppointmentsUpdated,
   type AppointmentRdv,
 } from "@/utils/appointmentData";
 import {
+  computeLinkedAppointmentDateMovesFromLab,
   filterAppointmentsForPatient,
   pullAgendaDatesIntoLabCommandes,
-  pushLabDatesToLinkedAppointments,
 } from "@/utils/labAgendaSync";
 import {
   findLabById,
@@ -57,10 +59,14 @@ import {
   todayIsoLocal,
   writeLabCommandesToStorage,
 } from "@/utils/laboratoireCommandes";
+import { getPatientsAction } from "@/app/actions/patients";
+import {
+  getAppointmentsAction,
+  updateAppointmentAction,
+} from "@/app/actions/appointments";
 import {
   displayPatientName,
-  ensurePatientsHydrated,
-  readPatientsFromStorage,
+  patientRowToDentalPatientRecord,
   type DentalPatientRecord,
 } from "@/utils/patientData";
 import { generateLabBonPDF } from "@/utils/generateLabBonPDF";
@@ -164,6 +170,25 @@ function isPastIso(iso: string | undefined): boolean {
   return dt.getTime() < Date.now();
 }
 
+/** Bandeau gauche 4px — DESIGN.md §09 Labo (#f97316) + séquentiel état / urgence calendrier. */
+function commandeCardLeftAccent(
+  cmd: LaboratoireCommande,
+  conflit: boolean,
+): string {
+  if (conflit && cmd.statut !== "POSE") return "border-l-[#ef4444]";
+  switch (cmd.statut) {
+    case "EN_ATTENTE":
+      return "border-l-[#f59e0b]";
+    case "EN_FABRICATION":
+      return "border-l-[#06b6d4]";
+    case "RECU_CABINET":
+    case "POSE":
+      return "border-l-[#10b981]";
+    default:
+      return "border-l-[#f97316]";
+  }
+}
+
 type ActiveTab = "all" | "urgent" | "fabrication" | "ready" | "pose";
 type FilterKey = ActiveTab;
 
@@ -195,15 +220,24 @@ export default function LaboratoirePage() {
     "Gouttière",
   ] as const;
 
-  const refreshPatients = useCallback(() => {
-    ensurePatientsHydrated();
-    setPatients(readPatientsFromStorage());
+  const refreshPatients = useCallback(async () => {
+    const res = await getPatientsAction();
+    if (!res.ok) {
+      console.error(res.error);
+      return;
+    }
+    setPatients(res.data.map(patientRowToDentalPatientRecord));
   }, []);
 
   useEffect(() => {
-    refreshPatients();
+    void refreshPatients();
+    void (async () => {
+      const res = await getAppointmentsAction();
+      if (res.ok) {
+        setAppointments(res.data.map(appointmentJoinedRowToRdv));
+      }
+    })();
     setLabs(readLabsDirectoryFromStorage());
-    setAppointments(readAppointmentsFromStorage());
     setCommandes(readLabCommandesFromStorage());
     setHydrated(true);
   }, [refreshPatients]);
@@ -219,19 +253,23 @@ export default function LaboratoirePage() {
 
   useEffect(() => {
     function onAppt() {
-      const apps = readAppointmentsFromStorage();
-      setAppointments(apps);
-      setCommandes((prev) => {
-        const merged = pullAgendaDatesIntoLabCommandes(prev, apps);
-        const pmap = new Map(prev.map((c) => [c.id, c]));
-        for (const m of merged) {
-          const p = pmap.get(m.id);
-          if (!p || labDatesDiffer(p, m)) {
-            return merged;
+      void (async () => {
+        const res = await getAppointmentsAction();
+        if (!res.ok) return;
+        const apps = res.data.map(appointmentJoinedRowToRdv);
+        setAppointments(apps);
+        setCommandes((prev) => {
+          const merged = pullAgendaDatesIntoLabCommandes(prev, apps);
+          const pmap = new Map(prev.map((c) => [c.id, c]));
+          for (const m of merged) {
+            const p = pmap.get(m.id);
+            if (!p || labDatesDiffer(p, m)) {
+              return merged;
+            }
           }
-        }
-        return prev;
-      });
+          return prev;
+        });
+      })();
     }
     window.addEventListener(APPOINTMENTS_UPDATED_EVENT, onAppt);
     return () =>
@@ -259,7 +297,10 @@ export default function LaboratoirePage() {
     const L = readLabsDirectoryFromStorage();
     setLabs(L);
     setModalLabId(L[0]?.id ?? "");
-    setAppointments(readAppointmentsFromStorage());
+    void (async () => {
+      const res = await getAppointmentsAction();
+      if (res.ok) setAppointments(res.data.map(appointmentJoinedRowToRdv));
+    })();
   }, [isModalOpen]);
 
   useEffect(() => {
@@ -283,21 +324,36 @@ export default function LaboratoirePage() {
     );
   }, [appointments, modalPatientId, modalPatientRecord]);
 
-  const patchCommand = useCallback(
-    (id: string, next: LaboratoireCommande) => {
+  const patchCommand = useCallback((id: string, next: LaboratoireCommande) => {
+    setCommandes((prev) =>
+      prev.map((c) => (c.id === id ? next : c)),
+    );
+    void (async () => {
+      const appsRes = await getAppointmentsAction();
+      if (!appsRes.ok) return;
+      const apps = appsRes.data.map(appointmentJoinedRowToRdv);
+      const moves = computeLinkedAppointmentDateMovesFromLab(apps, next);
+      for (const m of moves) {
+        const up = await updateAppointmentAction(m.appointmentId, {
+          date: m.newDateIso.trim().slice(0, 10),
+        });
+        if (!up.ok) console.error(up.error);
+      }
+      if (moves.length === 0) return;
+      showAppToast(capitalizeToastPhrase(moves[0].toast));
+      const refreshed = await getAppointmentsAction();
+      if (!refreshed.ok) return;
+      const refreshedApps = refreshed.data.map(appointmentJoinedRowToRdv);
+      setAppointments(refreshedApps);
       setCommandes((prev) =>
-        prev.map((c) => {
-          if (c.id !== id) return c;
-          const old = c;
-          const msg = pushLabDatesToLinkedAppointments(old, next);
-          if (msg) showAppToast(msg);
-          return next;
-        }),
+        pullAgendaDatesIntoLabCommandes(
+          prev.map((c) => (c.id === id ? next : c)),
+          refreshedApps,
+        ),
       );
-      setAppointments(readAppointmentsFromStorage());
-    },
-    [],
-  );
+      notifyAppointmentsUpdated();
+    })();
+  }, []);
 
   const urgentCommandes = useMemo(
     () =>
@@ -421,19 +477,19 @@ export default function LaboratoirePage() {
   ];
 
   return (
-    <div className="space-y-0 pb-8 font-['Sora']">
+    <div className="space-y-0 bg-[var(--ds-bg)] pb-8 font-sans">
       <header className="flex items-start justify-between pb-5 pt-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ds-text)]">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-[color:var(--ds-text)]">
             Laboratoire &amp; Prothèses
           </h1>
-          <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
+          <p className="mt-1.5 text-sm font-normal leading-relaxed text-[var(--ds-text-muted)]">
             Suivi des commandes prothétiques et des délais laboratoire
           </p>
         </div>
         <AnimatedButton
           onClick={() => setIsModalOpen(true)}
-          className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(124,58,237,0.25)] transition-colors hover:bg-[color:var(--ds-primary-dark)]"
+          className="rounded-[12px] bg-[color:var(--ds-primary)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_16px_rgba(124,58,237,0.25)] transition-colors hover:bg-[color:var(--ds-primary-hover)]"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           Nouvelle commande labo
@@ -442,47 +498,52 @@ export default function LaboratoirePage() {
 
       <div className="grid grid-cols-1 gap-3 pb-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
+          variant="lab"
           kpi="rdv"
           icon={<ClipboardList />}
           value={commandes.length}
-          label="Total commandes"
+          label="TOTAL COMMANDES"
         />
         <KpiCard
+          variant="lab"
           kpi="stock"
           icon={<AlertTriangle />}
           value={urgentCommandes.length}
-          label="Urgences"
+          label="URGENCES"
           stockAlertCount={urgentCommandes.length}
         />
         <KpiCard
+          variant="lab"
           kpi="patients"
           icon={<Clock />}
           value={fabricationCommandes.length}
-          label="En fabrication"
+          label="EN FABRICATION"
         />
         <KpiCard
+          variant="lab"
           kpi="kits"
           icon={<CheckCircle2 />}
           value={recuCommandes.length}
-          label="Reçu au cabinet"
+          label="REÇU AU CABINET"
         />
       </div>
 
       {urgentCommandes.length > 0 ? (
-        <div className="mx-0 mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-            <p className="text-base text-amber-800">
-              <span className="font-bold">
-                {urgentCommandes.length} commande{urgentCommandes.length > 1 ? "s" : ""}
+        <div className="mx-0 mb-5 flex flex-col gap-3 rounded-[16px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#d97706] sm:mt-0" />
+            <p className="text-sm font-medium leading-snug text-[#d97706]">
+              <span className="font-mono tabular-nums font-medium tracking-tight">
+                {urgentCommandes.length}
               </span>{" "}
-              ont une date de pose prévue avant le retour du labo — action requise.
+              commande{urgentCommandes.length > 1 ? "s" : ""} ont une date de
+              pose prévue avant le retour du labo — action requise.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setActiveTab("urgent")}
-            className="shrink-0 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200"
+            className="shrink-0 rounded-[12px] border border-[#f59e0b] px-3.5 py-2 text-[13px] font-semibold text-[#d97706] transition-colors hover:bg-[#fef3c7]"
           >
             Voir les commandes urgentes
           </button>
@@ -490,25 +551,26 @@ export default function LaboratoirePage() {
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-        <div className="flex gap-1 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] p-0.5">
+        <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => setActiveTab(f.key)}
+              type="button"
               className={cn(
-                "flex items-center gap-2 rounded-[9px] px-5 py-2.5 text-base font-semibold transition-all",
+                "flex items-center gap-2 rounded-[12px] border px-3.5 py-2 text-[13px] transition-colors",
                 activeTab === f.key
-                  ? "bg-[color:var(--ds-primary)] text-white"
-                  : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
+                  ? "border-transparent bg-[color:var(--ds-primary)] font-semibold text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+                  : "border-[var(--ds-border)] bg-[var(--ds-surface)] font-medium text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
               )}
             >
               {f.label}
               <span
                 className={cn(
-                  "font-['DM_Mono'] rounded-full px-2 py-0.5 text-sm font-bold leading-snug",
+                  "rounded-full px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums leading-none tracking-tight",
                   activeTab === f.key
                     ? "bg-white/20 text-white"
-                    : "bg-black/5 text-[var(--ds-text-muted)]",
+                    : "bg-[var(--ds-bg)] text-[var(--ds-text-muted)]",
                 )}
               >
                 {f.count}
@@ -517,26 +579,32 @@ export default function LaboratoirePage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2">
-          <Search className="h-3.5 w-3.5 text-[var(--ds-text-muted)]" strokeWidth={2} />
+        <div className="flex items-center gap-2 rounded-[12px] border border-[var(--ds-border)] bg-[var(--ds-surface)] px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <Search
+            className="h-3.5 w-3.5 shrink-0 text-[var(--ds-text-muted)]"
+            strokeWidth={2}
+          />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Rechercher un patient, un acte…"
-            className="w-52 border-0 bg-transparent text-xs text-[color:var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)]"
+            className="w-52 border-0 bg-transparent text-[13px] font-normal text-[color:var(--ds-text)] outline-none placeholder:text-[var(--ds-text-subtle)]"
           />
         </div>
       </div>
 
-      <p className="pb-4 text-lg font-medium text-[var(--ds-text-muted)]">
-        <span className="font-['DM_Mono']">{filtered.length}</span> commande
+      <p className="pb-4 text-sm font-normal leading-relaxed text-[var(--ds-text-muted)]">
+        <span className="font-mono text-sm font-medium tabular-nums text-[var(--ds-text-muted)]">
+          {filtered.length}
+        </span>{" "}
+        commande
         {filtered.length > 1 ? "s" : ""} trouvée
         {filtered.length > 1 ? "s" : ""}
       </p>
 
       {filtered.length === 0 ? (
-        <div className="mx-0 rounded-2xl border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-sm">
+        <div className="mx-0 rounded-[20px] border border-dashed border-[var(--ds-primary-border)]/80 bg-[var(--ds-surface)]/60 px-6 py-16 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           {searchTerm.trim() && tabFiltered.length > 0 ? (
             <div className="mx-auto max-w-md space-y-3">
               <div
@@ -568,16 +636,8 @@ export default function LaboratoirePage() {
               isPastIso(cmd.retourIso) &&
               cmd.statut !== "RECU_CABINET" &&
               cmd.statut !== "POSE";
-            const retourOk = cmd.statut === "RECU_CABINET" || cmd.statut === "POSE";
             const posePast = isPastIso(cmd.rdvPatientIso);
             const pretAPoser = cmd.statut === "RECU_CABINET";
-
-            const STATUS_ACCENT: Record<string, string> = {
-              "En attente": "border-l-amber-400",
-              "En fabrication": "border-l-cyan-400",
-              "Reçu au cabinet": "border-l-violet-500",
-              Posé: "border-l-emerald-400",
-            };
 
             const labPartner: DentalLabPartner =
               findLabByName(cmd.labo, labs) ?? {
@@ -605,33 +665,44 @@ export default function LaboratoirePage() {
                   }
                 }}
                 className={cn(
-                  "cursor-pointer rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-6 py-5",
-                  "border-l-[3px] transition-all hover:border-[var(--ds-primary-border)] hover:shadow-[0_4px_16px_rgba(124,58,237,0.07)]",
-                  STATUS_ACCENT[statutLabel] ?? "border-l-[var(--ds-border)]",
+                  "cursor-pointer rounded-[20px] border border-[var(--ds-border)] bg-[var(--ds-surface)] py-5 pl-5 pr-6",
+                  "border-l-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]",
+                  commandeCardLeftAccent(cmd, conflit),
                 )}
               >
-                <div className="mb-2.5 flex items-center gap-2">
-                  <span className="text-xl font-bold text-[color:var(--ds-text)]">
+                <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-bold leading-snug tracking-tight text-[color:var(--ds-text)]">
                     {cmd.patient}
                   </span>
                   <StatusBadgeInline statut={statutLabel} />
                   {conflit && cmd.statut !== "POSE" ? <UrgenceBadge /> : null}
                   {pretAPoser ? <PretBadge /> : null}
-                  <div className="flex-1" />
-                  <span className="flex items-center gap-1 text-sm font-medium text-[var(--ds-text)]">
-                    <Building2 className="h-3 w-3 text-[var(--ds-text-muted)]" strokeWidth={1.8} />
-                    {cmd.labo}
+                  <div className="hidden flex-1 min-[880px]:block" />
+                  <span className="ml-auto flex min-w-0 items-center gap-1.5 text-sm font-normal text-[var(--ds-text-subtle)] max-[879px]:w-full">
+                    <Building2
+                      className="h-3.5 w-3.5 shrink-0 text-[var(--ds-text-subtle)]"
+                      strokeWidth={1.85}
+                      aria-hidden
+                    />
+                    <span className="truncate">{cmd.labo}</span>
                   </span>
                 </div>
 
-                <p className="mb-2.5 text-base text-[var(--ds-text-muted)]">
-                  <span className="font-medium text-[color:var(--ds-text)]">{acte}</span>
-                  {" · "}
-                  {dent ?? "—"}
-                  {" · "}
-                  {cmd.teinte ?? "—"}
-                  {" · "}
-                  {cmd.materiau ?? "—"}
+                <p className="mb-2 text-sm font-normal leading-relaxed text-[var(--ds-text-muted)]">
+                  {acte}
+                </p>
+                <p className="mb-2.5 text-xs font-light leading-relaxed tracking-tight text-[var(--ds-text-subtle)]">
+                  <span className="font-mono font-normal text-[var(--ds-text-subtle)]">
+                    {dent ?? "—"}
+                  </span>
+                  <span aria-hidden className="px-1.5 opacity-70">
+                    ·
+                  </span>
+                  <span>{cmd.teinte ?? "—"}</span>
+                  <span aria-hidden className="px-1.5 opacity-70">
+                    ·
+                  </span>
+                  <span>{cmd.materiau ?? "—"}</span>
                 </p>
 
                 <div className="flex items-center gap-4 border-t border-[var(--ds-border)] pt-2.5">
@@ -669,7 +740,7 @@ export default function LaboratoirePage() {
                           e.stopPropagation();
                           changeStatut(cmd, "POSE");
                         }}
-                        className="rounded-lg bg-[color:var(--ds-primary)] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-[color:var(--ds-primary-dark)]"
+                        className="rounded-[12px] bg-[color:var(--ds-primary)] px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors hover:bg-[color:var(--ds-primary-hover)]"
                         title="Poser"
                       >
                         Poser
@@ -747,7 +818,7 @@ export default function LaboratoirePage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <h3 className="text-lg font-medium tracking-tight text-[color:var(--ds-text)]">
+                <h3 className="text-lg font-semibold tracking-tight text-[color:var(--ds-text)]">
                   Nouvelle commande labo
                 </h3>
                 <p className="text-sm font-light text-[var(--ds-text-muted)]">
@@ -804,14 +875,40 @@ export default function LaboratoirePage() {
                 }
 
                 setCommandes((prev) => {
-                  const msg = pushLabDatesToLinkedAppointments(undefined, next);
-                  if (msg) showAppToast(msg);
-                  const apps = readAppointmentsFromStorage();
                   const withNew = [next, ...prev];
-                  return pullAgendaDatesIntoLabCommandes(withNew, apps);
+                  return pullAgendaDatesIntoLabCommandes(withNew, appointments);
                 });
-                setAppointments(readAppointmentsFromStorage());
                 setIsModalOpen(false);
+                void (async () => {
+                  const appsRes = await getAppointmentsAction();
+                  if (!appsRes.ok) return;
+                  const appsFromServer = appsRes.data.map(
+                    appointmentJoinedRowToRdv,
+                  );
+                  const moves = computeLinkedAppointmentDateMovesFromLab(
+                    appsFromServer,
+                    next,
+                  );
+                  for (const m of moves) {
+                    const up = await updateAppointmentAction(m.appointmentId, {
+                      date: m.newDateIso.trim().slice(0, 10),
+                    });
+                    if (!up.ok) console.error(up.error);
+                  }
+                  if (moves.length > 0) {
+                    showAppToast(capitalizeToastPhrase(moves[0].toast));
+                  }
+                  const refreshed = await getAppointmentsAction();
+                  if (!refreshed.ok) return;
+                  const refreshedApps = refreshed.data.map(
+                    appointmentJoinedRowToRdv,
+                  );
+                  setAppointments(refreshedApps);
+                  setCommandes((prev) =>
+                    pullAgendaDatesIntoLabCommandes(prev, refreshedApps),
+                  );
+                  notifyAppointmentsUpdated();
+                })();
               }}
             >
               <PatientCombobox
@@ -944,7 +1041,7 @@ export default function LaboratoirePage() {
                 <button
                   type="submit"
                   disabled={!modalPatientId || !modalLabId || !retourIso}
-                  className="rounded-2xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white shadow-[0_4px_16px_rgba(8,145,178,0.2)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="rounded-2xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(8,145,178,0.2)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Créer la commande
                 </button>
@@ -960,26 +1057,41 @@ export default function LaboratoirePage() {
 
 function StatusBadgeInline({ statut }: { statut: string }) {
   const styles: Record<string, string> = {
-    "En attente": "border-amber-200 bg-amber-50 text-amber-800",
-    "En fabrication": "border-cyan-200 bg-cyan-50 text-cyan-800",
+    "En attente":
+      "border-[#fde68a] bg-[#fffbeb] text-[#b45309]",
+    "En fabrication":
+      "border-[#a5f3fc] bg-[#ecfeff] text-[#0891b2]",
     "Reçu au cabinet":
-      "border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] text-[color:var(--ds-primary)]",
-    Posé: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      "border-[#bbf7d0] bg-[#f0fdf4] text-[#059669]",
+    Posé:
+      "border-[#bbf7d0] bg-[#f0fdf4] text-[#059669]",
+    "Envoyé au labo":
+      "border-[#fed7aa] bg-[#fff7ed] text-[#ea580c]",
+    "Expédié au cabinet":
+      "border-[#a5f3fc] bg-[#ecfeff] text-[#0891b2]",
+    Retouche:
+      "border-[#fde68a] bg-[#fffbeb] text-[#b45309]",
   };
   const dots: Record<string, string> = {
-    "En attente": "bg-amber-400",
-    "En fabrication": "bg-cyan-400",
-    "Reçu au cabinet": "bg-[color:var(--ds-primary)]",
-    Posé: "bg-emerald-400",
+    "En attente": "bg-[#f59e0b]",
+    "En fabrication": "bg-[#06b6d4]",
+    "Reçu au cabinet": "bg-[#10b981]",
+    Posé: "bg-[#10b981]",
+    "Envoyé au labo": "bg-[#f97316]",
+    "Expédié au cabinet": "bg-[#06b6d4]",
+    Retouche: "bg-[#f59e0b]",
   };
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold",
-        styles[statut] ?? "border-[var(--ds-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)]",
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium tracking-tight text-[color:var(--ds-text)]",
+        styles[statut] ??
+          "border-[var(--ds-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)]",
       )}
     >
-      <span className={cn("h-2 w-2 rounded-full", dots[statut] ?? "bg-slate-400")} />
+      <span
+        className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dots[statut] ?? "bg-[var(--ds-text-subtle)]")}
+      />
       {statut}
     </span>
   );
@@ -987,8 +1099,8 @@ function StatusBadgeInline({ statut }: { statut: string }) {
 
 function UrgenceBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700">
-      <span className="h-1 w-1 rounded-full bg-red-500" />
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#fecaca] bg-[#fef2f2] px-2.5 py-1 text-[11px] font-medium tracking-tight text-[#dc2626]">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ef4444]" />
       Pose avant retour
     </span>
   );
@@ -996,8 +1108,8 @@ function UrgenceBadge() {
 
 function PretBadge() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-      <span className="h-1 w-1 rounded-full bg-emerald-500" />
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#bbf7d0] bg-[#f0fdf4] px-2.5 py-1 text-[11px] font-medium tracking-tight text-[#059669]">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#10b981]" />
       Prêt à poser
     </span>
   );
@@ -1013,18 +1125,26 @@ function DateItem({
   isAlert?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-1.5 text-base text-[var(--ds-text-muted)]">
-      <Calendar className="h-3 w-3" strokeWidth={1.8} />
-      <span>{label}</span>
+    <div className="flex items-center gap-1.5 text-xs leading-snug tracking-tight text-[var(--ds-text-muted)]">
+      <Calendar
+        className="h-3 w-3 shrink-0 text-[var(--ds-text-subtle)]"
+        strokeWidth={1.85}
+      />
+      <span className="font-light text-[var(--ds-text-subtle)]">{label}</span>
       <span
         className={cn(
-          "font-['DM_Mono'] font-medium",
-          isAlert ? "text-red-600" : "text-[color:var(--ds-text)]",
+          "font-light tabular-nums",
+          isAlert ? "text-[#ef4444]" : "text-[color:var(--ds-text)]",
         )}
       >
         {date}
       </span>
-      {isAlert ? <AlertCircle className="h-3 w-3 text-red-500" strokeWidth={1.8} /> : null}
+      {isAlert ? (
+        <AlertCircle
+          className="h-3 w-3 shrink-0 text-[#ef4444]"
+          strokeWidth={1.85}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1034,7 +1154,7 @@ function ActionButton({
   onClick,
   title,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   onClick: () => void;
   title: string;
 }) {
@@ -1043,7 +1163,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       title={title}
-      className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--ds-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)] transition-all hover:border-[var(--ds-primary-border)] hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)]"
+      className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[var(--ds-text-subtle)] transition-colors hover:bg-[var(--ds-primary-soft)] hover:text-[color:var(--ds-primary)] active:scale-[0.98]"
     >
       {icon}
     </button>
@@ -1115,7 +1235,7 @@ function CommandeDrawer({
 
   type TimelineEvent = {
     key: string;
-    icon: React.ReactNode;
+    icon: ReactNode;
     dotClass: string;
     title: string;
     date: string;
@@ -1197,17 +1317,23 @@ function CommandeDrawer({
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6 py-5">
           <div className="min-w-0">
-            <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
               Commande labo
             </p>
-            <h3 className="mt-1 truncate text-[18px] font-semibold tracking-tight text-[var(--ds-text)]">
+            <h3 className="mt-1 truncate text-[18px] font-normal tracking-tight text-[var(--ds-text)]">
               {acte}
               {dent ? (
-                <span className="text-[var(--ds-text-muted)]"> · {dent}</span>
+                <span className="font-mono font-medium text-[var(--ds-text-muted)]">
+                  {" "}
+                  · {dent}
+                </span>
               ) : null}
             </h3>
-            <p className="mt-0.5 truncate text-[12px] font-light text-[var(--ds-text-muted)]">
-              {cmd.patient} · {cmd.labo}
+            <p className="mt-0.5 truncate text-[12px] text-[var(--ds-text-muted)]">
+              <span className="font-bold text-[var(--ds-text)]">
+                {cmd.patient}
+              </span>
+              <span className="font-light"> · {cmd.labo}</span>
             </p>
           </div>
           <button
@@ -1224,13 +1350,13 @@ function CommandeDrawer({
         <div className="px-6 py-6">
           {/* Statut */}
           <section className="mb-6">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
               Statut actuel
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge statut={cmd.statut} />
               {conflit ? (
-                <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
                   🚨 Pose avant retour
                 </span>
               ) : null}
@@ -1249,37 +1375,60 @@ function CommandeDrawer({
 
           {/* Détails */}
           <section className="mb-6">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
               Détails de la commande
             </p>
             <div className="grid grid-cols-2 gap-2">
-              <DetailItem label="Patient" value={cmd.patient} />
-              <DetailItem label="Dent" value={dent ?? "—"} />
-              <DetailItem label="Type" value={acte} full />
-              <DetailItem label="Matériau" value={cmd.materiau ?? "—"} />
-              <DetailItem label="Teinte" value={cmd.teinte ?? "—"} />
-              <DetailItem label="Laboratoire" value={cmd.labo} full />
+              <DetailItem
+                label="Patient"
+                value={cmd.patient}
+                valueVariant="patient"
+              />
+              <DetailItem
+                label="Dent"
+                value={dent ?? "—"}
+                valueVariant="dent"
+              />
+              <DetailItem label="Type" value={acte} full valueVariant="detail" />
+              <DetailItem
+                label="Matériau"
+                value={cmd.materiau ?? "—"}
+                valueVariant="detail"
+              />
+              <DetailItem
+                label="Teinte"
+                value={cmd.teinte ?? "—"}
+                valueVariant="detail"
+              />
+              <DetailItem
+                label="Laboratoire"
+                value={cmd.labo}
+                full
+                valueVariant="meta"
+              />
               <DetailItem
                 label="Retour prévu"
                 value={formatDatePrettyLocal(cmd.retourIso)}
                 valueClass={retourPast ? "text-red-600" : undefined}
+                valueVariant="date"
               />
               <DetailItem
                 label="Pose prévue"
                 value={formatDatePrettyLocal(cmd.rdvPatientIso)}
                 valueClass={conflit ? "text-red-600" : undefined}
+                valueVariant="date"
               />
             </div>
           </section>
 
           {/* Édition dates & liens */}
           <section className="mb-6">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
               Modifier dates & liaison agenda
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Retour labo
                 </label>
                 <input
@@ -1292,7 +1441,7 @@ function CommandeDrawer({
                 />
               </div>
               <div>
-                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Date de pose
                 </label>
                 <input
@@ -1308,7 +1457,7 @@ function CommandeDrawer({
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Lien agenda — pose
                 </label>
                 <select
@@ -1340,7 +1489,7 @@ function CommandeDrawer({
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Lien agenda — retour labo
                 </label>
                 <select
@@ -1372,7 +1521,7 @@ function CommandeDrawer({
                 </select>
               </div>
               <div>
-                <label className="text-[10px] font-mono uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">
+                <label className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
                   Coût labo (DA)
                 </label>
                 <input
@@ -1384,7 +1533,7 @@ function CommandeDrawer({
                   placeholder="—"
                   onChange={(e) => onCoutChange(e.target.value)}
                   onBlur={onCoutCommit}
-                  className={inputSubtle + " mt-1.5 tabular-nums"}
+                  className={inputSubtle + " mt-1.5 font-normal tabular-nums"}
                 />
               </div>
             </div>
@@ -1392,7 +1541,7 @@ function CommandeDrawer({
 
           {/* Changer statut */}
           <section className="mb-6">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
               Changer le statut
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -1419,7 +1568,7 @@ function CommandeDrawer({
 
           {/* Timeline */}
           <section className="mb-6">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--ds-text-muted)]">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
               Historique
             </p>
             <ol className="relative space-y-3 pl-0">
@@ -1441,10 +1590,10 @@ function CommandeDrawer({
                       ) : null}
                     </span>
                     <div className="min-w-0 flex-1 pb-1">
-                      <p className="text-[13px] font-semibold text-[var(--ds-text)]">
+                      <p className="text-[13px] font-medium text-[var(--ds-text)]">
                         {ev.title}
                       </p>
-                      <p className="font-mono text-[11px] text-[var(--ds-text-muted)]">
+                      <p className="text-[11px] font-light text-[var(--ds-text-muted)]">
                         {ev.date}
                       </p>
                     </div>
@@ -1508,17 +1657,36 @@ function CommandeDrawer({
   );
 }
 
+type DetailValueVariant =
+  | "patient"
+  | "dent"
+  | "detail"
+  | "meta"
+  | "date"
+  | "default";
+
 function DetailItem({
   label,
   value,
   full,
   valueClass,
+  valueVariant = "default",
 }: {
   label: string;
   value: string;
   full?: boolean;
   valueClass?: string;
+  valueVariant?: DetailValueVariant;
 }) {
+  const valueTypography: Record<DetailValueVariant, string> = {
+    patient: "mt-1 text-[13px] font-bold text-[var(--ds-text)]",
+    dent: "mt-1 text-[13px] font-mono font-medium text-[var(--ds-text)]",
+    detail: "mt-1 text-[13px] font-normal text-[var(--ds-text)]",
+    meta: "mt-1 text-[13px] font-light text-[var(--ds-text)]",
+    date: "mt-1 text-[13px] font-light text-[var(--ds-text)]",
+    default: "mt-1 text-[13px] font-normal text-[var(--ds-text)]",
+  };
+
   return (
     <div
       className={[
@@ -1526,15 +1694,10 @@ function DetailItem({
         full ? "col-span-2" : "",
       ].join(" ")}
     >
-      <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--ds-text-muted)]">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--ds-text-muted)]">
         {label}
       </p>
-      <p
-        className={[
-          "mt-1 text-[13px] font-semibold text-[var(--ds-text)]",
-          valueClass ?? "",
-        ].join(" ")}
-      >
+      <p className={cn(valueTypography[valueVariant], valueClass ?? "")}>
         {value}
       </p>
     </div>

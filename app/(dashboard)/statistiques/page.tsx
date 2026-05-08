@@ -24,38 +24,105 @@ import {
   Activity,
   Award,
 } from "lucide-react";
+import { getAppointmentsAction } from "@/app/actions/appointments";
+import { getPatientsAction } from "@/app/actions/patients";
 import {
-  readPatientsFromStorage,
-  ensurePatientsHydrated,
+  appointmentJoinedRowToRdv,
+  APPOINTMENTS_UPDATED_EVENT,
+  type AppointmentRdv,
+} from "@/utils/appointmentData";
+import {
+  patientRowToDentalPatientRecord,
+  type DentalPatientRecord,
 } from "@/utils/patientData";
-import { readAppointmentsFromStorage } from "@/utils/appointmentData";
-import { readFacturesFromStorage } from "@/utils/factureDocuments";
+import {
+  FACTURES_UPDATED_EVENT,
+  type FactureDocument,
+} from "@/utils/factureDocuments";
+import { getFacturesAction } from "@/app/actions/factures";
+import { factureJoinedRowToDocument } from "@/utils/factureDbMapping";
 
 export default function StatistiquesPage() {
   const [mounted, setMounted] = useState(false);
+  const [patients, setPatients] = useState<DentalPatientRecord[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentRdv[]>([]);
+  const [factureDocs, setFactureDocs] = useState<FactureDocument[]>([]);
   const [periode, setPeriode] = useState<"mois" | "trimestre" | "annee">(
     "mois",
   );
 
   useEffect(() => {
     setMounted(true);
-    ensurePatientsHydrated();
   }, []);
 
-  const patients = useMemo(
-    () => (mounted ? readPatientsFromStorage() : []),
-    [mounted],
-  );
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await getPatientsAction();
+      if (cancelled || !res.ok) return;
+      setPatients(res.data.map(patientRowToDentalPatientRecord));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted]);
 
-  const appointments = useMemo(
-    () => (mounted ? readAppointmentsFromStorage() : []),
-    [mounted],
-  );
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await getAppointmentsAction();
+      if (cancelled || !res.ok) return;
+      setAppointments(res.data.map(appointmentJoinedRowToRdv));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted]);
 
-  const factures = useMemo(
-    () => (mounted ? readFacturesFromStorage() : []),
-    [mounted],
-  );
+  useEffect(() => {
+    if (!mounted || typeof window === "undefined") return;
+    const onUp = () => {
+      void (async () => {
+        const res = await getAppointmentsAction();
+        if (!res.ok) return;
+        setAppointments(res.data.map(appointmentJoinedRowToRdv));
+      })();
+    };
+    window.addEventListener(APPOINTMENTS_UPDATED_EVENT, onUp);
+    return () =>
+      window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, onUp);
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await getFacturesAction();
+      if (cancelled || !res.ok) return;
+      setFactureDocs(res.data.map(factureJoinedRowToDocument));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!mounted || typeof window === "undefined") return;
+    const onFactures = () => {
+      void (async () => {
+        const res = await getFacturesAction();
+        if (!res.ok) return;
+        setFactureDocs(res.data.map(factureJoinedRowToDocument));
+      })();
+    };
+    window.addEventListener(FACTURES_UPDATED_EVENT, onFactures);
+    return () =>
+      window.removeEventListener(FACTURES_UPDATED_EVENT, onFactures);
+  }, [mounted]);
+
+  const factures = factureDocs;
 
   const totalPatients = patients.length;
 

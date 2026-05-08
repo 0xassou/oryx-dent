@@ -107,8 +107,8 @@ export function PatientCombobox({
                     setOpen(false);
                   }}
                 >
-                  <span className="font-medium">{displayPatientName(p)}</span>
-                  <span className="ml-2 text-xs text-[var(--ds-text-muted)]">
+                  <span className="font-bold">{displayPatientName(p)}</span>
+                  <span className="ml-2 text-xs font-light text-[var(--ds-text-muted)]">
                     {p.telephone}
                   </span>
                 </button>

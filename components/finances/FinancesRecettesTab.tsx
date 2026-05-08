@@ -6,25 +6,34 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deriveFactureStatut,
   formatMontantDANumber,
+  FACTURES_UPDATED_EVENT,
+  notifyFacturesUpdated,
+  resteAPayer,
   type FactureDocument,
   type FactureStatut,
-  parseFacturesFromLocalStorage,
-  resteAPayer,
-  writeFacturesToStorage,
 } from "@/utils/factureDocuments";
-import { syncPatientToDBAction } from "@/app/actions/patients";
+import { createPatientAction, getPatientsAction, updatePatientAction } from "@/app/actions/patients";
 import {
-  createPatientQuick,
+  createFactureAction,
+  deleteFactureAction,
+  getFacturesAction,
+  updateFactureAction,
+} from "@/app/actions/factures";
+import {
+  factureDateFrToIso,
+  factureJoinedRowToDocument,
+  montantsToStatutPostgreSQL,
+} from "@/utils/factureDbMapping";
+import {
   displayPatientName,
-  ensurePatientsHydrated,
-  readPatientsFromStorage,
-  touchPatientDerniereVisite,
+  initializeEmptyDentalChart,
+  patientRowToDentalPatientRecord,
+  writeMinimalPatientProfile,
+  capitalizeStoragePart,
   type DentalPatientRecord,
 } from "@/utils/patientData";
 import { formatPhoneNumber } from "@/utils/formatters";
 import { generateFacturePDF } from "@/utils/generateFacturePDF";
-
-const DOCS_STORAGE_KEY = "dental_dashboard_docs";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
@@ -34,56 +43,6 @@ function getSettings(): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-const FACTURES_MOCK: FactureDocument[] = [
-  {
-    id: "FCT-2026-042",
-    date: "25/03/2026",
-    patient: "Mme Dupont",
-    patientId: "3",
-    montantTotal: 45_000,
-    montantPaye: 45_000,
-  },
-  {
-    id: "FCT-2026-089",
-    date: "24/03/2026",
-    patient: "M. Khelil",
-    patientId: "2",
-    montantTotal: 250_000,
-    montantPaye: 80_000,
-  },
-  {
-    id: "FCT-2026-041",
-    date: "20/03/2026",
-    patient: "Mme Saïd",
-    patientId: "3",
-    montantTotal: 72_000,
-    montantPaye: 0,
-  },
-  {
-    id: "FCT-2026-088",
-    date: "15/03/2026",
-    patient: "M. Yassine",
-    patientId: "1",
-    montantTotal: 120_000,
-    montantPaye: 120_000,
-  },
-];
-
-function loadInitialFactures(): FactureDocument[] {
-  if (typeof window === "undefined") return [...FACTURES_MOCK];
-  const parsed = parseFacturesFromLocalStorage(
-    localStorage.getItem(DOCS_STORAGE_KEY),
-  );
-  return parsed.length ? parsed : [...FACTURES_MOCK];
-}
-
-function formatDateDDMMYYYY(d: Date): string {
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
 }
 
 function parseDDMMYYYY(s: string): Date | null {
@@ -203,21 +162,37 @@ export function FinancesRecettesTab() {
   >([]);
   const [dateFilter, setDateFilter] = useState<DateFilterKey>("today");
 
-  const refreshPatientDirectory = useCallback(() => {
-    ensurePatientsHydrated();
-    setPatientDirectory(readPatientsFromStorage());
+  const refreshPatientDirectory = useCallback(async () => {
+    const res = await getPatientsAction();
+    if (!res.ok) {
+      console.error(res.error);
+      return;
+    }
+    setPatientDirectory(res.data.map(patientRowToDentalPatientRecord));
+  }, []);
+
+  const reloadFactures = useCallback(async () => {
+    const res = await getFacturesAction();
+    if (!res.ok) {
+      console.error(res.error);
+      return;
+    }
+    setFactures(res.data.map(factureJoinedRowToDocument));
   }, []);
 
   useEffect(() => {
     setMounted(true);
-    setFactures(loadInitialFactures());
-    refreshPatientDirectory();
-  }, [refreshPatientDirectory]);
+    void reloadFactures();
+    void refreshPatientDirectory();
+  }, [refreshPatientDirectory, reloadFactures]);
 
   useEffect(() => {
-    if (!mounted) return;
-    writeFacturesToStorage(factures);
-  }, [mounted, factures]);
+    if (!mounted || typeof window === "undefined") return;
+    const h = () => void reloadFactures();
+    window.addEventListener(FACTURES_UPDATED_EVENT, h);
+    return () =>
+      window.removeEventListener(FACTURES_UPDATED_EVENT, h);
+  }, [mounted, reloadFactures]);
 
   useEffect(() => {
     if (!toastMessage) return;
@@ -231,53 +206,79 @@ export function FinancesRecettesTab() {
     const montantTotal = parseMontantInput(newDocMontant);
     if (montantTotal <= 0) return;
 
-    let patientLabel: string;
-    let patientId: string | undefined;
+    void (async () => {
+      let patientLabel: string;
+      let patientId: string | undefined;
 
-    if (selectedPatientId === "__new__") {
-      const pr = newPatientPrenom.trim();
-      const n = newPatientNom.trim();
-      const tel = newPatientTel.trim();
-      if (!pr || !n || !tel) return;
-      const rec = createPatientQuick({
-        prenom: pr,
-        nom: n,
-        telephone: tel,
+      if (selectedPatientId === "__new__") {
+        const pr = newPatientPrenom.trim();
+        const n = newPatientNom.trim();
+        const tel = newPatientTel.trim();
+        if (!pr || !n || !tel) return;
+        const created = await createPatientAction({
+          nom: capitalizeStoragePart(n),
+          prenom: capitalizeStoragePart(pr),
+          telephone: tel || "—",
+        });
+        if (!created.ok) {
+          console.error(created.error);
+          return;
+        }
+        const rec = patientRowToDentalPatientRecord(created.data);
+        const fullName = displayPatientName(rec);
+        writeMinimalPatientProfile({
+          id: rec.id,
+          nom: fullName,
+          age: 0,
+          genre: "—",
+          profession: "—",
+          adresse: "—",
+          telephone: rec.telephone,
+          email: "—",
+          dateNaissance: "",
+          alerts: [],
+        });
+        initializeEmptyDentalChart(rec.id);
+        patientLabel = fullName;
+        patientId = rec.id;
+      } else {
+        const p = patientDirectory.find((x) => x.id === selectedPatientId);
+        if (!p) return;
+        patientLabel = displayPatientName(p);
+        patientId = p.id;
+        await updatePatientAction(p.id, {});
+      }
+
+      const todayIso = (() => {
+        const n = new Date();
+        const y = n.getFullYear();
+        const mo = String(n.getMonth() + 1).padStart(2, "0");
+        const dd = String(n.getDate()).padStart(2, "0");
+        return `${y}-${mo}-${dd}`;
+      })();
+
+      const ins = await createFactureAction({
+        patient_id: patientId ?? null,
+        date: todayIso,
+        montant: montantTotal,
+        montant_paye: 0,
       });
-      syncPatientToDBAction({
-        id: rec.id,
-        prenom: rec.prenom,
-        nom: rec.nom,
-        telephone: rec.telephone,
-      }).catch(console.error);
-      patientLabel = displayPatientName(rec);
-      patientId = rec.id;
-    } else {
-      const p = patientDirectory.find((x) => x.id === selectedPatientId);
-      if (!p) return;
-      patientLabel = displayPatientName(p);
-      patientId = p.id;
-      touchPatientDerniereVisite(p.id);
-    }
+      if (!ins.ok) {
+        console.error(ins.error);
+        return;
+      }
+      const doc = factureJoinedRowToDocument(ins.data);
 
-    const id = `FCT-2026-${Math.floor(Math.random() * 900 + 100)}`;
-
-    const doc: FactureDocument = {
-      id,
-      date: formatDateDDMMYYYY(new Date()),
-      patient: patientLabel,
-      patientId,
-      montantTotal,
-      montantPaye: 0,
-    };
-
-    setFactures((prev) => [doc, ...prev]);
-    setIsModalOpen(false);
-    setSelectedPatientId("");
-    setNewDocMontant("");
-    setNewPatientPrenom("");
-    setNewPatientNom("");
-    setNewPatientTel("");
+      setFactures((prev) => [doc, ...prev]);
+      notifyFacturesUpdated();
+      setIsModalOpen(false);
+      setSelectedPatientId("");
+      setNewDocMontant("");
+      setNewPatientPrenom("");
+      setNewPatientNom("");
+      setNewPatientTel("");
+      await refreshPatientDirectory();
+    })();
   }
 
   function handleOpenEdit(doc: FactureDocument) {
@@ -293,26 +294,43 @@ export function FinancesRecettesTab() {
     const paye = parseMontantInput(editMontantPaye);
     if (total <= 0) return;
     const payeClamped = Math.max(0, Math.min(paye, total));
+    const cur = editingDoc;
 
-    setFactures((prev) =>
-      prev.map((doc) =>
-        doc.id === editingDoc.id
-          ? {
-              ...doc,
-              montantTotal: total,
-              montantPaye: payeClamped,
-            }
-          : doc,
-      ),
-    );
-    setEditingDoc(null);
+    void (async () => {
+      const iso = factureDateFrToIso(cur.date);
+      const st = montantsToStatutPostgreSQL(total, payeClamped);
+      const up = await updateFactureAction(cur.id, {
+        date: iso,
+        montant: total,
+        montant_paye: payeClamped,
+        statut: st,
+      });
+      if (!up.ok) {
+        console.error(up.error);
+        return;
+      }
+      const doc = factureJoinedRowToDocument(up.data);
+      setFactures((prev) =>
+        prev.map((d) => (d.id === cur.id ? doc : d)),
+      );
+      setEditingDoc(null);
+      notifyFacturesUpdated();
+    })();
   }
 
   function handleDeleteDoc(docId: string) {
     const ok = window.confirm("Supprimer cette facture ?");
     if (!ok) return;
-    setFactures((prev) => prev.filter((doc) => doc.id !== docId));
-    setOpenMenuId(null);
+    void (async () => {
+      const r = await deleteFactureAction(docId);
+      if (!r.ok) {
+        console.error(r.error);
+        return;
+      }
+      setFactures((prev) => prev.filter((doc) => doc.id !== docId));
+      setOpenMenuId(null);
+      notifyFacturesUpdated();
+    })();
   }
 
   const canCreateFacture = useMemo(() => {

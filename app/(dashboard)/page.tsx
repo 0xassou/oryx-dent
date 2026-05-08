@@ -31,24 +31,38 @@ import {
   Tooltip,
 } from "recharts";
 import {
-  loadDentalStock,
   STOCK_UPDATED_EVENT,
   type StockLine,
 } from "@/utils/stockLogic";
+import { stockRowToStockLine } from "@/utils/stockDbMapping";
+import { getStocksAction } from "@/app/actions/stocks";
+import { getFacturesByDateAction } from "@/app/actions/factures";
+import { FACTURES_UPDATED_EVENT } from "@/utils/factureDocuments";
 import {
-  createPatientQuick,
-  DENTAL_PATIENTS_STORAGE_KEY,
+  createPatientAction,
+  getPatientsAction,
+} from "@/app/actions/patients";
+import {
   displayPatientName,
-  ensurePatientsHydrated,
-  readPatientsFromStorage,
+  initializeEmptyDentalChart,
+  patientRowToDentalPatientRecord,
+  writeMinimalPatientProfile,
+  capitalizeStoragePart,
+  type DentalPatientRecord,
 } from "@/utils/patientData";
-import { syncPatientToDBAction } from "@/app/actions/patients";
 import { toTitleCase } from "@/utils/formatters";
-import { syncAppointmentToDBAction } from "@/app/actions/appointments";
 import {
-  appendDirectEntryAppointment,
-  DENTAL_APPOINTMENTS_STORAGE_KEY,
-  readAppointmentsFromStorage,
+  createAppointmentAction,
+  getAppointmentsByDateAction,
+} from "@/app/actions/appointments";
+import {
+  APPOINTMENTS_UPDATED_EVENT,
+  appointmentJoinedRowToRdv,
+  buildDirectEntryAppointmentPreview,
+  composeAppointmentNotes,
+  notifyAppointmentsUpdated,
+  statutDbFromUi,
+  type AppointmentRdv,
 } from "@/utils/appointmentData";
 import { StatusBadge } from "@/components/laboratoire/StatusBadge";
 import { KpiCard } from "@/components/dashboard/KpiCard";
@@ -194,12 +208,11 @@ function minutesFromHHmm(t: string): number {
   return h * 60 + m;
 }
 
-function mergePlannedAppointmentsIntoFlux(rows: FluxRow[]): FluxRow[] {
-  const today = getLocalDateISO();
-  const apps = readAppointmentsFromStorage();
-  const planned = apps.filter(
-    (a) => a.dateKey === today && a.rdvType !== "direct",
-  );
+function mergePlannedAppointmentsIntoFlux(
+  rows: FluxRow[],
+  todaysPlans: AppointmentRdv[],
+): FluxRow[] {
+  const planned = todaysPlans.filter((a) => a.rdvType !== "direct");
   const existingIds = new Set(
     rows.map((r) => r.appointmentId).filter(Boolean) as string[],
   );
@@ -232,13 +245,6 @@ function sortFluxRowsByTime(rows: FluxRow[]): FluxRow[] {
   );
 }
 
-function loadFluxRowsForToday(): FluxRow[] {
-  if (typeof window === "undefined") return FLUX_INITIAL;
-  const parsed = parsePersistedFlux(localStorage.getItem(FLUX_STORAGE_KEY));
-  const base = parsed ?? FLUX_INITIAL;
-  return mergePlannedAppointmentsIntoFlux(base);
-}
-
 const FLUX_INITIAL: FluxRow[] = [];
 
 /** Répartition actes : patients + % (total 120 patients sur 30 j.) */
@@ -265,11 +271,11 @@ const ACTES_COLORS = [
   "#f43f5e",
 ];
 
-function computeActesChartDataFromStorage(): ActeChartDatum[] {
+function computeActesChartDataFromPatients(
+  patients: DentalPatientRecord[],
+): ActeChartDatum[] {
   if (typeof window === "undefined") return ACTES_CHART_FALLBACK;
   try {
-    ensurePatientsHydrated();
-    const patients = readPatientsFromStorage();
     const actesCount: Record<string, number> = {};
     patients.forEach((p) => {
       const raw = localStorage.getItem(`patient_acts_${p.id}`);
@@ -896,14 +902,70 @@ export default function DashboardPage() {
     [labCommandes],
   );
 
-  const refreshFluxPatientCandidates = useCallback(() => {
-    ensurePatientsHydrated();
+  const loadPatientsFromServer = useCallback(async () => {
+    const res = await getPatientsAction();
+    if (!res.ok) {
+      console.error(res.error);
+      return;
+    }
+    const list = res.data.map(patientRowToDentalPatientRecord);
     setFluxPatientCandidates(
-      readPatientsFromStorage().map((p) => ({
+      list.map((p) => ({
         id: p.id,
         nom: displayPatientName(p),
       })),
     );
+    setPatientCount(list.length);
+    const now = new Date();
+    let createdThisMonth = 0;
+    for (const p of list) {
+      if (p.createdAt) {
+        const d = new Date(p.createdAt);
+        if (
+          !Number.isNaN(d.getTime()) &&
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth()
+        ) {
+          createdThisMonth++;
+        }
+      }
+    }
+    setPatientsThisMonthCount(createdThisMonth);
+    setActesChartData(computeActesChartDataFromPatients(list));
+  }, []);
+
+  const reloadTodayPlansIntoFlux = useCallback(async () => {
+    const todayKey = getLocalDateISO();
+    const res = await getAppointmentsByDateAction(todayKey);
+    const appsToday = res.ok ? res.data.map(appointmentJoinedRowToRdv) : [];
+    setRdvCount(appsToday.length);
+    setRdvToConfirmCount(
+      appsToday.filter((a) => a.status === "pending").length,
+    );
+    setFluxRows((prev) =>
+      mergePlannedAppointmentsIntoFlux(prev, appsToday),
+    );
+  }, []);
+
+  const refreshStockKpisFromServer = useCallback(async () => {
+    const res = await getStocksAction();
+    if (!res.ok) return;
+    const lines = res.data.map(stockRowToStockLine);
+    setStockCriticalCount(lines.filter(isStockCritical).length);
+  }, []);
+
+  const refreshEncaissementsToday = useCallback(async () => {
+    const todayKey = getLocalDateISO();
+    const res = await getFacturesByDateAction(todayKey);
+    if (!res.ok) {
+      setTotalEncaisseToday(0);
+      return;
+    }
+    let sum = 0;
+    for (const row of res.data) {
+      sum += Number.parseFloat(String(row.montant_paye ?? "0")) || 0;
+    }
+    setTotalEncaisseToday(sum);
   }, []);
 
   useEffect(() => {
@@ -912,100 +974,38 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    setFluxRows(loadFluxRowsForToday());
     setTasks(loadDashboardTasks());
     const ster = readSterData();
     setSterileTotal(countSterileKitsReady(ster));
-    const stock = loadDentalStock();
-    setStockCriticalCount(stock.filter(isStockCritical).length);
-    refreshFluxPatientCandidates();
+    void refreshStockKpisFromServer();
+    void loadPatientsFromServer();
 
     const todayKey = getLocalDateISO();
-    const appointments = readAppointmentsFromStorage();
-    setRdvCount(appointments.filter((a) => a.dateKey === todayKey).length);
 
-    let toConfirm = 0;
-    try {
-      const rawApps = localStorage.getItem(DENTAL_APPOINTMENTS_STORAGE_KEY);
-      if (rawApps) {
-        const data = JSON.parse(rawApps) as unknown;
-        if (Array.isArray(data)) {
-          for (const item of data) {
-            if (!item || typeof item !== "object") continue;
-            const o = item as Record<string, unknown>;
-            const dateKey =
-              typeof o.dateKey === "string" ? o.dateKey.trim() : "";
-            if (dateKey !== todayKey) continue;
-            const status =
-              typeof o.status === "string" ? o.status : "";
-            if (status === "pending" || o.confirmed === false) {
-              toConfirm++;
-            }
-          }
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    setRdvToConfirmCount(toConfirm);
+    void (async () => {
+      const parsed = parsePersistedFlux(
+        typeof window !== "undefined"
+          ? localStorage.getItem(FLUX_STORAGE_KEY)
+          : null,
+      );
+      const baseFlux = parsed ?? FLUX_INITIAL;
+      const appsRes = await getAppointmentsByDateAction(todayKey);
+      const appsToday = appsRes.ok
+        ? appsRes.data.map(appointmentJoinedRowToRdv)
+        : [];
+      setRdvCount(appsToday.length);
+      setRdvToConfirmCount(
+        appsToday.filter((a) => a.status === "pending").length,
+      );
+      setFluxRows(mergePlannedAppointmentsIntoFlux(baseFlux, appsToday));
+    })();
 
-    let encaisseToday = 0;
-    try {
-      const rawDocs = localStorage.getItem("dental_dashboard_docs");
-      if (rawDocs) {
-        const data = JSON.parse(rawDocs) as unknown;
-        if (Array.isArray(data)) {
-          for (const item of data) {
-            if (!item || typeof item !== "object") continue;
-            const o = item as Record<string, unknown>;
-            const dateStr =
-              typeof o.date === "string"
-                ? o.date
-                : typeof o.dateISO === "string"
-                  ? o.dateISO
-                  : "";
-            if (!dateStr.startsWith(todayKey)) continue;
-            const mp = typeof o.montantPaye === "number" ? o.montantPaye : 0;
-            encaisseToday += mp;
-          }
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    setTotalEncaisseToday(encaisseToday);
-
-    const patients = readPatientsFromStorage();
-    setPatientCount(patients.length);
-
-    let createdThisMonth = 0;
-    try {
-      const rawPts = localStorage.getItem(DENTAL_PATIENTS_STORAGE_KEY);
-      if (rawPts) {
-        const data = JSON.parse(rawPts) as unknown;
-        if (Array.isArray(data)) {
-          const now = new Date();
-          const y = now.getFullYear();
-          const m = now.getMonth();
-          for (const item of data) {
-            if (!item || typeof item !== "object") continue;
-            const createdAt = (item as Record<string, unknown>).createdAt;
-            if (typeof createdAt !== "string") continue;
-            const d = new Date(createdAt);
-            if (Number.isNaN(d.getTime())) continue;
-            if (d.getFullYear() === y && d.getMonth() === m) {
-              createdThisMonth++;
-            }
-          }
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    setPatientsThisMonthCount(createdThisMonth);
-
-    setActesChartData(computeActesChartDataFromStorage());
-  }, [refreshFluxPatientCandidates]);
+    void refreshEncaissementsToday();
+  }, [
+    loadPatientsFromServer,
+    refreshStockKpisFromServer,
+    refreshEncaissementsToday,
+  ]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -1023,11 +1023,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    function refreshStock() {
-      const stock = loadDentalStock();
-      const criticals = stock.filter(isStockCritical);
-      setStockCriticalCount(criticals.length);
-    }
+    const refreshStock = () => void refreshStockKpisFromServer();
     refreshStock();
     window.addEventListener(STOCK_UPDATED_EVENT, refreshStock);
     window.addEventListener("focus", refreshStock);
@@ -1035,7 +1031,32 @@ export default function DashboardPage() {
       window.removeEventListener(STOCK_UPDATED_EVENT, refreshStock);
       window.removeEventListener("focus", refreshStock);
     };
-  }, [mounted]);
+  }, [mounted, refreshStockKpisFromServer]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const refreshPay = () => void refreshEncaissementsToday();
+    refreshPay();
+    window.addEventListener(FACTURES_UPDATED_EVENT, refreshPay);
+    window.addEventListener("focus", refreshPay);
+    return () => {
+      window.removeEventListener(FACTURES_UPDATED_EVENT, refreshPay);
+      window.removeEventListener("focus", refreshPay);
+    };
+  }, [mounted, refreshEncaissementsToday]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const h = () => {
+      void reloadTodayPlansIntoFlux();
+    };
+    window.addEventListener(APPOINTMENTS_UPDATED_EVENT, h);
+    window.addEventListener("focus", h);
+    return () => {
+      window.removeEventListener(APPOINTMENTS_UPDATED_EVENT, h);
+      window.removeEventListener("focus", h);
+    };
+  }, [mounted, reloadTodayPlansIntoFlux]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -1058,58 +1079,83 @@ export default function DashboardPage() {
   }, [mounted, fluxRows]);
 
   function addDirectEntryToFlux(payload: DirectEntryPayload) {
-    let patientLabel: string;
-    let patientId: string | undefined;
-    if (payload.mode === "quick") {
-      const rec = createPatientQuick({
-        prenom: payload.prenom,
-        nom: payload.nom,
-        telephone: payload.telephone,
-        medicalNote: payload.medicalNote,
+    void (async () => {
+      let patientLabel: string;
+      let patientId: string | undefined;
+      if (payload.mode === "quick") {
+        const note = payload.medicalNote?.trim();
+        const created = await createPatientAction({
+          prenom: capitalizeStoragePart(payload.prenom.trim()),
+          nom: capitalizeStoragePart(payload.nom.trim()),
+          telephone: payload.telephone.trim() || "—",
+          antecedents: note || null,
+        });
+        if (!created.ok) {
+          console.error(created.error);
+          return;
+        }
+        const rec = patientRowToDentalPatientRecord(created.data);
+        const fullName = displayPatientName(rec);
+        writeMinimalPatientProfile({
+          id: rec.id,
+          nom: fullName,
+          age: 0,
+          genre: "—",
+          profession: "—",
+          adresse: "—",
+          telephone: rec.telephone,
+          email: "—",
+          dateNaissance: "",
+          alerts: note ? [note] : [],
+        });
+        initializeEmptyDentalChart(rec.id);
+        patientLabel = fullName;
+        patientId = rec.id;
+        await loadPatientsFromServer();
+      } else {
+        patientLabel = payload.patientLabel;
+        patientId = payload.patientId;
+      }
+      const preview = buildDirectEntryAppointmentPreview({
+        patientName: patientLabel,
+        patientId: patientId ?? null,
+        visitKind: payload.visitKind,
       });
-      patientLabel = displayPatientName(rec);
-      patientId = rec.id;
-      refreshFluxPatientCandidates();
-      syncPatientToDBAction({
-        id: rec.id,
-        prenom: rec.prenom,
-        nom: rec.nom,
-        telephone: rec.telephone,
-      }).catch(console.error);
-    } else {
-      patientLabel = payload.patientLabel;
-      patientId = payload.patientId;
-    }
-    const rdv = appendDirectEntryAppointment({
-      patientName: patientLabel,
-      patientId: patientId ?? null,
-      visitKind: payload.visitKind,
-    });
-    syncAppointmentToDBAction({
-      id: rdv.id,
-      patientId: rdv.patientId,
-      patientName: rdv.patient,
-      dateKey: rdv.dateKey,
-      startTime: rdv.start,
-      durationMinutes: rdv.durationMinutes,
-      soin: rdv.soin,
-      rdvType: rdv.rdvType,
-      status: rdv.status,
-      urgence: rdv.urgence,
-    }).catch(console.error);
-    const row: FluxRow = {
-      id: `flux-${rdv.id}`,
-      time: rdv.start,
-      patient: patientLabel,
-      act: rdv.soin,
-      status: "En attente",
-      attenteMin: 0,
-      visitKind: payload.visitKind,
-      appointmentId: rdv.id,
-    };
-    setFluxRows((prev) =>
-      mergePlannedAppointmentsIntoFlux([row, ...prev]),
-    );
+      const notes = composeAppointmentNotes(undefined, {
+        rdvType: "direct",
+        urgence: preview.urgence,
+        ...(preview.patientId
+          ? {}
+          : { displayPatient: preview.patient.trim() }),
+      });
+      const cre = await createAppointmentAction({
+        patient_id: preview.patientId ?? null,
+        date: preview.dateKey,
+        heure: preview.start,
+        duree: preview.durationMinutes,
+        type_acte: preview.soin,
+        statut: statutDbFromUi(preview.status) ?? undefined,
+        notes,
+      });
+      if (!cre.ok) {
+        console.error(cre.error);
+        return;
+      }
+      const rdv = appointmentJoinedRowToRdv(cre.data);
+      notifyAppointmentsUpdated();
+      const row: FluxRow = {
+        id: `flux-${rdv.id}`,
+        time: rdv.start,
+        patient: patientLabel,
+        act: rdv.soin,
+        status: "En attente",
+        attenteMin: 0,
+        visitKind: payload.visitKind,
+        appointmentId: rdv.id,
+      };
+      setFluxRows((prev) => [row, ...prev]);
+      await reloadTodayPlansIntoFlux();
+    })();
   }
 
   function addTask() {
@@ -1295,7 +1341,7 @@ export default function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    refreshFluxPatientCandidates();
+                    void loadPatientsFromServer();
                     setDirectEntryOpen(true);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary)] hover:text-white"

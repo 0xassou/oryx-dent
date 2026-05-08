@@ -11,7 +11,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -26,8 +26,8 @@ import {
 import { formatDZD, formatDateShort } from "@/utils/formatters";
 import {
   deriveFactureStatut,
+  FACTURES_UPDATED_EVENT,
   parseFactureDateFr,
-  readFacturesFromStorage,
   resteAPayer,
   type FactureDocument,
 } from "@/utils/factureDocuments";
@@ -36,6 +36,8 @@ import {
   sumExpensesByCategory,
   type DentalExpense,
 } from "@/utils/expensesData";
+import { getFacturesAction } from "@/app/actions/factures";
+import { factureJoinedRowToDocument } from "@/utils/factureDbMapping";
 
 type RevenusDatum = {
   mois: string;
@@ -43,8 +45,7 @@ type RevenusDatum = {
   protheses: number;
 };
 
-function getRevenusSixMois(): RevenusDatum[] {
-  const factures = readFacturesFromStorage();
+function getRevenusSixMois(factures: FactureDocument[]): RevenusDatum[] {
   const result: RevenusDatum[] = [];
   for (let i = 5; i >= 0; i--) {
     const date = new Date();
@@ -74,8 +75,7 @@ function getRevenusSixMois(): RevenusDatum[] {
 
 type TopActe = { acte: string; montant: number };
 
-function getTopActes(): TopActe[] {
-  const factures = readFacturesFromStorage();
+function getTopActes(factures: FactureDocument[]): TopActe[] {
   const map: Record<string, number> = {};
 
   factures.forEach((f) => {
@@ -205,45 +205,72 @@ function getDepenses6Mois() {
   return result;
 }
 
-function getRealTransactions() {
-  if (typeof window === "undefined") return [];
+function getRealTransactionsFromFactures(factures: FactureDocument[]) {
+  return factures.map((f) => ({
+    id: f.id,
+    dateHeure: (() => {
+      const dt = parseFactureDateFr(f.date);
+      return dt
+        ? dt.toLocaleDateString("fr-DZ", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        : (f.date ?? "");
+    })(),
+    patient: f.patient ?? "",
+    acteMotif: "Soins dentaires",
+    montant: f.montantTotal,
+    modePaiement: "—",
+    statut: deriveFactureStatut(f.montantTotal, f.montantPaye),
+  }));
+}
+
+function computeCroissanceCA(factures: FactureDocument[]): number {
+  if (factures.length === 0) return 0;
   try {
-    const raw = localStorage.getItem("dental_dashboard_docs");
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(
-      (f: {
-        id?: string;
-        date?: string;
-        patient?: string;
-        montantTotal?: number;
-        montantPaye?: number;
-      }) => ({
-        id: f.id ?? "",
-        dateHeure: (() => {
-          const dt = f.date ? parseFactureDateFr(f.date) : null;
-          return dt
-            ? dt.toLocaleDateString("fr-DZ", { day: "numeric", month: "long", year: "numeric" })
-            : (f.date ?? "");
-        })(),
-        patient: f.patient ?? "",
-        acteMotif: "Soins dentaires",
-        montant: f.montantTotal ?? 0,
-        modePaiement: "—",
-        statut: deriveFactureStatut(
-          f.montantTotal ?? 0,
-          f.montantPaye ?? 0,
-        ),
-      }),
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+    const lastYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+
+    const sumMonth = (m: number, y: number) =>
+      factures
+        .filter((f) => {
+          if (!f.date) return false;
+          if (
+            deriveFactureStatut(
+              f.montantTotal,
+              f.montantPaye,
+            ) !== "Payé"
+          ) {
+            return false;
+          }
+          const parts = f.date.split("/");
+          if (parts.length !== 3) return false;
+          return (
+            parseInt(parts[1], 10) - 1 === m &&
+            parseInt(parts[2], 10) === y
+          );
+        })
+        .reduce((s, f) => s + f.montantPaye, 0);
+
+    const current = sumMonth(thisMonth, thisYear);
+    const previous = sumMonth(lastMonth, lastYear);
+
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return (
+      Math.round(((current - previous) / previous) * 100 * 10) / 10
     );
   } catch {
-    return [];
+    return 0;
   }
 }
 
 export function FinancesDashboardTab() {
   const [mounted, setMounted] = useState(false);
+  const [factureDocs, setFactureDocs] = useState<FactureDocument[]>([]);
   const [period, setPeriod] = useState<PeriodKey>("month");
   const [activeDetail, setActiveDetail] = useState<string | null>(null);
   const [transactionTab, setTransactionTab] = useState<
@@ -253,6 +280,24 @@ export function FinancesDashboardTab() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const reloadFactures = useCallback(async () => {
+    const res = await getFacturesAction();
+    if (!res.ok) return;
+    setFactureDocs(res.data.map(factureJoinedRowToDocument));
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    void reloadFactures();
+  }, [mounted, reloadFactures]);
+
+  useEffect(() => {
+    if (!mounted || typeof window === "undefined") return;
+    const h = () => void reloadFactures();
+    window.addEventListener(FACTURES_UPDATED_EVENT, h);
+    return () => window.removeEventListener(FACTURES_UPDATED_EVENT, h);
+  }, [mounted, reloadFactures]);
 
   const {
     totalRecettes,
@@ -272,7 +317,7 @@ export function FinancesDashboardTab() {
         pieSlices: [] as { name: string; value: number; color: string }[],
       };
     }
-    const factures = readFacturesFromStorage();
+    const factures = factureDocs;
     const expenses = readExpensesFromStorage();
     const tr = totalRecettesFacturesPayees(factures, period);
     const list = expensesInPeriod(expenses, period);
@@ -302,65 +347,22 @@ export function FinancesDashboardTab() {
       periodExpensesList: list,
       pieSlices: slices,
     };
-  }, [mounted, period]);
+  }, [mounted, period, factureDocs]);
 
-  const realTransactions = useMemo(() => getRealTransactions(), [mounted]);
+  const realTransactions = useMemo(
+    () => getRealTransactionsFromFactures(factureDocs),
+    [factureDocs],
+  );
 
   const showModePaiement = useMemo(
     () => realTransactions.some((t) => t.modePaiement && t.modePaiement !== "—"),
     [realTransactions],
   );
 
-  const croissanceCA = useMemo(() => {
-    if (typeof window === "undefined") return 0;
-    try {
-      const raw = localStorage.getItem("dental_dashboard_docs");
-      if (!raw) return 0;
-      const factures = JSON.parse(raw) as unknown;
-      if (!Array.isArray(factures)) return 0;
-
-      const now = new Date();
-      const thisMonth = now.getMonth();
-      const thisYear = now.getFullYear();
-      const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
-      const lastYear = thisMonth === 0 ? thisYear - 1 : thisYear;
-
-      const sumMonth = (m: number, y: number) =>
-        factures
-          .filter((f: { date?: string; montantTotal?: number; montantPaye?: number }) => {
-            if (!f.date) return false;
-            if (
-              deriveFactureStatut(
-                f.montantTotal ?? 0,
-                f.montantPaye ?? 0,
-              ) !== "Payé"
-            ) {
-              return false;
-            }
-            const parts = f.date.split("/");
-            if (parts.length !== 3) return false;
-            return (
-              parseInt(parts[1], 10) - 1 === m &&
-              parseInt(parts[2], 10) === y
-            );
-          })
-          .reduce(
-            (s: number, f: { montantPaye?: number }) =>
-              s + (f.montantPaye ?? 0),
-            0,
-          );
-
-      const current = sumMonth(thisMonth, thisYear);
-      const previous = sumMonth(lastMonth, lastYear);
-
-      if (previous === 0) return current > 0 ? 100 : 0;
-      return (
-        Math.round(((current - previous) / previous) * 100 * 10) / 10
-      );
-    } catch {
-      return 0;
-    }
-  }, [mounted]);
+  const croissanceCA = useMemo(
+    () => computeCroissanceCA(factureDocs),
+    [factureDocs],
+  );
 
   const resteARecouvrer = totalImpayes;
 
@@ -371,8 +373,14 @@ export function FinancesDashboardTab() {
         ? "Cette année"
         : "Ce mois-ci";
 
-  const revenus6M = useMemo(() => getRevenusSixMois(), [mounted]);
-  const topActes = useMemo(() => getTopActes(), [mounted]);
+  const revenus6M = useMemo(
+    () => getRevenusSixMois(factureDocs),
+    [factureDocs],
+  );
+  const topActes = useMemo(
+    () => getTopActes(factureDocs),
+    [factureDocs],
+  );
   const depenses6M = useMemo(() => getDepenses6Mois(), [mounted]);
 
   const totalTop = useMemo(
