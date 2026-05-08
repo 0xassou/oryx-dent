@@ -29,6 +29,12 @@ import {
   updateAppointmentAction,
 } from "@/app/actions/appointments";
 import {
+  createConsultationAction,
+  getConsultationsDuJourAction,
+  type ConsultationRow,
+  type ConsultationStatut,
+} from "@/app/actions/consultations";
+import {
   NewAppointmentModal,
   type NewAppointmentPayload,
 } from "@/components/planning/NewAppointmentModal";
@@ -228,16 +234,28 @@ function scrollDayColumnIntoView(scrollRoot: HTMLElement, columnHeaderEl: HTMLEl
 
 // ─── Vue Liste ────────────────────────────────────────────────────────────────
 
+const CONSULT_BADGE: Record<ConsultationStatut, { label: string; cls: string }> = {
+  en_attente: { label: "En attente", cls: "border-[#fde68a] bg-[#fffbeb] text-[#d97706]" },
+  arrive: { label: "Arrivé", cls: "border-[#bbf7d0] bg-[#f0fdf4] text-[#16a34a]" },
+  en_consultation: { label: "Au fauteuil", cls: "border-[#a5f3fc] bg-[#ecfeff] text-[#0891b2]" },
+  termine: { label: "Terminé", cls: "border-[#e2e8f0] bg-[#f8fafc] text-[#475569]" },
+  absent: { label: "Absent", cls: "border-[#fecaca] bg-[#fef2f2] text-[#dc2626]" },
+};
+
 function ListView({
   rdvs,
   centerDate,
   onDaySelect,
   selectedDayIso,
+  consultations,
+  onRegisterArrival,
 }: {
   rdvs: Rdv[];
   centerDate: Date;
   onDaySelect: (iso: string) => void;
   selectedDayIso: string;
+  consultations: ConsultationRow[];
+  onRegisterArrival: (rdvId: string, patientId: string) => void;
 }) {
   const weekCols = buildWeekColumns(centerDate);
 
@@ -380,6 +398,35 @@ function ListView({
                           {stBadge.label}
                         </span>
                       ) : null}
+                      {(() => {
+                        const isToday = rdv.dateKey === formatDateKey(new Date());
+                        const consult = consultations.find(
+                          (c) => c.appointment_id === rdv.id,
+                        );
+                        if (consult) {
+                          const b = CONSULT_BADGE[consult.statut];
+                          return (
+                            <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${b.cls}`}>
+                              {b.label}
+                            </span>
+                          );
+                        }
+                        if (isToday && rdv.patientId) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRegisterArrival(rdv.id, rdv.patientId!);
+                              }}
+                              className="shrink-0 rounded-full border border-[#a5f3fc] bg-[#ecfeff] px-2.5 py-0.5 text-[11px] font-medium text-[#0891b2] transition-colors hover:bg-[#cffafe]"
+                            >
+                              + Arrivée
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                     <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <p className="text-[13px] font-normal text-[var(--ds-text-muted)]">
@@ -680,6 +727,26 @@ function PlanningPageContent() {
     string | undefined
   >(undefined);
   const [appointments, setAppointments] = useState<Rdv[]>([]);
+  const [consultations, setConsultations] = useState<ConsultationRow[]>([]);
+
+  const reloadConsultations = useCallback(async () => {
+    const res = await getConsultationsDuJourAction();
+    if (res.ok) setConsultations(res.data);
+  }, []);
+
+  const handleRegisterArrival = useCallback(
+    async (rdvId: string, patientId: string) => {
+      const res = await createConsultationAction({
+        appointment_id: rdvId,
+        patient_id: patientId,
+      });
+      if (res.ok) {
+        setConsultations((prev) => [...prev, res.data]);
+      }
+    },
+    [],
+  );
+
   const patientFilterId = useMemo(() => {
     return (
       searchParams.get("patient")?.trim() ||
@@ -773,7 +840,8 @@ function PlanningPageContent() {
   useEffect(() => {
     setMounted(true);
     void reloadAppointments();
-  }, [reloadAppointments]);
+    void reloadConsultations();
+  }, [reloadAppointments, reloadConsultations]);
 
   useEffect(() => {
     const patientId =
@@ -985,6 +1053,8 @@ function PlanningPageContent() {
             rdvs={visibleAppointments}
             centerDate={currentDate}
             selectedDayIso={listSelectedDay}
+            consultations={consultations}
+            onRegisterArrival={handleRegisterArrival}
             onDaySelect={(iso) => {
               setListSelectedDay(iso);
               setCurrentDate(safeDate(new Date(`${iso}T12:00:00`)));
@@ -1012,6 +1082,8 @@ function PlanningPageContent() {
               rdvs={visibleAppointments}
               centerDate={currentDate}
               selectedDayIso={listSelectedDay}
+              consultations={consultations}
+              onRegisterArrival={handleRegisterArrival}
               onDaySelect={(iso) => {
                 setListSelectedDay(iso);
                 setCurrentDate(safeDate(new Date(`${iso}T12:00:00`)));

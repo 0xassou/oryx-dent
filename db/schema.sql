@@ -198,3 +198,27 @@ CREATE INDEX IF NOT EXISTS idx_team_members_actif ON team_members(actif);
 
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS temp_password_display TEXT;
+
+-- Module Workflow / Salle d'attente
+CREATE TABLE IF NOT EXISTS consultations (
+  id              TEXT PRIMARY KEY,
+  appointment_id  TEXT REFERENCES appointments(id) ON DELETE CASCADE,
+  patient_id      TEXT REFERENCES patients(id) ON DELETE CASCADE,
+  statut          TEXT DEFAULT 'en_attente',
+  heure_arrivee   TIMESTAMPTZ,
+  heure_debut     TIMESTAMPTZ,
+  heure_fin       TIMESTAMPTZ,
+  salle           TEXT,
+  notes_accueil   TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT consultations_statut_check CHECK (
+    statut IN ('en_attente', 'arrive', 'en_consultation', 'termine', 'absent')
+  )
+);
+
+ALTER TABLE consultations ADD COLUMN IF NOT EXISTS type_acte TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_consultations_appointment ON consultations(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_consultations_patient ON consultations(patient_id);
+CREATE INDEX IF NOT EXISTS idx_consultations_statut ON consultations(statut);

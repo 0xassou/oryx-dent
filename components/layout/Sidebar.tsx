@@ -8,6 +8,7 @@ import {
   Banknote,
   Users,
   Calendar,
+  ClipboardList,
   Package,
   ShieldCheck,
   Truck,
@@ -33,6 +34,7 @@ const NAV_PRINCIPAL: readonly NavItem[] = [
   { key: "dashboard", href: "/", label: "Tableau de bord", icon: LayoutDashboard, locked: false },
   { key: "patients", href: "/patients", label: "Patients", icon: Users, locked: false },
   { key: "planning", href: "/planning", label: "Planning", icon: Calendar, locked: false },
+  { key: "workflow", href: "/workflow", label: "Salle d'attente", icon: ClipboardList, locked: false },
   { key: "finances", href: "/finances", label: "Gestion Financière", icon: Banknote, locked: false },
 ];
 

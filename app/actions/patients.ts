@@ -46,6 +46,37 @@ function mapRow(r: Record<string, unknown>): PatientRow {
   };
 }
 
+/** Recherche rapide (autocomplete) — sans caractères génériques côté SQL. */
+export async function searchPatientsAutocompleteAction(
+  query: string,
+  limit = 15,
+): Promise<{ ok: true; data: PatientRow[] } | { ok: false; error: string }> {
+  const q = query.trim().toLowerCase();
+  if (q.length < 1) return { ok: true, data: [] };
+  const lim = Math.min(Math.max(1, limit), 50);
+  try {
+    const pool = getPostgresPool();
+    const { rows } = await pool.query(
+      `SELECT * FROM patients
+       WHERE position($1 IN lower(
+         coalesce(nom, '') || ' ' || coalesce(prenom, '') || ' ' || coalesce(telephone, '')
+       )) > 0
+       ORDER BY nom ASC, prenom ASC
+       LIMIT $2`,
+      [q, lim],
+    );
+    return {
+      ok: true,
+      data: rows.map((row) => mapRow(row as Record<string, unknown>)),
+    };
+  } catch (e) {
+    console.error("[searchPatientsAutocompleteAction]", e);
+    const message =
+      e instanceof Error ? e.message : "Impossible de rechercher les patients.";
+    return { ok: false, error: message };
+  }
+}
+
 export async function getPatientsAction(): Promise<
   { ok: true; data: PatientRow[] } | { ok: false; error: string }
 > {

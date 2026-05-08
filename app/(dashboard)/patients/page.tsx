@@ -109,6 +109,13 @@ function PatientsPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (searchParams.get("nouveau") === "1") {
+      setIsModalOpen(true);
+      router.replace("/patients", { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  useEffect(() => {
     function onFocus() {
       if (typeof window === "undefined") return;
       void reload();

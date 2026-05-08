@@ -294,6 +294,7 @@ export type NavKey =
   | "dashboard"
   | "patients"
   | "planning"
+  | "workflow"
   | "finances"
   /** Sous-page Dépenses uniquement (`/finances/depenses`) — admin + assistante, pas le remplaçant. */
   | "financesDepenses"
@@ -308,6 +309,7 @@ export const NAV_ACCESS: Record<NavKey, Role[]> = {
   dashboard: ["admin", "praticien", "assistant", "remplacant"],
   patients: ["admin", "praticien", "assistant", "remplacant"],
   planning: ["admin", "praticien", "assistant", "remplacant"],
+  workflow: ["admin", "praticien", "assistant", "remplacant"],
   finances: ["admin"],
   financesDepenses: ["admin"],
   statistiques: ["admin"],
@@ -323,6 +325,7 @@ export function pathToNavKey(pathname: string): NavKey | null {
   if (pathname === "/" || pathname === "") return "dashboard";
   if (pathname.startsWith("/patients")) return "patients";
   if (pathname.startsWith("/planning")) return "planning";
+  if (pathname.startsWith("/workflow")) return "workflow";
   // Plus spécifique avant `/finances` : assistante = uniquement cette sous-route
   if (
     pathname === "/finances/depenses" ||
