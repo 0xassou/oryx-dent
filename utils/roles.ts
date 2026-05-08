@@ -1,7 +1,9 @@
 /**
- * Système de rôles Oryx — 3 rôles : admin, replacant, assistant.
+ * Système de rôles Oryx — 4 rôles : admin, praticien, assistant, remplacant.
+ * Les membres d'équipe sont aussi persistés en PostgreSQL (`team_members`) ;
+ * la session locale (localStorage) est synchronisée après connexion Better Auth.
  *
- * Toutes les données persistent dans localStorage (aucun backend pour le moment) :
+ * Données client (démo / invitations) :
  *  - oryx_current_role  : rôle de la session en cours
  *  - oryx_current_user  : {email, nom, role} de la session en cours
  *  - oryx_team          : liste des membres (hors admin) avec mot de passe hashé
@@ -12,12 +14,16 @@
  *  - oryx_cabinet_id     : identifiant cabinet (admin) embarqué dans le token
  */
 
-export type Role = "admin" | "replacant" | "assistant";
+export type Role = "admin" | "praticien" | "assistant" | "remplacant";
+
+/** Rôles invitables par lien (hors admin). */
+export type InvitableRole = "assistant" | "remplacant";
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Administrateur",
-  replacant: "Remplaçant",
+  praticien: "Praticien",
   assistant: "Assistante",
+  remplacant: "Remplaçant",
 };
 
 export const STORAGE_KEYS = {
@@ -37,7 +43,7 @@ export type TeamMember = {
   id: string;
   email: string;
   nom: string;
-  role: Exclude<Role, "admin">;
+  role: InvitableRole;
   statut: "actif" | "invité" | "désactivé";
   dateInvitation: string;
   dateAcceptation?: string;
@@ -50,7 +56,7 @@ export type Invitation = {
   /** Token d’URL auto-suffisant (base64url JSON + signature HMAC intégrée). */
   token: string;
   email: string;
-  role: Exclude<Role, "admin">;
+  role: InvitableRole;
   dateInvitation: string;
   /** ISO, pour l’affichage admin. */
   expiresAt: string;
@@ -131,8 +137,8 @@ function buildCanonicalString(
 export type InvitationTokenPayload = {
   v: number;
   email: string;
-  /** Aligné sur `Role` : "replacant" | "assistant" */
-  role: "replacant" | "assistant";
+  /** Ancien libellé "replacant" encore accepté à la lecture. */
+  role: InvitableRole | "replacant";
   cabinetId: string;
   expiresAt: number;
   signature: string;
@@ -167,7 +173,7 @@ async function hmacVerify(message: string, signatureHex: string): Promise<boolea
  */
 export async function encodeInvitationToken(data: {
   email: string;
-  role: Exclude<Role, "admin">;
+  role: InvitableRole;
   cabinetId: string;
   expiresAtMs: number;
 }): Promise<string> {
@@ -226,12 +232,26 @@ export async function parseInvitationToken(
     return { ok: false, error: "Version d’invitation non supportée" };
   }
   const email = typeof p["email"] === "string" ? p["email"] : "";
-  const role = p["role"] === "replacant" || p["role"] === "assistant" ? p["role"] : null;
+  const rawRole = p["role"];
+  const roleCanonical =
+    rawRole === "assistant"
+      ? "assistant"
+      : rawRole === "remplacant"
+        ? "remplacant"
+        : rawRole === "replacant"
+          ? "replacant"
+          : null;
+  const roleNorm: InvitableRole | null =
+    rawRole === "assistant"
+      ? "assistant"
+      : rawRole === "remplacant" || rawRole === "replacant"
+        ? "remplacant"
+        : null;
   const cabinetId = typeof p["cabinetId"] === "string" ? p["cabinetId"] : "";
   const expiresAt =
     typeof p["expiresAt"] === "number" ? p["expiresAt"] : Number.NaN;
   const signature = typeof p["signature"] === "string" ? p["signature"] : "";
-  if (!email || !role || !cabinetId || !Number.isFinite(expiresAt) || !signature) {
+  if (!email || !roleCanonical || !roleNorm || !cabinetId || !Number.isFinite(expiresAt) || !signature) {
     return { ok: false, error: "Données d’invitation incomplètes" };
   }
   if (Date.now() > expiresAt) {
@@ -240,7 +260,7 @@ export async function parseInvitationToken(
   const canonical = buildCanonicalString(
     INVITATION_TOKEN_VERSION,
     email,
-    role,
+    roleCanonical,
     cabinetId,
     expiresAt,
   );
@@ -253,7 +273,7 @@ export async function parseInvitationToken(
     data: {
       v: INVITATION_TOKEN_VERSION,
       email: email.toLowerCase(),
-      role,
+      role: roleNorm,
       cabinetId,
       expiresAt,
       signature,
@@ -285,16 +305,16 @@ export type NavKey =
   | "settings";
 
 export const NAV_ACCESS: Record<NavKey, Role[]> = {
-  dashboard: ["admin", "replacant", "assistant"],
-  patients: ["admin", "replacant", "assistant"],
-  planning: ["admin", "replacant", "assistant"],
-  finances: ["admin", "assistant"],
-  financesDepenses: ["admin", "assistant"],
+  dashboard: ["admin", "praticien", "assistant", "remplacant"],
+  patients: ["admin", "praticien", "assistant", "remplacant"],
+  planning: ["admin", "praticien", "assistant", "remplacant"],
+  finances: ["admin"],
+  financesDepenses: ["admin"],
   statistiques: ["admin"],
   stocks: ["admin", "assistant"],
-  sterilisation: ["admin", "assistant"],
-  laboratoire: ["admin", "assistant"],
-  factures: ["admin", "assistant"],
+  sterilisation: ["admin"],
+  laboratoire: ["admin", "praticien"],
+  factures: ["admin"],
   settings: ["admin"],
 };
 
@@ -346,7 +366,15 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 export function getCurrentRole(): Role {
   if (!isBrowser()) return "admin";
   const raw = window.localStorage.getItem(STORAGE_KEYS.currentRole);
-  if (raw === "replacant" || raw === "assistant" || raw === "admin") return raw;
+  if (
+    raw === "admin" ||
+    raw === "praticien" ||
+    raw === "assistant" ||
+    raw === "remplacant"
+  ) {
+    return raw;
+  }
+  if (raw === "replacant") return "remplacant";
   return "admin";
 }
 
@@ -416,7 +444,7 @@ export function saveInvitations(list: Invitation[]): void {
  */
 export async function createInvitation(
   email: string,
-  role: Exclude<Role, "admin">,
+  role: InvitableRole,
 ): Promise<{ invitation: Invitation; member: TeamMember }> {
   const now = new Date();
   const cabinetId = getCabinetId();
@@ -480,7 +508,9 @@ export async function acceptInvitation(
 ): Promise<{ ok: true; member: TeamMember } | { ok: false; error: string }> {
   const v = await parseInvitationToken(rawToken);
   if (!v.ok) return v;
-  const { email, role, cabinetId } = v.data;
+  const { email, role: rawRole, cabinetId } = v.data;
+  const role: InvitableRole =
+    rawRole === "replacant" ? "remplacant" : rawRole;
   const id = makeMemberId(cabinetId, email);
   const nowIso = new Date().toISOString();
   const team = loadTeam();
@@ -546,6 +576,7 @@ export function getInitials(source: string): string {
 
 export function roleBadgeTone(role: Role): string {
   if (role === "admin") return "#7c3aed";
-  if (role === "replacant") return "#0ea5e9";
+  if (role === "praticien") return "#06b6d4";
+  if (role === "assistant") return "#10b981";
   return "#f59e0b";
 }

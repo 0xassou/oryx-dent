@@ -26,6 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { loginAsMemberAction } from "@/app/actions/auth";
+import { resolveAppRoleForSessionAction } from "@/app/actions/team";
 import {
   findMemberByCredentials,
   setCurrentRole,
@@ -356,16 +357,26 @@ function ConnexionPanel() {
         data && typeof data === "object" && "user" in data
           ? (data as DataShape).user
           : undefined;
-      const displayName =
-        user?.name && user.name.trim().length > 0
-          ? user.name.trim()
-          : "Administrateur";
-      setCurrentRole("admin");
-      setCurrentUser({
-        email: user?.email ?? cleanEmail,
-        nom: displayName,
-        role: "admin",
-      });
+      const resolved = await resolveAppRoleForSessionAction();
+      if (resolved.ok) {
+        setCurrentRole(resolved.role);
+        setCurrentUser({
+          email: resolved.email,
+          nom: resolved.nom,
+          role: resolved.role,
+        });
+      } else {
+        const displayName =
+          user?.name && user.name.trim().length > 0
+            ? user.name.trim()
+            : "Utilisateur";
+        setCurrentRole("admin");
+        setCurrentUser({
+          email: user?.email ?? cleanEmail.toLowerCase(),
+          nom: displayName,
+          role: "admin",
+        });
+      }
       router.push("/");
       router.refresh();
     } catch {

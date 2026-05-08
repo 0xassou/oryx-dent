@@ -234,7 +234,7 @@ export default function SettingsPage() {
     { id: "clinique", label: "Clinique & légal", icon: Building2 },
     { id: "actes", label: "Actes & tarifs", icon: Tags },
     { id: "laboratoires", label: "Laboratoires", icon: FlaskConical },
-    { id: "equipe", label: "Équipe & accès", icon: Users },
+    { id: "equipe", label: "Équipe", icon: Users },
     { id: "abonnement", label: "Abonnement", icon: CreditCard },
     { id: "modeles", label: "Modèles PDF", icon: FileText },
     { id: "preferences", label: "Préférences", icon: Settings },

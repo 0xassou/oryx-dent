@@ -278,7 +278,7 @@ function SubTopbar({
           <Pencil className="h-3.5 w-3.5" aria-hidden />
           Modifier
         </button>
-        <RoleGate role={["admin", "replacant"]}>
+        <RoleGate role={["admin", "praticien"]}>
           <button
             type="button"
             onClick={(e) => {

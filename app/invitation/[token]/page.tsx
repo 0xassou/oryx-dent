@@ -11,6 +11,7 @@ import {
   setCurrentRole,
   setCurrentUser,
   type InvitationTokenPayload,
+  type Role,
 } from "@/utils/roles";
 
 type Stage = "loading" | "invalid" | "form" | "done";
@@ -171,7 +172,7 @@ export default function InvitationPage({
               <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                 Rôle attribué :{" "}
                 <span className="font-semibold text-[var(--ds-primary)]">
-                  {ROLE_LABEL[invitation.role]}
+                  {ROLE_LABEL[invitationRoleToAppRole(invitation.role)]}
                 </span>
               </p>
             </div>
@@ -244,6 +245,12 @@ export default function InvitationPage({
       </div>
     </div>
   );
+}
+
+function invitationRoleToAppRole(
+  role: InvitationTokenPayload["role"],
+): Role {
+  return role === "replacant" ? "remplacant" : role;
 }
 
 const INPUT_CLS =

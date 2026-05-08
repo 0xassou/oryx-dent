@@ -3033,7 +3033,7 @@ export default function PatientDetailPage() {
       </div>}
       />
 
-      <RoleGate role={["admin", "replacant"]}>
+      <RoleGate role={["admin", "praticien"]}>
       <PrescriptionModal
         open={isPrescriptionModalOpen}
         patientName={displayFullName}
@@ -4523,7 +4523,7 @@ export default function PatientDetailPage() {
           {/* FOOTER */}
           <footer className="shrink-0 space-y-1.5 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-5 py-3 backdrop-blur-sm">
             <RoleGate
-              role={["admin", "replacant"]}
+              role={["admin", "praticien"]}
               fallback={
                 <div className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)]/40 px-3 py-2 text-center text-xs text-[var(--ds-text-muted)]">
                   Odontogramme en lecture seule pour votre rôle

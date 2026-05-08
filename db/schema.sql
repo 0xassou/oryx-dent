@@ -172,3 +172,29 @@ CREATE TABLE IF NOT EXISTS commandes_labo (
 
 CREATE INDEX IF NOT EXISTS idx_commandes_labo_patient ON commandes_labo(patient_id);
 CREATE INDEX IF NOT EXISTS idx_commandes_labo_created ON commandes_labo(created_at);
+
+-- Membres d'équipe (liés aux comptes Better Auth : id = "user".id)
+CREATE TABLE IF NOT EXISTS team_members (
+  id            TEXT PRIMARY KEY,
+  nom           TEXT NOT NULL,
+  prenom        TEXT NOT NULL,
+  email         TEXT UNIQUE NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'assistant',
+  telephone     TEXT,
+  specialite    TEXT,
+  actif         BOOLEAN DEFAULT true,
+  password_hash TEXT,
+  must_change_password BOOLEAN NOT NULL DEFAULT false,
+  temp_password_display TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT team_members_role_check CHECK (
+    role IN ('admin', 'praticien', 'assistant', 'remplacant')
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_members_nom ON team_members(nom);
+CREATE INDEX IF NOT EXISTS idx_team_members_actif ON team_members(actif);
+
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS temp_password_display TEXT;

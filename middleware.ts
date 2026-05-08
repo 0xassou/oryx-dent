@@ -33,8 +33,27 @@ function isPublicPath(pathname: string): boolean {
   return false;
 }
 
+async function getMustChangePassword(request: NextRequest): Promise<boolean> {
+  try {
+    const url = new URL("/api/team/must-change-password", request.nextUrl.origin);
+    const response = await fetch(url, {
+      headers: { cookie: request.headers.get("cookie") ?? "" },
+      cache: "no-store",
+    });
+    const data: unknown = await response.json().catch(() => null);
+    if (!data || typeof data !== "object") return false;
+    return (data as { mustChangePassword?: boolean }).mustChangePassword === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
+
+  if (pathname === "/api/team/must-change-password") {
+    return NextResponse.next();
+  }
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
     if (await hasBetterAuthSession(req)) {
@@ -51,6 +70,15 @@ export async function middleware(req: NextRequest) {
 
   if (!authed) {
     return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  const onChangePasswordPage =
+    pathname === "/change-password" || pathname.startsWith("/change-password/");
+  if (!onChangePasswordPage) {
+    const mustChange = await getMustChangePassword(req);
+    if (mustChange) {
+      return NextResponse.redirect(new URL("/change-password", req.url));
+    }
   }
 
   return NextResponse.next();

@@ -5,6 +5,8 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
+  --radius-xl: 1rem;
+  --shadow-lg: 0 10px 40px rgba(15, 23, 42, 0.08);
   --ds-bg: #faf9ff;
   --ds-surface: #ffffff;
   --ds-surface-2: #f8f7fc;
