@@ -11,6 +11,7 @@
     "create-admin": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
     "autoprefixer": "^10.4.27",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.6.9",

@@ -1,7 +1,7 @@
 "use client";
 
 import { FileDown, FileText, MoreVertical, Pencil, Search, Trash2, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deriveFactureStatut,
@@ -141,6 +141,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 export function FinancesRecettesTab() {
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [factures, setFactures] = useState<FactureDocument[]>([]);
@@ -354,7 +355,9 @@ export function FinancesRecettesTab() {
 
   const filteredFactures = useMemo(() => {
     const now = new Date();
+    const patientFilterId = (searchParams.get("patient") ?? "").trim();
     const base = factures.filter((doc) => {
+      if (patientFilterId && doc.patientId !== patientFilterId) return false;
       const st = deriveFactureStatut(doc.montantTotal, doc.montantPaye);
       if (activeTab === "Tous") return true;
       return st === activeTab;
@@ -374,7 +377,7 @@ export function FinancesRecettesTab() {
         doc.patient.toLowerCase().includes(q) ||
         doc.id.toLowerCase().includes(q),
     );
-  }, [factures, activeTab, search, dateFilter]);
+  }, [factures, activeTab, search, dateFilter, searchParams]);
 
   return (
     <div className="space-y-6">

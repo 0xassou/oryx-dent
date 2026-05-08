@@ -32,9 +32,7 @@ import {
 } from "recharts";
 import {
   STOCK_UPDATED_EVENT,
-  type StockLine,
 } from "@/utils/stockLogic";
-import { stockRowToStockLine } from "@/utils/stockDbMapping";
 import { getStocksAction } from "@/app/actions/stocks";
 import { getFacturesByDateAction } from "@/app/actions/factures";
 import { FACTURES_UPDATED_EVENT } from "@/utils/factureDocuments";
@@ -122,11 +120,6 @@ function countSterileKitsReady(ster: SterData): number {
   }
   const kits = ster.kits ?? [];
   return kits.filter((k) => k.status === "sterile").length;
-}
-
-function isStockCritical(s: StockLine): boolean {
-  if (s.quantiteMax <= 0) return s.quantite <= 0;
-  return (s.quantite / s.quantiteMax) * 100 < 50;
 }
 
 type FluxStatus = "Terminé" | "En attente" | "Au fauteuil" | "À venir";
@@ -950,8 +943,10 @@ export default function DashboardPage() {
   const refreshStockKpisFromServer = useCallback(async () => {
     const res = await getStocksAction();
     if (!res.ok) return;
-    const lines = res.data.map(stockRowToStockLine);
-    setStockCriticalCount(lines.filter(isStockCritical).length);
+    // KPI "ruptures" : quantite <= quantite_min (spéc)
+    setStockCriticalCount(
+      res.data.filter((row) => row.quantite <= row.quantite_min).length,
+    );
   }, []);
 
   const refreshEncaissementsToday = useCallback(async () => {

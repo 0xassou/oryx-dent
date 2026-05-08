@@ -1407,7 +1407,9 @@ export default function PatientDetailPage() {
           if (exists) return prev;
           return [autoFinanceLine, ...prev];
         });
-        upsertGlobalFactureFromFinanceLine(autoFinanceLine);
+        upsertGlobalFactureFromFinanceLine(autoFinanceLine, {
+          toastOnCreate: true,
+        });
         setDrawerMontant("");
         setSelectedTooth(null);
       } else {
@@ -1419,7 +1421,10 @@ export default function PatientDetailPage() {
   }
 
   /** Synchronise la facture PostgreSQL liée à une ligne finance (fiche patient). */
-  function upsertGlobalFactureFromFinanceLine(line: FinanceLine) {
+  function upsertGlobalFactureFromFinanceLine(
+    line: FinanceLine,
+    opts?: { toastOnCreate?: boolean },
+  ) {
     if (typeof window === "undefined" || !id) return;
     void (async () => {
       const listRes = await getFacturesByPatientAction(id);
@@ -1447,7 +1452,8 @@ export default function PatientDetailPage() {
         date: pgDate,
         montant: line.montantTotal,
         montant_paye: paye,
-        statut,
+        // Spéc : facture auto en attente si non payée.
+        statut: paye <= 0 ? "en_attente" : statut,
         actes,
       };
 
@@ -1458,7 +1464,15 @@ export default function PatientDetailPage() {
       } else {
         const cr = await createFactureAction(patch);
         if (!cr.ok) console.error(cr.error);
-        else notifyFacturesUpdated();
+        else {
+          notifyFacturesUpdated();
+          if (opts?.toastOnCreate) {
+            // Laisse le toast "acte enregistré" vivre, puis affiche la confirmation facture.
+            setTimeout(() => {
+              setToast({ type: "success", message: "Facture créée automatiquement" });
+            }, 800);
+          }
+        }
       }
     })();
   }
@@ -2060,7 +2074,7 @@ export default function PatientDetailPage() {
             {tab === "finances" && (
               <div>
                 <Link
-                  href="/finances"
+                  href={`/finances?patient=${encodeURIComponent(id)}`}
                   className="text-xs text-[var(--ds-primary)] hover:underline flex items-center gap-1"
                 >
                   <ExternalLink className="h-3 w-3" />
@@ -2567,15 +2581,21 @@ export default function PatientDetailPage() {
               settings.praticien.trim()) ||
             `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
             undefined;
-          generateOrdonnancePDF({
+          void generateOrdonnancePDF({
             patient: displayFullName,
             age:
               patientProfile.age != null && patientProfile.age > 0
                 ? patientProfile.age
                 : undefined,
-            date: new Date().toLocaleDateString("fr-DZ"),
-            items: items.map(({ medicament, posologie, duree }) => ({
-              medicament,
+            sexe: patientProfile.genre && patientProfile.genre !== "—" ? patientProfile.genre : undefined,
+            date: new Date().toLocaleDateString("fr-DZ", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            }),
+            items: items.map(({ nom, dosage, posologie, duree }) => ({
+              nom,
+              dosage,
               posologie,
               duree,
             })),
@@ -2585,6 +2605,10 @@ export default function PatientDetailPage() {
                 | undefined,
             cabinetAdresse: settings.adresse as string | undefined,
             cabinetTel: settings.telephone as string | undefined,
+            cabinetNumeroCnam:
+              (settings.numeroCnam ?? settings.numeroCNAM ?? settings.cabinetNumeroCnam) as
+                | string
+                | undefined,
             praticienNom: praticienFromSettings,
             mentionLegale: settings.mentionLegale as string | undefined,
             logoBase64: settings.logoBase64 as string | undefined,

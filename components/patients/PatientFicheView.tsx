@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -287,8 +287,7 @@ function SubTopbar({
             }}
             className={ghost}
           >
-            <FileText className="h-3.5 w-3.5" aria-hidden />
-            Ordonnance
+            📄 Ordonnance
           </button>
         </RoleGate>
         <button type="button" onClick={onNewAppointment} className={primary}>
@@ -536,9 +535,11 @@ function AlertesCard({
 function StatsCard({
   stats,
   rdv,
+  patientId,
 }: {
   stats: PatientFicheData["stats"];
   rdv?: PatientFicheProchainRdv;
+  patientId: string;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-4">
@@ -609,6 +610,15 @@ function StatsCard({
           Aucun rendez-vous programmé.
         </div>
       )}
+
+      <div className="mt-3 flex justify-end">
+        <Link
+          href={`/planning?patient=${encodeURIComponent(patientId)}`}
+          className="text-xs font-medium text-[var(--ds-primary)] hover:underline"
+        >
+          Voir tous les RDV
+        </Link>
+      </div>
     </section>
   );
 }
@@ -616,13 +626,15 @@ function StatsCard({
 function OdontogrammeCard({
   dents,
   watchedTeeth,
+  presentCount,
+  totalCount,
   onToothClick,
-  onAddActe,
 }: {
   dents: Record<ToothId, ToothStatus>;
   watchedTeeth?: Set<number>;
+  presentCount: number;
+  totalCount: number;
   onToothClick: (t: ToothId) => void;
-  onAddActe: () => void;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)]">
@@ -630,13 +642,16 @@ function OdontogrammeCard({
         <h2 className="font-serif text-[15px] font-semibold tracking-tight text-[var(--ds-text)]">
           Odontogramme
         </h2>
-        <button
-          type="button"
-          onClick={onAddActe}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-        >
-          <Plus className="h-3 w-3" aria-hidden /> Ajouter un acte
-        </button>
+        <div className="text-right">
+          <div className="text-sm font-bold text-[var(--ds-primary)]">
+            {presentCount} dents présentes
+          </div>
+          {presentCount < totalCount ? (
+            <div className="text-xs font-normal text-[var(--ds-text-muted)]">
+              sur {totalCount}
+            </div>
+          ) : null}
+        </div>
       </header>
       <div className="px-4 py-3">
         <OdontogrammeFiche
@@ -754,8 +769,27 @@ export function PatientSoinsTimeline({
 }
 
 export default function PatientFicheView({ data, handlers, footer }: Props) {
-  const { patient, statut, alertes, stats, prochainRdv, dentsStatus, watchedTeeth, timeline } =
-    data;
+  const {
+    patient,
+    statut,
+    alertes,
+    stats,
+    prochainRdv,
+    dentsStatus,
+    watchedTeeth,
+    timeline,
+  } = data;
+
+  const totalCount = useMemo(() => Object.keys(dentsStatus).length, [dentsStatus]);
+  const presentCount = useMemo(() => {
+    let c = 0;
+    for (const st of Object.values(dentsStatus)) {
+      // Dents manquantes/extraites = "absente" (valeur utilisée par l’odontogramme)
+      if (st === "absente") continue;
+      c += 1;
+    }
+    return c;
+  }, [dentsStatus]);
 
   return (
     <div className="mx-auto w-full max-w-[1400px]">
@@ -787,12 +821,13 @@ export default function PatientFicheView({ data, handlers, footer }: Props) {
         </aside>
 
         <section className="flex min-w-0 flex-col gap-6">
-          <StatsCard stats={stats} rdv={prochainRdv} />
+          <StatsCard stats={stats} rdv={prochainRdv} patientId={patient.id} />
           <OdontogrammeCard
             dents={dentsStatus}
             watchedTeeth={watchedTeeth}
+            presentCount={presentCount}
+            totalCount={totalCount}
             onToothClick={handlers.onToothClick}
-            onAddActe={handlers.onAddActe}
           />
         </section>
       </div>

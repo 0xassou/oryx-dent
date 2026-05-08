@@ -6,6 +6,7 @@ import type {
   AppointmentInput,
   AppointmentRowJoined,
 } from "@/lib/types/appointments-db";
+import type { PatientRow } from "@/lib/types/patients-db";
 
 const SELECT_JOIN = `
   SELECT
@@ -58,6 +59,39 @@ function mapRow(row: Record<string, unknown>): AppointmentRowJoined {
   };
 }
 
+function toIsoTimestamp(v: unknown): string {
+  if (v == null) return new Date(0).toISOString();
+  if (v instanceof Date) return v.toISOString();
+  const s = String(v);
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? new Date(0).toISOString() : d.toISOString();
+}
+
+function toDateStringOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : s || null;
+}
+
+function mapPatientRow(r: Record<string, unknown>): PatientRow {
+  return {
+    id: String(r.id),
+    nom: String(r.nom ?? ""),
+    prenom: String(r.prenom ?? ""),
+    telephone: r.telephone == null ? null : String(r.telephone),
+    email: r.email == null ? null : String(r.email),
+    date_naissance: toDateStringOrNull(r.date_naissance),
+    sexe: r.sexe == null ? null : String(r.sexe),
+    adresse: r.adresse == null ? null : String(r.adresse),
+    mutuelle: r.mutuelle == null ? null : String(r.mutuelle),
+    antecedents: r.antecedents == null ? null : String(r.antecedents),
+    notes: r.notes == null ? null : String(r.notes),
+    created_at: toIsoTimestamp(r.created_at),
+    updated_at: toIsoTimestamp(r.updated_at),
+  };
+}
+
 export async function getAppointmentsAction(): Promise<
   AppointmentsOk<AppointmentRowJoined[]>
 > {
@@ -70,6 +104,36 @@ export async function getAppointmentsAction(): Promise<
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
     console.error("[getAppointmentsAction]", e);
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+export async function getInactivePatientsAction(
+  daysSince: number,
+): Promise<AppointmentsOk<PatientRow[]>> {
+  const days = Math.max(1, Math.floor(Number(daysSince) || 90));
+  try {
+    const pool = getPostgresPool();
+    const { rows } = await pool.query(
+      `
+      SELECT p.*
+      FROM patients p
+      WHERE p.id NOT IN (
+        SELECT DISTINCT a.patient_id
+        FROM appointments a
+        WHERE a.patient_id IS NOT NULL
+          AND a.date >= (CURRENT_DATE - $1::int)
+      )
+      ORDER BY p.nom ASC
+      `,
+      [days],
+    );
+    return { ok: true, data: rows.map((r) => mapPatientRow(r as Record<string, unknown>)) };
+  } catch (e) {
+    console.error("[getInactivePatientsAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),

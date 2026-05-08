@@ -1,7 +1,8 @@
 "use client";
 
 import type { ComponentType } from "react";
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { LayoutDashboard, TrendingDown, TrendingUp } from "lucide-react";
 import { FinancesDashboardTab } from "@/components/finances/FinancesDashboardTab";
 import { FinancesRecettesTab } from "@/components/finances/FinancesRecettesTab";
@@ -9,9 +10,15 @@ import { FinancesDepensesTab } from "@/components/finances/FinancesDepensesTab";
 
 type MainTab = "dashboard" | "recettes" | "depenses";
 
-export default function FinancesPage() {
+function FinancesPageContent() {
   // TODO: Masquer les onglets Tableau de bord et Dépenses si l'utilisateur n'est pas Admin.
   const [tab, setTab] = useState<MainTab>("dashboard");
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const pid = (searchParams.get("patient") ?? "").trim();
+    if (pid) setTab("recettes");
+  }, [searchParams]);
 
   const tabs: { id: MainTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -64,5 +71,13 @@ export default function FinancesPage() {
         {tab === "depenses" ? <FinancesDepensesTab /> : null}
       </div>
     </div>
+  );
+}
+
+export default function FinancesPage() {
+  return (
+    <Suspense fallback={null}>
+      <FinancesPageContent />
+    </Suspense>
   );
 }

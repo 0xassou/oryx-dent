@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, ChevronRight, MoreVertical, Search, FileText, UserPlus } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
 import { createPatientAction, getPatientsAction } from "@/app/actions/patients";
+import { getInactivePatientsAction } from "@/app/actions/appointments";
 import {
   AddPatientModal,
   type AddPatientPayload,
@@ -46,6 +47,25 @@ function getAvatarColor(seed: string) {
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
+function getCabinetWhatsappNumber(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const s = JSON.parse(localStorage.getItem("dental_settings") ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    const tel = typeof s.telephone === "string" ? s.telephone : "";
+    const digits = tel.replace(/[^\d]/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("213")) return digits;
+    if (digits.startsWith("0")) return `213${digits.slice(1)}`;
+    // fallback: on assume déjà au bon format
+    return digits;
+  } catch {
+    return "";
+  }
+}
+
 function PatientsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,6 +76,10 @@ function PatientsPageContent() {
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"tous" | "actifs" | "inactifs">("tous");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [inactive90Only, setInactive90Only] = useState(false);
+  const [inactivePatientIds, setInactivePatientIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const reload = useCallback(async () => {
     const res = await getPatientsAction();
@@ -69,6 +93,12 @@ function PatientsPageContent() {
   useEffect(() => {
     void (async () => {
       await reload();
+      const inactiveRes = await getInactivePatientsAction(90);
+      if (inactiveRes.ok) {
+        setInactivePatientIds(new Set(inactiveRes.data.map((p) => p.id)));
+      } else {
+        console.error(inactiveRes.error);
+      }
       setHydrated(true);
     })();
   }, [reload]);
@@ -106,6 +136,7 @@ function PatientsPageContent() {
         if (statusFilter === "actifs" && !isActif) return false;
         if (statusFilter === "inactifs" && isActif) return false;
       }
+      if (inactive90Only && !inactivePatientIds.has(p.id)) return false;
       return true;
     });
 
@@ -114,7 +145,7 @@ function PatientsPageContent() {
       const tb = new Date(b.derniereVisite).getTime();
       return sortOrder === "desc" ? tb - ta : ta - tb;
     });
-  }, [patients, search, statusFilter, sortOrder]);
+  }, [patients, search, statusFilter, sortOrder, inactive90Only, inactivePatientIds]);
 
   function goToPatient(patientId: string) {
     router.push(`/patients/${patientId}`);
@@ -207,7 +238,7 @@ function PatientsPageContent() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {(["tous", "actifs", "inactifs"] as const).map((f) => (
             <button
               key={f}
@@ -223,6 +254,19 @@ function PatientsPageContent() {
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
+
+          <button
+            type="button"
+            onClick={() => setInactive90Only((v) => !v)}
+            className={[
+              "rounded-full px-3.5 py-1.5 text-xs transition-colors",
+              inactive90Only
+                ? "bg-[var(--ds-primary)] text-white font-semibold"
+                : "border border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] font-medium hover:border-[var(--ds-primary-border)] hover:text-[var(--ds-text)]",
+            ].join(" ")}
+          >
+            Sans RDV depuis 3 mois
+          </button>
         </div>
         <button
           type="button"
@@ -270,6 +314,9 @@ function PatientsPageContent() {
                     const isActionsOpen = openActionsId === patient.id;
                     const initials = `${patient.prenom?.[0]?.toUpperCase() ?? ""}${patient.nom?.[0]?.toUpperCase() ?? ""}` || "?";
                     const avatarColor = getAvatarColor(patient.id);
+                    const isInactive90 = inactivePatientIds.has(patient.id);
+                    const cabinetWa = getCabinetWhatsappNumber();
+                    const message = `Bonjour ${patient.prenom || ""}, le Cabinet Dentaire vous rappelle qu'un contrôle est recommandé.\nContactez-nous pour prendre rendez-vous. Merci.`;
                     return (
                       <tr
                         key={patient.id}
@@ -290,34 +337,41 @@ function PatientsPageContent() {
                         <td className="px-4 py-2.5 text-sm text-[var(--ds-text-muted)]">
                           <div className="flex items-center">
                             <span>{formatPhoneNumber(patient.telephone)}</span>
-                            <a
-                              href={`https://wa.me/${patient.telephone
-                                .replace(/\s/g, "")
-                                .replace(/^0/, "213")}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 transition-all hover:bg-emerald-500 hover:text-white"
-                              title="WhatsApp"
-                            >
-                              <svg
-                                className="h-3 w-3"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
-                                aria-hidden
+                            {isInactive90 && cabinetWa ? (
+                              <a
+                                href={`https://wa.me/${cabinetWa}?text=${encodeURIComponent(message)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="ml-2 inline-flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 transition-all hover:bg-emerald-500 hover:text-white"
+                                title="WhatsApp"
                               >
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                              </svg>
-                            </a>
+                                <svg
+                                  className="h-3 w-3"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                  aria-hidden
+                                >
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                </svg>
+                              </a>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-sm text-[var(--ds-text-muted)]">
                           {formatDate(patient.derniereVisite)}
                         </td>
                         <td className="px-4 py-2.5">
-                          <span className="inline-flex rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-2.5 py-0.5 text-[10px] font-semibold text-[color:var(--ds-primary)]">
-                            Actif
-                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-2.5 py-0.5 text-[10px] font-semibold text-[color:var(--ds-primary)]">
+                              Actif
+                            </span>
+                            {isInactive90 ? (
+                              <span className="inline-flex rounded-[var(--radius-md)] bg-[#fef3c7] px-2 py-1 text-xs font-medium text-[#d97706]">
+                                Rappel contrôle
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="relative px-4 py-2.5 text-right">
                           <button
@@ -375,6 +429,9 @@ function PatientsPageContent() {
                   .charAt(0)
                   .toUpperCase();
                 const avatarColor = getAvatarColor(patient.id);
+                const isInactive90 = inactivePatientIds.has(patient.id);
+                const cabinetWa = getCabinetWhatsappNumber();
+                const message = `Bonjour ${patient.prenom || ""}, le Cabinet Dentaire vous rappelle qu'un contrôle est recommandé.\nContactez-nous pour prendre rendez-vous. Merci.`;
                 return (
                   <div
                     key={patient.id}
@@ -397,6 +454,13 @@ function PatientsPageContent() {
                         <p className="text-sm font-semibold text-[var(--ds-text)]">
                           {toTitleCase(patient.prenom)} {toTitleCase(patient.nom)}
                         </p>
+                        {isInactive90 ? (
+                          <div className="mt-1">
+                            <span className="inline-flex rounded-[var(--radius-md)] bg-[#fef3c7] px-2 py-1 text-xs font-medium text-[#d97706]">
+                              Rappel contrôle
+                            </span>
+                          </div>
+                        ) : null}
                         <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
                           {formatPhoneNumber(patient.telephone)}
                         </p>
@@ -406,25 +470,25 @@ function PatientsPageContent() {
                       </div>
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-1.5 pl-2">
-                      <a
-                        href={`https://wa.me/${patient.telephone
-                          .replace(/\s/g, "")
-                          .replace(/^0/, "213")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 transition-all hover:bg-emerald-500 hover:text-white"
-                        title="WhatsApp"
-                      >
-                        <svg
-                          className="h-3.5 w-3.5"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          aria-hidden
+                      {isInactive90 && cabinetWa ? (
+                        <a
+                          href={`https://wa.me/${cabinetWa}?text=${encodeURIComponent(message)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 transition-all hover:bg-emerald-500 hover:text-white"
+                          title="WhatsApp"
                         >
-                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                        </svg>
-                      </a>
+                          <svg
+                            className="h-3.5 w-3.5"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden
+                          >
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                          </svg>
+                        </a>
+                      ) : null}
                       <ChevronRight
                         className="h-5 w-5 shrink-0 text-[var(--ds-text-muted)]"
                         aria-hidden

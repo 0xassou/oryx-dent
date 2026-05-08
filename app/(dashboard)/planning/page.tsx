@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -679,6 +680,17 @@ function PlanningPageContent() {
     string | undefined
   >(undefined);
   const [appointments, setAppointments] = useState<Rdv[]>([]);
+  const patientFilterId = useMemo(() => {
+    return (
+      searchParams.get("patient")?.trim() ||
+      searchParams.get("patientId")?.trim() ||
+      ""
+    );
+  }, [searchParams]);
+  const visibleAppointments = useMemo(() => {
+    if (!patientFilterId) return appointments;
+    return appointments.filter((a) => (a.patientId ?? "").trim() === patientFilterId);
+  }, [appointments, patientFilterId]);
   const reloadAppointments = useCallback(async () => {
     const res = await getAppointmentsAction();
     if (!res.ok) return;
@@ -764,7 +776,10 @@ function PlanningPageContent() {
   }, [reloadAppointments]);
 
   useEffect(() => {
-    const patientId = searchParams.get("patientId")?.trim() || "";
+    const patientId =
+      searchParams.get("patient")?.trim() ||
+      searchParams.get("patientId")?.trim() ||
+      "";
     const patientName = searchParams.get("patientName");
     setNewRdvDefaultPatientId(patientId || undefined);
     if (patientName) setNewRdvDefaultPatientName(patientName);
@@ -967,7 +982,7 @@ function PlanningPageContent() {
         {/* Vue Liste — visible sur tous les écrans */}
         {view === "liste" && (
           <ListView
-            rdvs={appointments}
+            rdvs={visibleAppointments}
             centerDate={currentDate}
             selectedDayIso={listSelectedDay}
             onDaySelect={(iso) => {
@@ -981,7 +996,7 @@ function PlanningPageContent() {
         {view === "calendar" && (
           <div className="hidden min-h-0 flex-1 flex-col overflow-hidden lg:flex lg:flex-col">
             <CalendarView
-              items={appointments}
+              items={visibleAppointments}
               onItemsChange={setAppointments}
               columns={slidingColumns}
               scrollAnchorIso={scrollAnchorIso}
@@ -994,7 +1009,7 @@ function PlanningPageContent() {
         {view === "calendar" && (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
             <ListView
-              rdvs={appointments}
+              rdvs={visibleAppointments}
               centerDate={currentDate}
               selectedDayIso={listSelectedDay}
               onDaySelect={(iso) => {

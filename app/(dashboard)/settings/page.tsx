@@ -177,6 +177,7 @@ export default function SettingsPage() {
     adresse: "",
     telephone: "",
     email: "",
+    numeroCnam: "",
     nif: "",
     nis: "",
     rc: "",
@@ -463,6 +464,24 @@ export default function SettingsPage() {
                           }))
                         }
                         autoComplete="tel"
+                      />
+                    </div>
+                    <div className={fieldRowGrid}>
+                      <label className={labelClass} htmlFor="settings-cnam">
+                        Numéro CNAM / agrément
+                      </label>
+                      <input
+                        id="settings-cnam"
+                        type="text"
+                        className={inputBase}
+                        value={settings.numeroCnam ?? ""}
+                        onChange={(e) =>
+                          setSettings((prev) => ({
+                            ...prev,
+                            numeroCnam: e.target.value,
+                          }))
+                        }
+                        placeholder="Ex: 123456"
                       />
                     </div>
                     <div className={fieldRowGrid}>
