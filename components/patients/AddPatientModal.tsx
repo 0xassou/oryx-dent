@@ -12,8 +12,12 @@ export interface AddPatientPayload {
   sexe: Sexe;
   dateNaissance: string;
   telephone: string;
+  telephoneSecondaire: string;
   email: string;
   adresse: string;
+  groupeSanguin: string;
+  mutuelleNom: string;
+  mutuelleNumero: string;
   allergies: string;
   antecedents: {
     diabete: boolean;
@@ -55,9 +59,13 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
   const [prenom, setPrenom] = useState("");
   const [sexe, setSexe] = useState<Sexe>("autre");
   const [dateNaissance, setDateNaissance] = useState("");
+  const [groupeSanguin, setGroupeSanguin] = useState("");
   const [telephone, setTelephone] = useState("");
+  const [telephoneSecondaire, setTelephoneSecondaire] = useState("");
   const [email, setEmail] = useState("");
   const [adresse, setAdresse] = useState("");
+  const [mutuelleNom, setMutuelleNom] = useState("");
+  const [mutuelleNumero, setMutuelleNumero] = useState("");
   const [allergies, setAllergies] = useState("");
   const [diabete, setDiabete] = useState(false);
   const [hta, setHta] = useState(false);
@@ -98,8 +106,12 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
       sexe,
       dateNaissance: dateNaissance.trim(),
       telephone: telephone.trim(),
+      telephoneSecondaire: telephoneSecondaire.trim(),
       email: email.trim(),
       adresse: adresse.trim(),
+      groupeSanguin: groupeSanguin.trim(),
+      mutuelleNom: mutuelleNom.trim(),
+      mutuelleNumero: mutuelleNumero.trim(),
       allergies: allergies.trim(),
       antecedents: { diabete, hta, problemesCardiaques, enceinte },
       traitementsEnCours: traitementsEnCours.trim(),
@@ -239,6 +251,25 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                       className={inputBase}
                     />
                   </div>
+                  <div>
+                    <label className={labelBase} htmlFor="add-patient-groupe-sanguin">
+                      Groupe sanguin
+                    </label>
+                    <select
+                      id="add-patient-groupe-sanguin"
+                      name="groupeSanguin"
+                      value={groupeSanguin}
+                      onChange={(e) => setGroupeSanguin(e.target.value)}
+                      className={inputBase}
+                    >
+                      <option value="">Sélectionner…</option>
+                      {(["O+","O-","A+","A-","B+","B-","AB+","AB-"] as const).map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </section>
 
@@ -272,6 +303,22 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                         {errors.telephone}
                       </p>
                     )}
+                  </div>
+                  <div>
+                    <label className={labelBase} htmlFor="add-patient-tel2">
+                      Téléphone secondaire
+                    </label>
+                    <input
+                      id="add-patient-tel2"
+                      type="tel"
+                      name="telephoneSecondaire"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      value={telephoneSecondaire}
+                      onChange={(e) => setTelephoneSecondaire(e.target.value)}
+                      className={inputBase}
+                      placeholder="Ex. 06 12 34 56 78…"
+                    />
                   </div>
                   <div>
                     <label className={labelBase} htmlFor="add-patient-email">
@@ -308,7 +355,42 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                 </div>
               </section>
 
-              {/* Section 3 - Dossier médical (Anamnèse) */}
+              {/* Section 3 - Informations administratives */}
+              <section>
+                <h3 className={sectionTitle}>Informations administratives</h3>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelBase} htmlFor="add-patient-mutuelle-nom">
+                      Mutuelle / Assurance
+                    </label>
+                    <input
+                      id="add-patient-mutuelle-nom"
+                      type="text"
+                      name="mutuelleNom"
+                      value={mutuelleNom}
+                      onChange={(e) => setMutuelleNom(e.target.value)}
+                      className={inputBase}
+                      placeholder="Ex. CNAS, CASNOS, Cardif…"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelBase} htmlFor="add-patient-mutuelle-numero">
+                      N° adhérent
+                    </label>
+                    <input
+                      id="add-patient-mutuelle-numero"
+                      type="text"
+                      name="mutuelleNumero"
+                      value={mutuelleNumero}
+                      onChange={(e) => setMutuelleNumero(e.target.value)}
+                      className={inputBase}
+                      placeholder="Ex. 123456789"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Section 4 - Dossier médical (Anamnèse) */}
               <section>
                 <h3 className={sectionTitle}>Dossier médical (Anamnèse)</h3>
                 <div className="mt-3 space-y-4">

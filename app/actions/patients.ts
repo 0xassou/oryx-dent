@@ -29,11 +29,16 @@ function mapRow(r: Record<string, unknown>): PatientRow {
     nom: String(r.nom ?? ""),
     prenom: String(r.prenom ?? ""),
     telephone: r.telephone == null ? null : String(r.telephone),
+    telephone2: r.telephone2 == null ? null : String(r.telephone2),
     email: r.email == null ? null : String(r.email),
     date_naissance: toDateStringOrNull(r.date_naissance),
+    groupe_sanguin: r.groupe_sanguin == null ? null : String(r.groupe_sanguin),
     sexe: r.sexe == null ? null : String(r.sexe),
     adresse: r.adresse == null ? null : String(r.adresse),
     mutuelle: r.mutuelle == null ? null : String(r.mutuelle),
+    mutuelle_nom: r.mutuelle_nom == null ? null : String(r.mutuelle_nom),
+    mutuelle_numero:
+      r.mutuelle_numero == null ? null : String(r.mutuelle_numero),
     antecedents: r.antecedents == null ? null : String(r.antecedents),
     notes: r.notes == null ? null : String(r.notes),
     created_at: toIsoTimestamp(r.created_at),
@@ -94,29 +99,38 @@ export async function createPatientAction(
       data.nom,
       data.prenom,
       data.telephone ?? null,
+      data.telephone2 ?? null,
       data.email ?? null,
       data.date_naissance?.trim() || null,
+      data.groupe_sanguin ?? null,
       data.sexe ?? null,
       data.adresse ?? null,
       data.mutuelle ?? null,
+      data.mutuelle_nom ?? null,
+      data.mutuelle_numero ?? null,
       data.antecedents ?? null,
       data.notes ?? null,
     ];
     const { rows } = explicitId
       ? await pool.query(
           `INSERT INTO patients (
-             id, nom, prenom, telephone, email, date_naissance,
-             sexe, adresse, mutuelle, antecedents, notes
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             id, nom, prenom, telephone, telephone2, email, date_naissance,
+             groupe_sanguin, sexe, adresse, mutuelle, mutuelle_nom, mutuelle_numero,
+             antecedents, notes
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            ON CONFLICT (id) DO UPDATE SET
              nom = EXCLUDED.nom,
              prenom = EXCLUDED.prenom,
              telephone = EXCLUDED.telephone,
+             telephone2 = EXCLUDED.telephone2,
              email = EXCLUDED.email,
              date_naissance = EXCLUDED.date_naissance,
+             groupe_sanguin = EXCLUDED.groupe_sanguin,
              sexe = EXCLUDED.sexe,
              adresse = EXCLUDED.adresse,
              mutuelle = EXCLUDED.mutuelle,
+             mutuelle_nom = EXCLUDED.mutuelle_nom,
+             mutuelle_numero = EXCLUDED.mutuelle_numero,
              antecedents = EXCLUDED.antecedents,
              notes = EXCLUDED.notes,
              updated_at = NOW()
@@ -125,9 +139,10 @@ export async function createPatientAction(
         )
       : await pool.query(
           `INSERT INTO patients (
-             id, nom, prenom, telephone, email, date_naissance,
-             sexe, adresse, mutuelle, antecedents, notes
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             id, nom, prenom, telephone, telephone2, email, date_naissance,
+             groupe_sanguin, sexe, adresse, mutuelle, mutuelle_nom, mutuelle_numero,
+             antecedents, notes
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            RETURNING *`,
           cols,
         );

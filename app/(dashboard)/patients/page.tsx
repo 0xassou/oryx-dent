@@ -160,10 +160,14 @@ function PatientsPageContent() {
       nom: payload.nom.trim(),
       prenom: payload.prenom.trim(),
       telephone: payload.telephone.trim() || "—",
+      telephone2: payload.telephoneSecondaire.trim() || null,
       email: payload.email.trim() || null,
       date_naissance: dob || null,
+      groupe_sanguin: payload.groupeSanguin.trim() || null,
       sexe: payload.sexe === "F" ? "F" : payload.sexe === "M" ? "M" : null,
       adresse: payload.adresse.trim() || null,
+      mutuelle_nom: payload.mutuelleNom.trim() || null,
+      mutuelle_numero: payload.mutuelleNumero.trim() || null,
       antecedents: payload.allergies.trim() || null,
     });
     if (!created.ok) {
@@ -180,20 +184,51 @@ function PatientsPageContent() {
           ? "Homme"
           : "—";
 
-    writeMinimalPatientProfile({
-      id: newId,
-      nom: displayPatientName(record),
-      age: computeAgeFromDateIso(payload.dateNaissance),
-      genre: genreLabel,
-      profession: "—",
-      adresse: payload.adresse.trim() || "—",
-      telephone: record.telephone,
-      email: payload.email.trim() || "—",
-      dateNaissance: payload.dateNaissance.trim(),
-      alerts: payload.allergies
-        ? [payload.allergies.trim()].filter(Boolean)
-        : [],
-    });
+    // Profil complet localStorage (utilisé par la fiche patient)
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(
+          `patient_profile_${newId}`,
+          JSON.stringify({
+            id: newId,
+            prenom: payload.prenom.trim(),
+            nom: `${payload.prenom.trim()} ${payload.nom.trim()}`.trim(),
+            age: computeAgeFromDateIso(payload.dateNaissance),
+            genre: genreLabel,
+            profession: "—",
+            adresse: payload.adresse.trim() || "—",
+            telephone: record.telephone || "—",
+            telephoneSecondaire: payload.telephoneSecondaire.trim() || "",
+            email: payload.email.trim() || "—",
+            dateNaissance: payload.dateNaissance.trim(),
+            groupeSanguin: payload.groupeSanguin.trim() || "",
+            // La fiche affiche `mutuelle` → on la mappe sur `mutuelle_nom`
+            mutuelle: payload.mutuelleNom.trim() || "",
+            mutuelleNumero: payload.mutuelleNumero.trim() || "",
+            premiereVisite: "",
+            statut: "actif",
+            alerts: payload.allergies
+              ? [{ label: payload.allergies.trim(), level: "danger" }]
+              : [],
+          }),
+        );
+      }
+    } catch (e) {
+      console.error("[patient_profile write]", e);
+      // fallback: profil minimal
+      writeMinimalPatientProfile({
+        id: newId,
+        nom: displayPatientName(record),
+        age: computeAgeFromDateIso(payload.dateNaissance),
+        genre: genreLabel,
+        profession: "—",
+        adresse: payload.adresse.trim() || "—",
+        telephone: record.telephone,
+        email: payload.email.trim() || "—",
+        dateNaissance: payload.dateNaissance.trim(),
+        alerts: payload.allergies ? [payload.allergies.trim()].filter(Boolean) : [],
+      });
+    }
 
     initializeEmptyDentalChart(newId);
 

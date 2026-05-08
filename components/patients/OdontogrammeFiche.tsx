@@ -61,43 +61,47 @@ const LOWER: ToothSpec[] = [
 
 type Palette = { crown: string; stroke: string; root: string };
 
-/**
- * Mapping statut → palette (teintes douces pour la couronne + liseré).
- * Les couleurs sont inspirées de la palette Oryx et complètent la variable
- * `--ds-primary` existante pour les soins (violet).
- */
+/** Palette officielle états dent Oryx (fill/stroke alignés DESIGN). */
+const ORYX_TOOTH = {
+  saine: "#10b981",
+  soins: "#7c3aed",
+  chirurgie: "#f97316",
+  prothese: "#06b6d4",
+  absente: "#94a3b8",
+} as const;
+
 function paletteFor(status: ToothStatus): Palette {
   switch (status) {
     case "carie":
       return {
-        crown: "var(--tooth-soin-crown)",
-        stroke: "var(--tooth-soin-stroke)",
-        root: "var(--tooth-soin-root)",
+        crown: `color-mix(in srgb, ${ORYX_TOOTH.soins} 42%, white)`,
+        stroke: ORYX_TOOTH.soins,
+        root: `color-mix(in srgb, ${ORYX_TOOTH.soins} 62%, white)`,
       };
     case "couronne":
       return {
-        crown: "var(--tooth-couronne-crown)",
-        stroke: "var(--tooth-couronne-stroke)",
-        root: "var(--tooth-couronne-root)",
+        crown: `color-mix(in srgb, ${ORYX_TOOTH.prothese} 42%, white)`,
+        stroke: ORYX_TOOTH.prothese,
+        root: `color-mix(in srgb, ${ORYX_TOOTH.prothese} 62%, white)`,
       };
     case "chirurgie":
       return {
-        crown: "var(--tooth-chirurgie-crown)",
-        stroke: "var(--tooth-chirurgie-stroke)",
-        root: "var(--tooth-chirurgie-root)",
+        crown: `color-mix(in srgb, ${ORYX_TOOTH.chirurgie} 42%, white)`,
+        stroke: ORYX_TOOTH.chirurgie,
+        root: `color-mix(in srgb, ${ORYX_TOOTH.chirurgie} 62%, white)`,
       };
     case "absente":
       return {
-        crown: "var(--tooth-absente-crown)",
-        stroke: "var(--tooth-absente-stroke)",
-        root: "var(--tooth-absente-root)",
+        crown: `color-mix(in srgb, ${ORYX_TOOTH.absente} 45%, white)`,
+        stroke: ORYX_TOOTH.absente,
+        root: ORYX_TOOTH.absente,
       };
     case "healthy":
     default:
       return {
-        crown: "var(--tooth-sain-crown)",
-        stroke: "var(--tooth-sain-stroke)",
-        root: "var(--tooth-sain-root)",
+        crown: `color-mix(in srgb, ${ORYX_TOOTH.saine} 42%, white)`,
+        stroke: ORYX_TOOTH.saine,
+        root: `color-mix(in srgb, ${ORYX_TOOTH.saine} 62%, white)`,
       };
   }
 }
@@ -189,6 +193,7 @@ function Wisdom({ fill }: { fill: Palette }) {
 
 function Missing() {
   const { width, height } = wh(20, 44);
+  const g = ORYX_TOOTH.absente;
   return (
     <svg width={width} height={height} viewBox="0 0 20 44" xmlns="http://www.w3.org/2000/svg">
       <rect
@@ -197,27 +202,13 @@ function Missing() {
         width="16"
         height="22"
         rx="5"
-        fill="var(--tooth-absente-crown)"
-        stroke="var(--tooth-absente-stroke)"
-        strokeWidth={1}
+        fill={`color-mix(in srgb, ${g} 35%, white)`}
+        stroke={g}
+        strokeWidth={1.2}
         strokeDasharray="2 2"
       />
-      <line
-        x1="5"
-        y1="10"
-        x2="15"
-        y2="24"
-        stroke="var(--tooth-absente-stroke)"
-        strokeWidth={1.5}
-      />
-      <line
-        x1="15"
-        y1="10"
-        x2="5"
-        y2="24"
-        stroke="var(--tooth-absente-stroke)"
-        strokeWidth={1.5}
-      />
+      <line x1="4" y1="10" x2="16" y2="24" stroke={g} strokeWidth={2} strokeLinecap="round" />
+      <line x1="16" y1="10" x2="4" y2="24" stroke={g} strokeWidth={2} strokeLinecap="round" />
     </svg>
   );
 }
@@ -289,7 +280,6 @@ function ToothNode({
       className={[
         "oryx-fade-up relative flex shrink-0 cursor-pointer select-none flex-col items-center gap-1 border-0 bg-transparent p-0 outline-none",
         "focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--ds-primary)_40%,transparent)]",
-        isMissing ? "opacity-60" : "",
       ].join(" ")}
       style={{ animationDelay: `${waveIndex * 30}ms` }}
       title={`Dent ${spec.n}${isMissing ? " — absente" : ""}`}
@@ -332,7 +322,7 @@ export function OdontogrammeFiche({
     { status: "healthy", label: "Saine" },
     { status: "carie", label: "Soins" },
     { status: "chirurgie", label: "Chirurgie" },
-    { status: "couronne", label: "Orthopédie / Couronne" },
+    { status: "couronne", label: "Prothèse" },
     { status: "absente", label: "Absente" },
   ];
 

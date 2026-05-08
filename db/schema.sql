@@ -6,11 +6,15 @@ CREATE TABLE IF NOT EXISTS patients (
   nom           TEXT NOT NULL,
   prenom        TEXT NOT NULL,
   telephone     TEXT,
+  telephone2    TEXT,
   email         TEXT,
   date_naissance DATE,
+  groupe_sanguin TEXT,
   sexe          TEXT,
   adresse       TEXT,
   mutuelle      TEXT,
+  mutuelle_nom  TEXT,
+  mutuelle_numero TEXT,
   antecedents   TEXT,
   notes         TEXT,
   created_at    TIMESTAMPTZ DEFAULT NOW(),
@@ -23,6 +27,10 @@ DROP INDEX IF EXISTS idx_patients_clinic;
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS sexe TEXT;
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS adresse TEXT;
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS mutuelle TEXT;
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS groupe_sanguin TEXT;
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS telephone2 TEXT;
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS mutuelle_nom TEXT;
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS mutuelle_numero TEXT;
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS antecedents TEXT;
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS notes TEXT;
@@ -123,6 +131,22 @@ CREATE TABLE IF NOT EXISTS factures (
 
 CREATE INDEX IF NOT EXISTS idx_factures_patient ON factures(patient_id);
 CREATE INDEX IF NOT EXISTS idx_factures_date ON factures(date);
+
+-- Module Dépenses (PostgreSQL)
+CREATE TABLE IF NOT EXISTS depenses (
+  id           TEXT PRIMARY KEY,
+  categorie    TEXT NOT NULL,
+  description  TEXT,
+  montant      NUMERIC(10,2) NOT NULL,
+  date         DATE NOT NULL,
+  fournisseur  TEXT,
+  justificatif TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_depenses_date ON depenses(date);
+CREATE INDEX IF NOT EXISTS idx_depenses_categorie ON depenses(categorie);
 
 -- Module Laboratoire (remplace dental_lab_commandes localStorage)
 CREATE TABLE IF NOT EXISTS commandes_labo (

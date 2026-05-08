@@ -52,23 +52,32 @@ const LOWER_LEFT: ToothId[] = [31, 32, 33, 34, 35, 36, 37, 38];
 const STATUS_LABELS: Record<ToothStatus, string> = {
   healthy: "Saine",
   carie: "Soins",
-  couronne: "Orthopédie",
+  couronne: "Prothèse",
   chirurgie: "Chirurgie",
   absente: "Absente",
 };
 
+/** États dent Oryx — aligné DESIGN (#10b981, #7c3aed, #f97316, #06b6d4, #94a3b8). */
+const TOOTH_THEME = {
+  saine: "#10b981",
+  soins: "#7c3aed",
+  chirurgie: "#f97316",
+  prothese: "#06b6d4",
+  absente: "#94a3b8",
+} as const;
+
 function toothClasses(status: ToothStatus) {
   switch (status) {
     case "carie":
-      return "bg-[var(--tooth-soin-crown)] ring-[color-mix(in_srgb,var(--tooth-soin-stroke)_45%,transparent)] text-[var(--tooth-soin-stroke)]";
+      return "bg-[color-mix(in_srgb,#7c3aed_18%,transparent)] ring-[color-mix(in_srgb,#7c3aed_45%,transparent)] text-[#7c3aed]";
     case "couronne":
-      return "bg-[var(--tooth-couronne-crown)] ring-[color-mix(in_srgb,var(--tooth-couronne-stroke)_45%,transparent)] text-[var(--tooth-couronne-stroke)]";
+      return "bg-[color-mix(in_srgb,#06b6d4_18%,transparent)] ring-[color-mix(in_srgb,#06b6d4_45%,transparent)] text-[#06b6d4]";
     case "chirurgie":
-      return "bg-[var(--tooth-chirurgie-crown)] ring-[color-mix(in_srgb,var(--tooth-chirurgie-stroke)_45%,transparent)] text-[var(--tooth-chirurgie-stroke)]";
+      return "bg-[color-mix(in_srgb,#f97316_18%,transparent)] ring-[color-mix(in_srgb,#f97316_45%,transparent)] text-[#f97316]";
     case "absente":
-      return "bg-[var(--ds-primary-soft)]/40 ring-[var(--ds-primary-border)]/40 text-[var(--ds-text-muted)]";
+      return "bg-[color-mix(in_srgb,#94a3b8_22%,transparent)] ring-[color-mix(in_srgb,#94a3b8_40%,transparent)] text-[#94a3b8]";
     default:
-      return "bg-[var(--ds-primary-soft)]/30 ring-[var(--ds-primary-border)]/70 text-[var(--ds-text)]";
+      return "bg-[color-mix(in_srgb,#10b981_18%,transparent)] ring-[color-mix(in_srgb,#10b981_45%,transparent)] text-[#10b981]";
   }
 }
 
@@ -89,19 +98,27 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
 
   const showAbsent = status === "absente";
   const stroke =
-    status === "absente" ? "rgba(100,116,139,0.5)" : "rgba(15,23,42,0.3)";
-  const strokeWidth = 1.5;
+    status === "healthy"
+      ? TOOTH_THEME.saine
+      : status === "carie"
+        ? TOOTH_THEME.soins
+        : status === "couronne"
+          ? TOOTH_THEME.prothese
+          : status === "chirurgie"
+            ? TOOTH_THEME.chirurgie
+            : TOOTH_THEME.absente;
+  const strokeWidth = status === "absente" ? 1.75 : 1.5;
 
   const gradientUrl =
     status === "absente"
       ? `url(#${opalAbsentId})`
       : status === "carie"
-        ? "rgba(6,182,212,0.25)"
+        ? "rgba(124,58,237,0.28)"
         : status === "couronne"
-          ? "rgba(16,185,129,0.25)"
+          ? "rgba(6,182,212,0.28)"
           : status === "chirurgie"
-            ? "rgba(249,115,22,0.25)"
-            : "rgba(148,163,184,0.25)";
+            ? "rgba(249,115,22,0.28)"
+            : "rgba(16,185,129,0.28)";
 
   const type = getToothIconType(id);
   const defs = (
@@ -112,19 +129,17 @@ function ToothIcon({ id, status }: { id: ToothId; status: ToothStatus }) {
         <stop offset="100%" stopColor="rgba(94,234,212,0.35)" />
       </linearGradient>
       <linearGradient id={opalAbsentId} x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stopColor="rgba(148,163,184,0.12)" />
-        <stop offset="100%" stopColor="rgba(100,116,139,0.08)" />
+        <stop offset="0%" stopColor="rgba(148,163,184,0.22)" />
+        <stop offset="100%" stopColor="rgba(148,163,184,0.12)" />
       </linearGradient>
     </defs>
   );
 
   const absentLine = showAbsent ? (
-    <path
-      d="M16 48L48 16"
-      stroke="rgba(239,68,68,0.5)"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
+    <g aria-hidden="true">
+      <path d="M16 48L48 16" stroke={TOOTH_THEME.absente} strokeWidth={2.5} strokeLinecap="round" />
+      <path d="M48 48L16 16" stroke={TOOTH_THEME.absente} strokeWidth={2.5} strokeLinecap="round" />
+    </g>
   ) : null;
 
   switch (type) {
@@ -378,28 +393,28 @@ export function DentalChart({
                               "flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-xs font-medium transition-colors",
                               status === s
                                 ? s === "carie"
-                                  ? "bg-[var(--tooth-soin-crown)] text-[var(--tooth-soin-stroke)]"
+                                  ? "bg-[color-mix(in_srgb,#7c3aed_22%,white)] text-[#7c3aed]"
                                   : s === "couronne"
-                                    ? "bg-[var(--tooth-couronne-crown)] text-[var(--tooth-couronne-stroke)]"
+                                    ? "bg-[color-mix(in_srgb,#06b6d4_22%,white)] text-[#06b6d4]"
                                     : s === "chirurgie"
-                                      ? "bg-[var(--tooth-chirurgie-crown)] text-[var(--tooth-chirurgie-stroke)]"
+                                      ? "bg-[color-mix(in_srgb,#f97316_22%,white)] text-[#f97316]"
                                       : s === "absente"
-                                        ? "bg-[var(--ds-primary-soft)] text-[var(--ds-text)]"
-                                        : "bg-[var(--ds-bg)] text-[var(--ds-text)]"
+                                        ? "bg-[color-mix(in_srgb,#94a3b8_25%,white)] text-[#64748b]"
+                                        : "bg-[color-mix(in_srgb,#10b981_22%,white)] text-[#10b981]"
                                 : "text-[var(--ds-text)] hover:bg-[var(--ds-bg)]",
                             ].join(" ")}
                           >
                             <span
                               className={`h-2 w-2 shrink-0 rounded-full ${
                                 s === "healthy"
-                                  ? "bg-[var(--ds-primary-border)]"
+                                  ? "bg-[#10b981]"
                                   : s === "carie"
-                                    ? "bg-[var(--tooth-soin-stroke)]"
+                                    ? "bg-[#7c3aed]"
                                     : s === "couronne"
-                                      ? "bg-[var(--tooth-couronne-stroke)]"
+                                      ? "bg-[#06b6d4]"
                                       : s === "chirurgie"
-                                        ? "bg-[var(--tooth-chirurgie-stroke)]"
-                                        : "bg-[var(--ds-text-muted)]"
+                                        ? "bg-[#f97316]"
+                                        : "bg-[#94a3b8]"
                               }`}
                             />
                             {STATUS_LABELS[s]}
@@ -462,23 +477,23 @@ export function DentalChart({
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]/50">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-primary-border)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />
             <span className="text-[var(--ds-text)]">Saine</span>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tooth-soin-stroke)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#7c3aed]" />
             <span className="text-[var(--ds-text)]">Soins</span>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tooth-couronne-stroke)]" />
-            <span className="text-[var(--ds-text)]">Orthopédie</span>
+            <span className="h-2.5 w-2.5 rounded-full bg-[#06b6d4]" />
+            <span className="text-[var(--ds-text)]">Prothèse</span>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--tooth-chirurgie-stroke)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#f97316]" />
             <span className="text-[var(--ds-text)]">Chirurgie</span>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-primary-border)]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--ds-text-muted)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#94a3b8]" />
             <span className="text-[var(--ds-text)]">Absente</span>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full bg-[var(--ds-surface)]/40 px-3 py-1 ring-1 ring-[var(--ds-border-strong)]">

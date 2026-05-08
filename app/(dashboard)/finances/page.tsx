@@ -2,43 +2,71 @@
 
 import type { ComponentType } from "react";
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { LayoutDashboard, TrendingDown, TrendingUp } from "lucide-react";
-import { FinancesDashboardTab } from "@/components/finances/FinancesDashboardTab";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FileText, LineChart, Receipt, TrendingUp } from "lucide-react";
 import { FinancesRecettesTab } from "@/components/finances/FinancesRecettesTab";
-import { FinancesDepensesTab } from "@/components/finances/FinancesDepensesTab";
+import { FinancesStatistiquesTab } from "@/components/finances/FinancesStatistiquesTab";
+import { FinancesRapportsTab } from "@/components/finances/FinancesRapportsTab";
+import { GestionFinanciereDepensesTab } from "@/components/finances/GestionFinanciereDepensesTab";
+import { useRole } from "@/hooks/useRole";
 
-type MainTab = "dashboard" | "recettes" | "depenses";
+type MainTab = "recettes" | "depenses" | "statistiques" | "rapports";
 
 function FinancesPageContent() {
-  // TODO: Masquer les onglets Tableau de bord et Dépenses si l'utilisateur n'est pas Admin.
-  const [tab, setTab] = useState<MainTab>("dashboard");
+  const [tab, setTab] = useState<MainTab>("recettes");
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { role, ready } = useRole();
+  const isAdmin = role === "admin";
 
   useEffect(() => {
     const pid = (searchParams.get("patient") ?? "").trim();
-    if (pid) setTab("recettes");
+    if (pid) {
+      setTab("recettes");
+      return;
+    }
+    const qTab = (searchParams.get("tab") ?? "").trim().toLowerCase();
+    if (qTab === "depenses") setTab("depenses");
+    else if (qTab === "statistiques") setTab("statistiques");
+    else if (qTab === "rapports") setTab("rapports");
+    else setTab("recettes");
   }, [searchParams]);
 
-  const tabs: { id: MainTab; label: string; icon: ComponentType<{ className?: string }> }[] = [
-    { id: "dashboard", label: "Tableau de bord", icon: LayoutDashboard },
-    { id: "recettes", label: "Recettes", icon: TrendingUp },
-    { id: "depenses", label: "Dépenses", icon: TrendingDown },
-  ];
+  useEffect(() => {
+    if (!ready) return;
+    const qTab = (searchParams.get("tab") ?? "").trim().toLowerCase();
+    const wantsAdminTab = qTab === "statistiques" || qTab === "rapports";
+    if (!isAdmin && wantsAdminTab) {
+      setTab("recettes");
+      router.replace("/finances?tab=recettes");
+    }
+  }, [ready, isAdmin, router, searchParams]);
+
+  const tabs: { id: MainTab; label: string; icon: ComponentType<{ className?: string }> }[] =
+    [
+      { id: "recettes", label: "Recettes", icon: TrendingUp },
+      { id: "depenses", label: "Dépenses", icon: Receipt },
+      ...(isAdmin
+        ? ([
+            { id: "statistiques", label: "Statistiques", icon: LineChart },
+            { id: "rapports", label: "Rapports", icon: FileText },
+          ] as const)
+        : []),
+    ];
 
   return (
     <div className="w-full">
       <header className="border-b border-[var(--ds-primary-border)]/90 pb-6">
         <h1 className="text-2xl font-bold tracking-tight text-[var(--ds-text)]">
-          Finances
+          Gestion Financière
         </h1>
         <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
-          Recettes, dépenses et pilotage en un seul endroit.
+          Recettes, dépenses et analyses du cabinet
         </p>
-        <nav
-          className="mt-6 flex flex-nowrap gap-1 overflow-x-auto scrollbar-none border-b border-transparent"
+        <div
+          className="mt-6 inline-flex rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] p-0.5"
           role="tablist"
-          aria-label="Sections Finances"
+          aria-label="Gestion Financière"
         >
           {tabs.map((t) => {
             const selected = tab === t.id;
@@ -51,10 +79,10 @@ function FinancesPageContent() {
                 aria-selected={selected}
                 onClick={() => setTab(t.id)}
                 className={[
-                  "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap lg:px-4 lg:text-sm",
+                  "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors whitespace-nowrap lg:px-4 lg:text-sm",
                   selected
-                    ? "border-[var(--ds-primary)] text-[var(--ds-text)]"
-                    : "border-transparent text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
+                    ? "bg-[var(--ds-primary)] text-white font-semibold"
+                    : "text-[var(--ds-text-muted)] hover:text-[var(--ds-text)]",
                 ].join(" ")}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -62,13 +90,14 @@ function FinancesPageContent() {
               </button>
             );
           })}
-        </nav>
+        </div>
       </header>
 
       <div className="mt-8" role="tabpanel">
-        {tab === "dashboard" ? <FinancesDashboardTab /> : null}
         {tab === "recettes" ? <FinancesRecettesTab /> : null}
-        {tab === "depenses" ? <FinancesDepensesTab /> : null}
+        {tab === "depenses" ? <GestionFinanciereDepensesTab /> : null}
+        {tab === "statistiques" ? <FinancesStatistiquesTab /> : null}
+        {tab === "rapports" ? <FinancesRapportsTab /> : null}
       </div>
     </div>
   );

@@ -8,7 +8,6 @@ import {
   Banknote,
   Users,
   Calendar,
-  BarChart2,
   Package,
   ShieldCheck,
   Truck,
@@ -34,8 +33,7 @@ const NAV_PRINCIPAL: readonly NavItem[] = [
   { key: "dashboard", href: "/", label: "Tableau de bord", icon: LayoutDashboard, locked: false },
   { key: "patients", href: "/patients", label: "Patients", icon: Users, locked: false },
   { key: "planning", href: "/planning", label: "Planning", icon: Calendar, locked: false },
-  { key: "finances", href: "/finances", label: "Finances", icon: Banknote, locked: false },
-  { key: "statistiques", href: "/statistiques", label: "Statistiques", icon: BarChart2, locked: false },
+  { key: "finances", href: "/finances", label: "Gestion Financière", icon: Banknote, locked: false },
 ];
 
 const NAV_GESTION: readonly NavItem[] = [

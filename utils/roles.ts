@@ -288,7 +288,7 @@ export const NAV_ACCESS: Record<NavKey, Role[]> = {
   dashboard: ["admin", "replacant", "assistant"],
   patients: ["admin", "replacant", "assistant"],
   planning: ["admin", "replacant", "assistant"],
-  finances: ["admin"],
+  finances: ["admin", "assistant"],
   financesDepenses: ["admin", "assistant"],
   statistiques: ["admin"],
   stocks: ["admin", "assistant"],

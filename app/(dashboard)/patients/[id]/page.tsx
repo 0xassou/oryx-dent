@@ -96,7 +96,10 @@ import PatientFicheView, {
   type PatientFicheData,
   type PatientFicheTimelineItem,
 } from "@/components/patients/PatientFicheView";
-import { getAppointmentsByPatientAction } from "@/app/actions/appointments";
+import {
+  createAppointmentAction,
+  getAppointmentsByPatientAction,
+} from "@/app/actions/appointments";
 import {
   APPOINTMENTS_UPDATED_EVENT,
   appointmentJoinedRowToRdv,
@@ -511,11 +514,49 @@ function formatAmountDA(value: number) {
 
 type PatientTreatmentRow = {
   tooth: number;
+  kind?: "act" | "state";
   category: string;
   acte: string;
   date: string;
   notes?: string;
   lt?: string;
+  material?: string;
+  faces?: ToothFace[];
+  montant?: number;
+  praticien?: string;
+  // ---- état clinique (sauvegardé dans `patient_acts_${id}` via kind:"state") ----
+  mobilite?: MobiliteGrade;
+  sensibilite?: SensibiliteKind[];
+  vitalite?: VitaliteKind;
+  prochaine_etape?: string | null;
+  controle_prevu?: string | null; // yyyy-mm-dd
+  seances_notes?: ClinicalSessionNote[];
+};
+
+type ToothFace = "M" | "D" | "V" | "L" | "O";
+type MobiliteGrade = "stable" | "mobile" | "tres_mobile";
+type SensibiliteKind = "aucune" | "froid" | "chaud" | "percussion";
+type VitaliteKind = "vivante" | "depulpee" | "incertaine";
+type CockpitTab =
+  | "Saine"
+  | "Soins"
+  | "Endodontie"
+  | "Prothèse"
+  | "Chirurgie"
+  ;
+
+/** Fond/texte des onglets cockpit actifs — palette états dent Oryx. */
+const COCKPIT_TAB_ACTIVE_CN: Record<CockpitTab, string> = {
+  Saine: "border-transparent bg-[#10b981] text-white shadow-sm",
+  Soins: "border-transparent bg-[#7c3aed] text-white shadow-sm",
+  Endodontie: "border-transparent bg-[#7c3aed] text-white shadow-sm",
+  Prothèse: "border-transparent bg-[#06b6d4] text-white shadow-sm",
+  Chirurgie: "border-transparent bg-[#f97316] text-white shadow-sm",
+};
+type ClinicalSessionNote = {
+  date: string; // ISO
+  praticien?: string;
+  texte: string;
 };
 
 /** Schéma dentaire aligné sur l’historique des actes (localStorage / cockpit). */
@@ -525,49 +566,369 @@ function buildDentsStatusFromTreatments(
   const next = Object.fromEntries(
     ALL_TOOTH_IDS.map((tid) => [tid, "healthy" as ToothStatus]),
   ) as Record<ToothId, ToothStatus>;
+  const seen = new Set<number>();
   for (const t of treatments) {
+    if (t.kind === "state") continue;
     if (!ALL_TOOTH_IDS.includes(t.tooth as ToothId)) continue;
+    if (seen.has(t.tooth)) continue; // on garde le plus récent (liste triée desc)
     next[t.tooth as ToothId] = protocolCategoryToToothStatus(t.category);
+    seen.add(t.tooth);
   }
   return next;
+}
+
+function formatClinicalDateFr(rawIso: string): string {
+  const d = new Date(rawIso);
+  if (Number.isNaN(d.getTime())) return rawIso;
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function toggleFace(list: ToothFace[], face: ToothFace): ToothFace[] {
+  return list.includes(face) ? list.filter((f) => f !== face) : [...list, face];
+}
+
+function upsertToothStateRow(
+  rows: PatientTreatmentRow[],
+  tooth: number,
+  patch: Partial<PatientTreatmentRow>,
+): PatientTreatmentRow[] {
+  const idx = rows.findIndex((r) => r.kind === "state" && r.tooth === tooth);
+  const base: PatientTreatmentRow =
+    idx >= 0
+      ? rows[idx]!
+      : {
+          tooth,
+          kind: "state",
+          category: "__state__",
+          acte: "__state__",
+          date: new Date().toISOString(),
+          mobilite: "stable",
+          sensibilite: ["aucune"],
+          vitalite: "incertaine",
+          controle_prevu: null,
+          prochaine_etape: null,
+          seances_notes: [],
+        };
+  const nextRow: PatientTreatmentRow = {
+    ...base,
+    ...patch,
+    kind: "state",
+    category: "__state__",
+    acte: "__state__",
+    tooth,
+  };
+  if (idx >= 0) {
+    return rows.map((r, i) => (i === idx ? nextRow : r));
+  }
+  return [...rows, nextRow];
+}
+
+function getToothState(rows: PatientTreatmentRow[], tooth: number): PatientTreatmentRow | null {
+  return rows.find((r) => r.kind === "state" && r.tooth === tooth) ?? null;
+}
+
+function ToothFacesPicker({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: ToothFace[];
+  onChange: (next: ToothFace[]) => void;
+  ariaLabel: string;
+}) {
+  const cellBase =
+    "flex h-6 w-6 items-center justify-center rounded-md border text-[10px] font-semibold transition-colors";
+  const active =
+    "border-[var(--ds-primary)] bg-[var(--ds-primary)] text-white";
+  const idle =
+    "border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]";
+
+  const Cell = ({ face }: { face: ToothFace }) => {
+    const isOn = value.includes(face);
+    return (
+      <button
+        type="button"
+        aria-pressed={isOn}
+        onClick={() => onChange(toggleFace(value, face))}
+        className={[cellBase, isOn ? active : idle].join(" ")}
+      >
+        {face}
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex justify-center">
+      <div
+        className="grid h-[80px] w-[80px] grid-cols-3 grid-rows-3 gap-1"
+        role="group"
+        aria-label={ariaLabel}
+      >
+        <div />
+        <Cell face="V" />
+        <div />
+        <Cell face="M" />
+        <Cell face="O" />
+        <Cell face="D" />
+        <div />
+        <Cell face="L" />
+        <div />
+      </div>
+    </div>
+  );
+}
+
+function pillBase(active: boolean) {
+  return [
+    "rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-colors border",
+    active
+      ? "text-white font-semibold"
+      : "border-[var(--ds-primary-border)] bg-transparent text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+  ].join(" ");
+}
+
+function MobilitePills({
+  value,
+  onChange,
+}: {
+  value: MobiliteGrade;
+  onChange: (next: MobiliteGrade) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange("stable")}
+        className={[
+          pillBase(value === "stable"),
+          value === "stable" ? "border-emerald-500 bg-[#10b981]" : "",
+        ].join(" ")}
+      >
+        Stable
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("mobile")}
+        className={[
+          pillBase(value === "mobile"),
+          value === "mobile" ? "border-amber-500 bg-[#f59e0b]" : "",
+        ].join(" ")}
+      >
+        Mobile
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("tres_mobile")}
+        className={[
+          pillBase(value === "tres_mobile"),
+          value === "tres_mobile" ? "border-red-500 bg-[#ef4444]" : "",
+        ].join(" ")}
+      >
+        Très mobile
+      </button>
+    </div>
+  );
+}
+
+function SensibilitePills({
+  value,
+  onChange,
+}: {
+  value: SensibiliteKind[];
+  onChange: (next: SensibiliteKind[]) => void;
+}) {
+  const has = (k: SensibiliteKind) => value.includes(k);
+  const toggle = (k: SensibiliteKind) => {
+    if (k === "aucune") return ["aucune"] as SensibiliteKind[];
+    const withoutAucune = value.filter((x) => x !== "aucune");
+    const next = withoutAucune.includes(k)
+      ? withoutAucune.filter((x) => x !== k)
+      : [...withoutAucune, k];
+    return next.length ? next : (["aucune"] as SensibiliteKind[]);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange(toggle("aucune"))}
+        className={[
+          pillBase(has("aucune")),
+          has("aucune") ? "border-slate-400 bg-slate-400" : "",
+        ].join(" ")}
+      >
+        Aucune
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(toggle("froid"))}
+        className={[
+          pillBase(has("froid")),
+          has("froid") ? "border-cyan-500 bg-[#06b6d4]" : "",
+        ].join(" ")}
+      >
+        Froid
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(toggle("chaud"))}
+        className={[
+          pillBase(has("chaud")),
+          has("chaud") ? "border-orange-500 bg-[#f97316]" : "",
+        ].join(" ")}
+      >
+        Chaud
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(toggle("percussion"))}
+        className={[
+          pillBase(has("percussion")),
+          has("percussion") ? "border-red-500 bg-[#ef4444]" : "",
+        ].join(" ")}
+      >
+        Percussion
+      </button>
+    </div>
+  );
+}
+
+function VitalitePills({
+  value,
+  onChange,
+}: {
+  value: VitaliteKind;
+  onChange: (next: VitaliteKind) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange("vivante")}
+        className={[
+          pillBase(value === "vivante"),
+          value === "vivante" ? "border-emerald-500 bg-[#10b981]" : "",
+        ].join(" ")}
+      >
+        Vivante
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("depulpee")}
+        className={[
+          pillBase(value === "depulpee"),
+          value === "depulpee"
+            ? "border-[var(--ds-primary-border)] bg-[var(--ds-text-muted)]"
+            : "",
+        ].join(" ")}
+      >
+        Dépulpée
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("incertaine")}
+        className={[
+          pillBase(value === "incertaine"),
+          value === "incertaine" ? "border-amber-500 bg-[#f59e0b]" : "",
+        ].join(" ")}
+      >
+        Incertaine
+      </button>
+    </div>
+  );
+}
+
+function normalizeCockpitTabFromToothStatus(s: ToothStatus | undefined): CockpitTab {
+  if (s === "chirurgie") return "Chirurgie";
+  if (s === "couronne") return "Prothèse";
+  if (s === "carie") return "Soins";
+  return "Saine";
+}
+
+function protocolOptionsForTab(
+  protocols: ProtocolForSettings[],
+  tab: CockpitTab,
+): ProtocolForSettings[] {
+  const endoNames = new Set<string>([
+    "Traitement canalaire (monoradiculé)",
+    "Traitement canalaire (pluriradiculé)",
+    "Reprise de traitement canalaire",
+    "Pulpotomie",
+    "Pulpectomie",
+    "Coiffe pulpaire directe",
+    "Coiffe pulpaire indirecte",
+  ]);
+  if (tab === "Endodontie") {
+    return protocols.filter((p) => endoNames.has(p.nom));
+  }
+  if (tab === "Soins") return protocols.filter((p) => p.categorie === "Soins");
+  if (tab === "Chirurgie")
+    return protocols.filter((p) => p.categorie === "Chirurgie");
+  if (tab === "Prothèse")
+    return protocols.filter((p) => p.categorie === "Prothèse");
+  return protocols;
 }
 
 const MOCK_ALL_TREATMENTS: PatientTreatmentRow[] = [
   {
     tooth: 21,
+    kind: "act",
     category: "Chirurgie",
     acte: "Extraction simple",
     date: "2026-03-21T09:00:00Z",
     notes:
       "Extraction sous AL (Articaïne 4%). Détorsion/luxation contrôlées. Alvéole nettoyée, saignement maîtrisé. Pansement mis en place + consignes post-opératoires remises.",
     lt: "",
+    praticien: "Dr. Cabinet",
+    material: "Autre",
+    faces: ["O"],
+    montant: 4500,
   },
   {
     tooth: 16,
+    kind: "act",
     category: "Soins",
     acte: "Composite 2 faces",
     date: "2026-03-17T10:00:00Z",
     notes:
       "Mise en place de digue. Préparation et conditionnement de la cavité. Insertion composite, finition/polissage. Contrôle de l'occlusion.",
     lt: "",
+    praticien: "Dr. Cabinet",
+    material: "Composite",
+    faces: ["O", "M"],
+    montant: 3500,
   },
   {
     tooth: 15,
+    kind: "act",
     category: "Soins",
     acte: "Traitement canalaire (Prémolaire)",
     date: "2026-03-15T10:00:00Z",
     notes:
       "Accès canalaire, mise en forme, irrigation et obturation provisoire. Contrôle radiographique de la longueur de travail.",
     lt: "18.5",
+    praticien: "Dr. Cabinet",
+    material: "IRM",
+    faces: ["O"],
+    montant: 9000,
   },
   {
     tooth: 35,
+    kind: "act",
     category: "Orthopédie",
     acte: "Gouttière occlusale",
     date: "2026-03-10T10:00:00Z",
     notes:
       "Empreinte et conception. Ajustement initial sur articulateur. Conseils d'utilisation et rappel pour re-évaluation à J+10.",
     lt: "",
+    praticien: "Dr. Cabinet",
+    material: "Résine",
+    faces: ["O"],
+    montant: 12000,
   },
 ];
 
@@ -758,6 +1119,9 @@ export default function PatientDetailPage() {
         ALL_TOOTH_IDS.map((id) => [id, "healthy" as ToothStatus])
       ) as Record<ToothId, ToothStatus>
   );
+
+  // Onglet cockpit (Saine/Soins/Endodontie/Prothèse/Chirurgie)
+  const [cockpitTab, setCockpitTab] = useState<CockpitTab>("Saine");
 
   const [allTreatments, setAllTreatments] = useState<PatientTreatmentRow[]>(
     [],
@@ -1001,9 +1365,18 @@ export default function PatientDetailPage() {
     setEditCatalogActId(editingFinance.catalogActId ?? "");
   }, [editingFinance]);
 
-  useEffect(() => {
-    setDentsStatus(buildDentsStatusFromTreatments(allTreatments));
+  const treatmentsActsKey = useMemo(() => {
+    return allTreatments
+      .filter((t) => t.kind !== "state")
+      .map((t) => `${t.tooth}:${t.category}:${t.acte}:${t.date}`)
+      .join("|");
   }, [allTreatments]);
+
+  useEffect(() => {
+    // IMPORTANT: ne pas reseter l’onglet cockpit lors des changements d’état clinique.
+    // On recalcule le statut dentaire UNIQUEMENT quand les actes changent.
+    setDentsStatus(buildDentsStatusFromTreatments(allTreatments));
+  }, [treatmentsActsKey, allTreatments]);
 
   // Slide-over Cockpit — protocoles (20) + ajustement consommables
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
@@ -1016,6 +1389,26 @@ export default function PatientDetailPage() {
     Record<string, number>
   >({});
   const [toothNotes, setToothNotes] = useState("");
+  const [mobilite, setMobilite] = useState<MobiliteGrade>("stable");
+  const [sensibilite, setSensibilite] = useState<SensibiliteKind[]>(["aucune"]);
+  const [vitalite, setVitalite] = useState<VitaliteKind>("incertaine");
+  const [controlePrevu, setControlePrevu] = useState<string>("");
+  const [prochaineEtape, setProchaineEtape] = useState<string>("");
+  const [seancesNotes, setSeancesNotes] = useState<ClinicalSessionNote[]>([]);
+  const [newSeanceNote, setNewSeanceNote] = useState("");
+
+  const [actMaterial, setActMaterial] = useState<string>("");
+  const [actFaces, setActFaces] = useState<ToothFace[]>([]);
+  const [actPraticien, setActPraticien] = useState<string>("");
+
+  // Champs spécifiques Endodontie
+  const [endoCanaux, setEndoCanaux] = useState<string>("1");
+  const [endoLt, setEndoLt] = useState<string>("");
+  const [endoObturation, setEndoObturation] = useState<string>("Gutta-percha");
+
+  const cockpitProtocolOptions = useMemo(() => {
+    return protocolOptionsForTab(clinicalProtocolsList, cockpitTab);
+  }, [clinicalProtocolsList, cockpitTab]);
   const WATCHED_KEY = `oryx_watched_${id}`;
   const [watchedTeeth, setWatchedTeeth] = useState<Set<number>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -1188,11 +1581,11 @@ export default function PatientDetailPage() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  /** Liste groupée par catégorie (sans filtre) pour le `<select>` du cockpit. */
+  /** Liste groupée par catégorie (filtrée par onglet) pour le `<select>` du cockpit. */
   const drawerProtocolsGrouped = useMemo(() => {
     const order: string[] = [];
     const map = new Map<string, ProtocolForSettings[]>();
-    for (const p of clinicalProtocolsList) {
+    for (const p of cockpitProtocolOptions) {
       const cat = p.categorie.trim() || "Autres";
       if (!map.has(cat)) {
         map.set(cat, []);
@@ -1204,7 +1597,7 @@ export default function PatientDetailPage() {
       category,
       protocols: map.get(category)!,
     }));
-  }, [clinicalProtocolsList]);
+  }, [cockpitProtocolOptions]);
 
   const resolvedName = useMemo(() => {
     const { prenom, nom } = resolvePatientDisplayParts(
@@ -1305,7 +1698,7 @@ export default function PatientDetailPage() {
 
   const selectedDrawerProtocol =
     drawerProtocolId !== ""
-      ? clinicalProtocolsList.find((p) => p.id === drawerProtocolId) ?? null
+      ? cockpitProtocolOptions.find((p) => p.id === drawerProtocolId) ?? null
       : null;
 
   const totalFacture = finances.reduce((acc, f) => acc + f.montantTotal, 0);
@@ -1315,7 +1708,15 @@ export default function PatientDetailPage() {
   );
 
   async function handleValidateClinicalAct() {
-    if (selectedTooth === null || !selectedDrawerProtocol) return;
+    if (selectedTooth === null) return;
+    if (!drawerProtocolId.trim()) {
+      setToast({ type: "error", message: "Veuillez sélectionner un protocole" });
+      return;
+    }
+    if (!selectedDrawerProtocol) {
+      setToast({ type: "error", message: "Protocole introuvable" });
+      return;
+    }
     const clinicId = process.env.NEXT_PUBLIC_CLINIC_ID;
     if (!clinicId) {
       setToast({
@@ -1373,18 +1774,52 @@ export default function PatientDetailPage() {
           [toothNum as ToothId]: protocolCategoryToToothStatus(protocol.categorie),
         }));
         setAllTreatments((prev) => {
-          const row = {
+          const manualMontant = parseMoney(drawerMontant);
+          const montantFinal =
+            manualMontant > 0
+              ? manualMontant
+              : Math.round(res.data.amountCents / 100);
+
+          const row: PatientTreatmentRow = {
             tooth: toothNum,
-            category: protocol.categorie,
+            kind: "act",
+            category:
+              cockpitTab === "Endodontie"
+                ? "Endodontie"
+                  : protocol.categorie,
             acte: protocol.nom,
             date: new Date().toISOString(),
-            notes: toothNotes || undefined,
+            notes:
+              cockpitTab === "Endodontie"
+                ? [
+                    toothNotes?.trim() ? toothNotes.trim() : null,
+                    `Canaux: ${Math.min(4, Math.max(1, Number(endoCanaux) || 1))}`,
+                    endoLt.trim() ? `LT: ${endoLt.trim()} mm` : null,
+                    endoObturation.trim()
+                      ? `Obturation: ${endoObturation.trim()}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || undefined
+                  : toothNotes || undefined,
+            material: actMaterial || undefined,
+            faces: actFaces.length ? actFaces : undefined,
+            montant: montantFinal > 0 ? montantFinal : undefined,
+            praticien: actPraticien.trim() || undefined,
           };
-          const exists = prev.some((t) => t.tooth === toothNum);
-          if (exists) {
-            return prev.map((t) => (t.tooth === toothNum ? row : t));
-          }
-          return [row, ...prev];
+
+          const withState = upsertToothStateRow(prev, toothNum, {
+            mobilite,
+            sensibilite,
+            vitalite,
+            prochaine_etape: prochaineEtape.trim()
+              ? prochaineEtape.trim()
+              : null,
+            controle_prevu: controlePrevu.trim() ? controlePrevu.trim() : null,
+            seances_notes: seancesNotes,
+          });
+
+          return [row, ...withState];
         });
         await updatePatientAction(id, {});
         const manualMontant = parseMoney(drawerMontant);
@@ -1688,18 +2123,48 @@ export default function PatientDetailPage() {
       ),
     onDeletePatient: () => setDeleteConfirmOpen(true),
     onToothClick: (tooth: ToothId) => {
-      const existingTreatment = allTreatments.find((t) => t.tooth === tooth);
+      const existingTreatment = allTreatments.find(
+        (t) => t.tooth === tooth && t.kind !== "state",
+      );
       setSelectedTooth(tooth);
+      setCockpitTab(normalizeCockpitTabFromToothStatus(dentsStatus[tooth]));
+      const settings = getSettings();
+      const praticienFromSettings =
+        (typeof settings.praticien === "string" && settings.praticien.trim()) ||
+        `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
+        "";
+
+      const state = getToothState(allTreatments, tooth);
+      setMobilite(state?.mobilite ?? "stable");
+      setSensibilite(
+        state?.sensibilite?.length ? state.sensibilite : ["aucune"],
+      );
+      setVitalite(state?.vitalite ?? "incertaine");
+      setControlePrevu(state?.controle_prevu ?? "");
+      setProchaineEtape(state?.prochaine_etape ?? "");
+      setSeancesNotes(state?.seances_notes ?? []);
+
       if (existingTreatment) {
         setToothNotes(existingTreatment.notes || "");
         const match = clinicalProtocolsList.find(
           (p) => p.nom === existingTreatment.acte,
         );
         setDrawerProtocolId(match?.id ?? "");
+        setActMaterial(existingTreatment.material ?? "");
+        setActFaces(existingTreatment.faces ?? []);
+        setActPraticien(existingTreatment.praticien ?? praticienFromSettings);
       } else {
         setToothNotes("");
         setDrawerProtocolId("");
+        setActMaterial("");
+        setActFaces([]);
+        setActPraticien(praticienFromSettings);
       }
+
+      // reset champs spécifiques (non persistés tant que non validés)
+      setEndoCanaux("1");
+      setEndoLt("");
+      setEndoObturation("Gutta-percha");
     },
     onAddActe: () => {
       setToast({
@@ -3168,12 +3633,14 @@ export default function PatientDetailPage() {
                         className={[
                           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
                           dentsStatus[selectedTooth as ToothId] === "healthy"
-                            ? "bg-green-50 text-green-700"
-                            : dentsStatus[selectedTooth as ToothId] === "chirurgie"
-                              ? "bg-orange-50 text-orange-700"
-                              : dentsStatus[selectedTooth as ToothId] === "absente"
-                                ? "bg-[var(--ds-primary-soft)] text-[var(--ds-text-muted)]"
-                                : "bg-cyan-50 text-cyan-700"
+                            ? "bg-[color-mix(in_srgb,#10b981_16%,transparent)] text-[#10b981]"
+                            : dentsStatus[selectedTooth as ToothId] === "carie"
+                              ? "bg-[color-mix(in_srgb,#7c3aed_16%,transparent)] text-[#7c3aed]"
+                              : dentsStatus[selectedTooth as ToothId] === "chirurgie"
+                                ? "bg-[color-mix(in_srgb,#f97316_18%,transparent)] text-[#f97316]"
+                                : dentsStatus[selectedTooth as ToothId] === "absente"
+                                  ? "bg-[color-mix(in_srgb,#94a3b8_22%,transparent)] text-[#64748b]"
+                                  : "bg-[color-mix(in_srgb,#06b6d4_16%,transparent)] text-[#06b6d4]",
                         ].join(" ")}
                       >
                         ●{" "}
@@ -3197,36 +3664,59 @@ export default function PatientDetailPage() {
               </button>
             </div>
 
-            {/* Tabs état dent */}
+            {/* Onglets cockpit (catégories) */}
             {selectedTooth !== null && (
-              <div className="mt-3 grid grid-cols-4 gap-1.5">
+              <div className="mt-3 grid grid-cols-5 gap-1.5">
                 {(
                   [
-                    ["healthy", "Saine"],
-                    ["carie", "Soins"],
-                    ["couronne", "Prothèse"],
-                    ["chirurgie", "Chirurgie"],
+                    ["Saine", "Saine"],
+                    ["Soins", "Soins"],
+                    ["Endodontie", "Endodontie"],
+                    ["Prothèse", "Prothèse"],
+                    ["Chirurgie", "Chirurgie"],
                   ] as const
                 ).map(([key, label]) => {
-                  const active = dentsStatus[selectedTooth as ToothId] === key;
+                  const active = cockpitTab === key;
                   return (
                     <button
                       key={key}
                       type="button"
-                      onClick={() =>
-                        setDentsStatus((prev) => ({
-                          ...prev,
-                          [selectedTooth as ToothId]: key as ToothStatus,
-                        }))
-                      }
+                      onClick={() => {
+                        setCockpitTab(key);
+                        // Le statut dentaire ne change QUE si l'utilisateur clique sur un onglet.
+                        if (key === "Saine") {
+                          setDentsStatus((prev) => ({
+                            ...prev,
+                            [selectedTooth as ToothId]: "healthy",
+                          }));
+                        } else if (key === "Chirurgie") {
+                          setDentsStatus((prev) => ({
+                            ...prev,
+                            [selectedTooth as ToothId]: "chirurgie",
+                          }));
+                        } else if (key === "Prothèse") {
+                          setDentsStatus((prev) => ({
+                            ...prev,
+                            [selectedTooth as ToothId]: "couronne",
+                          }));
+                        } else if (key === "Soins" || key === "Endodontie") {
+                          setDentsStatus((prev) => ({
+                            ...prev,
+                            [selectedTooth as ToothId]: "carie",
+                          }));
+                        }
+
+                        // Reset du protocole sélectionné lors du changement d'onglet
+                        setDrawerProtocolId("");
+                      }}
                       className={[
                         "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
                         active
-                          ? "border-[var(--ds-primary)] bg-[var(--ds-primary-soft)] text-[var(--ds-primary)]"
+                          ? COCKPIT_TAB_ACTIVE_CN[key]
                           : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
                       ].join(" ")}
                     >
-                      {label}
+                      <span className="block truncate">{label}</span>
                     </button>
                   );
                 })}
@@ -3238,15 +3728,83 @@ export default function PatientDetailPage() {
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
             {selectedTooth !== null && (
               <>
+                {/* SECTION 1 — ÉTAT CLINIQUE */}
+                <section className="space-y-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    État clinique
+                  </h4>
+
+                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3 space-y-3">
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
+                        Mobilité
+                      </p>
+                      <MobilitePills
+                        value={mobilite}
+                        onChange={(next) => {
+                          setMobilite(next);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              mobilite: next,
+                            }),
+                          );
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
+                        Sensibilité
+                      </p>
+                      <SensibilitePills
+                        value={sensibilite}
+                        onChange={(next) => {
+                          setSensibilite(next);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              sensibilite: next,
+                            }),
+                          );
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
+                        Vitalité
+                      </p>
+                      <VitalitePills
+                        value={vitalite}
+                        onChange={(next) => {
+                          setVitalite(next);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              vitalite: next,
+                            }),
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <hr className="border-[var(--ds-primary-border)]" />
+
                 {/* Actes enregistrés */}
                 <section>
                   <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                     Actes enregistrés
                   </h4>
                   {(() => {
-                    const toothHistory = allTreatments.filter(
+                    const toothHistory = allTreatments
+                      .filter(
                       (t) => t.tooth === selectedTooth,
-                    );
+                      )
+                      .filter((t) => t.kind !== "state")
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() - new Date(a.date).getTime(),
+                      );
                     if (toothHistory.length === 0) {
                       return (
                         <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
@@ -3259,26 +3817,63 @@ export default function PatientDetailPage() {
                         {toothHistory.slice(0, 4).map((t, i) => (
                           <li
                             key={i}
-                            className="flex items-center justify-between gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-2"
+                            className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-2"
                           >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span
-                                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-primary)]"
-                                aria-hidden
-                              />
-                              <span className="truncate text-xs font-medium text-[var(--ds-text)]">
-                                {t.acte}
-                              </span>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-primary)]"
+                                    aria-hidden
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="truncate text-xs font-semibold text-[var(--ds-text)]">
+                                      {t.acte}
+                                    </div>
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--ds-text-muted)]">
+                                      <span className="font-mono">
+                                        {formatClinicalDateFr(t.date)}
+                                      </span>
+                                      {t.material ? (
+                                        <span>{t.material}</span>
+                                      ) : null}
+                                      {t.faces?.length ? (
+                                        <span className="flex items-center gap-1">
+                                          {t.faces.map((f) => (
+                                            <span
+                                              key={f}
+                                              className="rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ds-text)]"
+                                            >
+                                              {f}
+                                            </span>
+                                          ))}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    {t.praticien ? (
+                                      <div className="mt-0.5 text-[11px] text-[var(--ds-text-muted)]">
+                                        {t.praticien}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                              {typeof t.montant === "number" && t.montant > 0 ? (
+                                <div className="shrink-0 text-right">
+                                  <div className="font-mono text-[11px] font-semibold text-[var(--ds-primary)]">
+                                    {Math.round(t.montant).toLocaleString("fr-FR")} DA
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
-                            <span className="shrink-0 font-mono text-[10.5px] text-[var(--ds-text-muted)]">
-                              {new Date(t.date).toLocaleDateString("fr-DZ")}
-                            </span>
                           </li>
                         ))}
                       </ul>
                     );
                   })()}
                 </section>
+
+                <hr className="border-[var(--ds-primary-border)]" />
 
                 {/* Ajouter un acte */}
                 <section className="space-y-2">
@@ -3312,20 +3907,158 @@ export default function PatientDetailPage() {
                     </select>
                   </div>
 
+                  {cockpitTab === "Endodontie" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label
+                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                          htmlFor="endo-canaux"
+                        >
+                          Nombre de canaux
+                        </label>
+                        <input
+                          id="endo-canaux"
+                          type="number"
+                          min={1}
+                          max={4}
+                          value={endoCanaux}
+                          onChange={(e) => setEndoCanaux(e.target.value)}
+                          className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                          htmlFor="endo-lt"
+                        >
+                          Longueur de travail
+                        </label>
+                        <div className="relative mt-1">
+                          <input
+                            id="endo-lt"
+                            type="number"
+                            inputMode="decimal"
+                            value={endoLt}
+                            onChange={(e) => setEndoLt(e.target.value)}
+                            placeholder="__"
+                            className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 pr-10 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                          />
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10.5px] text-[var(--ds-text-muted)]">
+                            mm
+                          </span>
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <label
+                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                          htmlFor="endo-obturation"
+                        >
+                          Obturation
+                        </label>
+                        <select
+                          id="endo-obturation"
+                          value={endoObturation}
+                          onChange={(e) => setEndoObturation(e.target.value)}
+                          className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                        >
+                          {(
+                            [
+                              "Gutta-percha",
+                              "MTA",
+                              "Biodentine",
+                              "Autre",
+                            ] as const
+                          ).map((x) => (
+                            <option key={x} value={x}>
+                              {x}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Orthopédie supprimée (doublon Prothèse) */}
+
+                  <div>
+                    <label
+                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                      htmlFor="cockpit-material"
+                    >
+                      Matériau
+                    </label>
+                    <select
+                      id="cockpit-material"
+                      value={actMaterial}
+                      onChange={(e) => setActMaterial(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                    >
+                      <option value="">—</option>
+                      {(
+                        [
+                          "Composite",
+                          "Amalgame",
+                          "Zircone",
+                          "Céramique",
+                          "IRM",
+                          "Cavit",
+                          "CVI",
+                          "Résine",
+                          "Or",
+                          "Autre",
+                        ] as const
+                      ).map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <p className="block text-[11px] font-medium text-[var(--ds-text-muted)]">
+                      Faces concernées
+                    </p>
+                    <div className="mt-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-3">
+                      <ToothFacesPicker
+                        value={actFaces}
+                        onChange={(next) => setActFaces(next)}
+                        ariaLabel={`Faces acte dent ${selectedTooth}`}
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label
                       className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
                       htmlFor="cockpit-note"
                     >
-                      Note rapide
+                      Note clinique
                     </label>
                     <textarea
                       id="cockpit-note"
                       value={toothNotes}
                       onChange={(e) => setToothNotes(e.target.value)}
-                      rows={2}
-                      placeholder="Observation, remarque…"
+                      rows={3}
+                      placeholder="Observation clinique détaillée..."
                       className="mt-1 w-full resize-none rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                      htmlFor="cockpit-praticien"
+                    >
+                      Praticien
+                    </label>
+                    <input
+                      id="cockpit-praticien"
+                      type="text"
+                      value={actPraticien}
+                      onChange={(e) => setActPraticien(e.target.value)}
+                      placeholder="Nom du praticien"
+                      className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
                     />
                   </div>
 
@@ -3408,6 +4141,189 @@ export default function PatientDetailPage() {
                       </ul>
                     </details>
                   )}
+                </section>
+
+                <hr className="border-[var(--ds-primary-border)]" />
+
+                {/* SECTION 4 — SUIVI & CONTRÔLE */}
+                <section className="space-y-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    Suivi &amp; contrôle
+                  </h4>
+
+                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3 space-y-2">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
+                        Prochaine étape
+                      </p>
+                      <input
+                        type="text"
+                        value={prochaineEtape}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setProchaineEtape(v);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              prochaine_etape: v.trim() ? v : null,
+                            }),
+                          );
+                        }}
+                        placeholder="Ex: Empreinte, Pose couronne, Détartrage..."
+                        className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                      <div>
+                        <label
+                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
+                          htmlFor="cockpit-controle"
+                        >
+                          Contrôle prévu
+                        </label>
+                        <input
+                          id="cockpit-controle"
+                          type="date"
+                          value={controlePrevu}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setControlePrevu(v);
+                            setAllTreatments((prev) =>
+                              upsertToothStateRow(prev, selectedTooth, {
+                                controle_prevu: v.trim() ? v.trim() : null,
+                              }),
+                            );
+                          }}
+                          className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!controlePrevu.trim()}
+                        onClick={() => {
+                          const day = controlePrevu.trim();
+                          if (!day) return;
+                          void (async () => {
+                            const settings = getSettings();
+                            const praticienFromSettings =
+                              (typeof settings.praticien === "string" &&
+                                settings.praticien.trim()) ||
+                              `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
+                              null;
+                            const res = await createAppointmentAction({
+                              patient_id: id,
+                              date: day,
+                              heure: "09:00",
+                              duree: 15,
+                              type_acte: `Contrôle - Dent ${selectedTooth}`,
+                              statut: "confirme",
+                              notes: `Contrôle planifié depuis le cockpit clinique (dent ${selectedTooth}).`,
+                              praticien: praticienFromSettings,
+                              salle: null,
+                            });
+                            if (!res.ok) {
+                              setToast({ type: "error", message: res.error });
+                              return;
+                            }
+                            window.dispatchEvent(new Event(APPOINTMENTS_UPDATED_EVENT));
+                            setToast({
+                              type: "success",
+                              message: "Contrôle planifié dans le planning.",
+                            });
+                          })();
+                        }}
+                        className="h-9 rounded-xl bg-[var(--ds-primary)] px-4 text-xs font-semibold text-white transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Planifier
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <hr className="border-[var(--ds-primary-border)]" />
+
+                {/* SECTION 5 — NOTES CLINIQUES PAR SÉANCE */}
+                <section className="space-y-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                    Notes cliniques par séance
+                  </h4>
+
+                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3">
+                    {seancesNotes.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
+                        Aucune note
+                      </p>
+                    ) : (
+                      <div className="space-y-3 border-l-2 border-[var(--ds-primary)] pl-3">
+                        {seancesNotes
+                          .slice()
+                          .sort(
+                            (a, b) =>
+                              new Date(b.date).getTime() -
+                              new Date(a.date).getTime(),
+                          )
+                          .map((n, idx) => (
+                            <div key={`${n.date}-${idx}`} className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="font-mono text-[10.5px] text-[var(--ds-text-muted)]">
+                                  {formatClinicalDateFr(n.date)}
+                                </span>
+                                {n.praticien ? (
+                                  <span className="text-[11px] text-[var(--ds-text-muted)]">
+                                    {n.praticien}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-[12px] text-[var(--ds-text)]">
+                                {n.texte}
+                              </div>
+                              <div className="h-px w-full bg-[var(--ds-primary-border)]" />
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    <div className="mt-3 space-y-2">
+                      <textarea
+                        value={newSeanceNote}
+                        onChange={(e) => setNewSeanceNote(e.target.value)}
+                        rows={2}
+                        placeholder="Ajouter une note…"
+                        className="w-full resize-none rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                      />
+                      <button
+                        type="button"
+                        disabled={!newSeanceNote.trim()}
+                        onClick={() => {
+                          const txt = newSeanceNote.trim();
+                          if (!txt) return;
+                          const settings = getSettings();
+                          const praticienFromSettings =
+                            (typeof settings.praticien === "string" &&
+                              settings.praticien.trim()) ||
+                            `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
+                            undefined;
+
+                          const entry: ClinicalSessionNote = {
+                            date: new Date().toISOString(),
+                            praticien: actPraticien.trim() || praticienFromSettings,
+                            texte: txt,
+                          };
+                          const next = [entry, ...seancesNotes];
+                          setSeancesNotes(next);
+                          setNewSeanceNote("");
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              seances_notes: next,
+                            }),
+                          );
+                        }}
+                        className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        + Ajouter une note
+                      </button>
+                    </div>
+                  </div>
                 </section>
 
                 {/* Plan de traitement (inline) */}
