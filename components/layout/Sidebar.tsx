@@ -84,6 +84,7 @@ function NavLinkRow({
   return (
     <Link
       href={item.href}
+      prefetch={true}
       title={`${item.label}${lockTitle}`}
       aria-current={active ? "page" : undefined}
       onClick={() => onNavigate?.()}

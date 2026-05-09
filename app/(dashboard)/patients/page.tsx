@@ -27,6 +27,7 @@ import {
 } from "@/utils/patientData";
 import { getCabinetBlob } from "@/lib/client/cabinetBlob";
 import { mergePatientUiStateAction } from "@/app/actions/patient-ui-state";
+import { PatientsListSkeleton } from "@/components/ui/page-skeletons";
 
 const AVATAR_PALETTE = [
   { bg: "bg-violet-100 dark:bg-violet-900/40", text: "text-violet-700 dark:text-violet-300" },
@@ -254,11 +255,7 @@ function PatientsPageContent() {
   }
 
   if (!hydrated) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-[var(--ds-text-muted)]">
-        Chargement des patients…
-      </div>
-    );
+    return <PatientsListSkeleton />;
   }
 
   return (

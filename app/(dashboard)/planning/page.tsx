@@ -23,6 +23,7 @@ import {
   Plus,
 } from "lucide-react";
 import AnimatedButton from "@/components/ui/AnimatedButton";
+import { PlanningContentSkeleton } from "@/components/ui/page-skeletons";
 import {
   createAppointmentAction,
   getAppointmentsAction,
@@ -836,11 +837,15 @@ function PlanningPageContent() {
   );
   const [scrollAnchorIso, setScrollAnchorIso] = useState<string | null>(null);
   const handleScrollAnchorConsumed = useCallback(() => setScrollAnchorIso(null), []);
+  const [planningReady, setPlanningReady] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    void reloadAppointments();
-    void reloadConsultations();
+    setPlanningReady(false);
+    void (async () => {
+      await Promise.all([reloadAppointments(), reloadConsultations()]);
+      setPlanningReady(true);
+    })();
   }, [reloadAppointments, reloadConsultations]);
 
   useEffect(() => {
@@ -1046,7 +1051,10 @@ function PlanningPageContent() {
 
       {/* ── Contenu ── */}
       <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
-
+        {!planningReady ? (
+          <PlanningContentSkeleton />
+        ) : (
+          <>
         {/* Vue Liste — visible sur tous les écrans */}
         {view === "liste" && (
           <ListView
@@ -1090,6 +1098,8 @@ function PlanningPageContent() {
               }}
             />
           </div>
+        )}
+          </>
         )}
 
       </div>

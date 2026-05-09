@@ -19,6 +19,7 @@ export function getPostgresPool(): Pool {
     connectionString,
     max: 10,
     idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 2000,
   });
   return singleton;
 }

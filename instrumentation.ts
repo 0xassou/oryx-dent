@@ -1,7 +1,6 @@
-export async function register(): Promise<void> {
-  if (process.env.NEXT_RUNTIME !== "nodejs") {
-    return;
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startBackupCron } = await import("./lib/server/cron/backup-cron");
+    startBackupCron();
   }
-  const { startBackupCron } = await import("@/lib/server/cron/backup-cron");
-  startBackupCron();
 }

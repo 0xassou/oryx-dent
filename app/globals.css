@@ -524,6 +524,7 @@
 @theme inline {
   --color-background: var(--ds-bg);
   --color-foreground: var(--ds-text);
+  --color-muted: color-mix(in srgb, var(--ds-text-muted) 16%, var(--ds-surface));
   --font-sans: "Sora", sans-serif;
   --font-mono: "DM Mono", monospace;
 }

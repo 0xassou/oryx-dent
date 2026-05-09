@@ -35,6 +35,7 @@ import {
 import { formatPhoneNumber } from "@/utils/formatters";
 import { generateFacturePDF } from "@/utils/generateFacturePDF";
 import { getCabinetBlob } from "@/lib/client/cabinetBlob";
+import { FinancesFacturesTableSkeleton } from "@/components/ui/page-skeletons";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
@@ -144,6 +145,7 @@ export function FinancesRecettesTab() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [factures, setFactures] = useState<FactureDocument[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("Tous");
@@ -183,8 +185,14 @@ export function FinancesRecettesTab() {
 
   useEffect(() => {
     setMounted(true);
-    void reloadFactures();
-    void refreshPatientDirectory();
+    let cancelled = false;
+    void (async () => {
+      await Promise.all([reloadFactures(), refreshPatientDirectory()]);
+      if (!cancelled) setInitialLoadDone(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [refreshPatientDirectory, reloadFactures]);
 
   useEffect(() => {
@@ -378,6 +386,10 @@ export function FinancesRecettesTab() {
         doc.id.toLowerCase().includes(q),
     );
   }, [factures, activeTab, search, dateFilter, searchParams]);
+
+  if (!initialLoadDone) {
+    return <FinancesFacturesTableSkeleton />;
+  }
 
   return (
     <div className="space-y-6">

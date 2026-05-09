@@ -36,6 +36,7 @@ import {
   getCabinetValue,
   persistCabinetPartial,
 } from "@/lib/client/cabinetBlob";
+import { StocksListSkeleton } from "@/components/ui/page-skeletons";
 
 const CATEGORIES = [
   "Composites & Ciments",
@@ -956,6 +957,10 @@ export default function StocksPage() {
         </AnimatedButton>
       </div>
 
+      {!hasHydrated ? (
+        <StocksListSkeleton />
+      ) : (
+        <>
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 lg:grid-cols-3">
         <div className="kpi-card flex items-center gap-4 rounded-2xl border border-violet-200 bg-violet-50 px-6 py-3 shadow-sm">
@@ -1535,6 +1540,9 @@ export default function StocksPage() {
             </div>
           </div>
         </div>
+      )}
+
+        </>
       )}
 
       <ProductModal

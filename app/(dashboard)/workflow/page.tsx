@@ -23,6 +23,7 @@ import {
 } from "@/app/actions/patients";
 import type { PatientRow } from "@/lib/types/patients-db";
 import { showAppToast } from "@/utils/appToast";
+import { WorkflowKanbanSkeleton } from "@/components/ui/page-skeletons";
 
 const REFRESH_MS = 30_000;
 
@@ -203,14 +204,19 @@ export default function WorkflowPage() {
   }, [refresh]);
 
   async function transition(id: string, to: ConsultationStatut) {
+    const previous = consultations;
+    setConsultations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, statut: to } : c)),
+    );
     const res = await updateStatutConsultationAction(id, to);
-    if (res.ok) {
-      setConsultations((prev) =>
-        prev.map((c) => (c.id === id ? res.data : c)),
-      );
-    } else {
+    if (!res.ok) {
+      setConsultations(previous);
       showAppToast(res.error);
+      return;
     }
+    setConsultations((prev) =>
+      prev.map((c) => (c.id === id ? res.data : c)),
+    );
   }
 
   const nonAbsent = consultations.filter((c) => c.statut !== "absent");
@@ -254,9 +260,7 @@ export default function WorkflowPage() {
 
       {/* Kanban */}
       {loading ? (
-        <p className="py-12 text-center text-sm text-[var(--ds-text-muted)]">
-          Chargement…
-        </p>
+        <WorkflowKanbanSkeleton />
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -391,14 +395,17 @@ function ConsultationCard({
 }: {
   consultation: ConsultationRow;
   column: Column;
-  onTransition: (id: string, to: ConsultationStatut) => void;
+  onTransition: (id: string, to: ConsultationStatut) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
 
   async function go(to: ConsultationStatut) {
     setBusy(true);
-    onTransition(c.id, to);
-    setBusy(false);
+    try {
+      await onTransition(c.id, to);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const wait =

@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache, revalidateTag } from "next/cache";
 import { generateId } from "@better-auth/core/utils/id";
 import { hashPassword } from "@better-auth/utils/password";
 import { getPostgresPool } from "@/lib/server/db/pool";
@@ -16,6 +17,8 @@ import type {
 import type { Role } from "@/utils/roles";
 import { parseInvitationToken } from "@/utils/roles";
 import { logServerError } from "@/lib/server/logger";
+
+const TEAM_MEMBERS_CACHE_TAG = "team-members";
 
 function toIso(v: unknown): string {
   if (v == null) return new Date(0).toISOString();
@@ -54,6 +57,19 @@ function mapTeamMemberForClient(r: Record<string, unknown>): TeamMemberRow {
     temp_password_display: null,
   };
 }
+
+async function loadTeamMembersForCache(): Promise<TeamMemberRow[]> {
+  const pool = getPostgresPool();
+  const { rows } = await pool.query(
+    `SELECT * FROM team_members ORDER BY nom ASC, prenom ASC`,
+  );
+  return rows.map((row) => mapTeamMemberForClient(row as Record<string, unknown>));
+}
+
+const getTeamMembersCached = unstable_cache(loadTeamMembersForCache, ["team-members-list-v1"], {
+  revalidate: 60,
+  tags: [TEAM_MEMBERS_CACHE_TAG],
+});
 
 const ROLES: readonly TeamMemberRole[] = [
   "admin",
@@ -115,13 +131,10 @@ export async function getTeamMembersAction(): Promise<
   const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
   try {
-    const pool = getPostgresPool();
-    const { rows } = await pool.query(
-      `SELECT * FROM team_members ORDER BY nom ASC, prenom ASC`,
-    );
+    const data = await getTeamMembersCached();
     return {
       ok: true,
-      data: rows.map((row) => mapTeamMemberForClient(row as Record<string, unknown>)),
+      data,
     };
   } catch (e) {
     logServerError("getTeamMembersAction", e);
@@ -251,6 +264,7 @@ export async function createTeamMemberAction(
     }
 
     await client.query("COMMIT");
+    revalidateTag(TEAM_MEMBERS_CACHE_TAG, "max");
     return {
       ok: true,
       member: mapTeamMemberForClient(row0),
@@ -347,6 +361,7 @@ export async function updateTeamMemberAction(
       await pool.query(`UPDATE "user" SET "updatedAt" = NOW() WHERE id = $1`, [id]);
     }
 
+    revalidateTag(TEAM_MEMBERS_CACHE_TAG, "max");
     return { ok: true, data: mapTeamMemberForClient(row) };
   } catch (e) {
     logServerError("updateTeamMemberAction", e);
@@ -383,6 +398,7 @@ export async function deleteTeamMemberAction(
     await client.query(`DELETE FROM "account" WHERE "userId" = $1`, [id]);
     await client.query(`DELETE FROM "user" WHERE id = $1`, [id]);
     await client.query("COMMIT");
+    revalidateTag(TEAM_MEMBERS_CACHE_TAG, "max");
     return { ok: true };
   } catch (e) {
     await client.query("ROLLBACK");
@@ -463,6 +479,7 @@ export async function completeFirstPasswordChangeAction(
       };
     }
     await client.query("COMMIT");
+    revalidateTag(TEAM_MEMBERS_CACHE_TAG, "max");
     return { ok: true };
   } catch (e) {
     try {
@@ -577,6 +594,7 @@ export async function acceptInvitationAction(
     );
 
     await client.query("COMMIT");
+    revalidateTag(TEAM_MEMBERS_CACHE_TAG, "max");
     return { ok: true, email, role, memberId };
   } catch (e) {
     try {

@@ -85,6 +85,7 @@ import {
   mapServerCommandeLaboToUi,
   type LaboratoireCommande,
 } from "@/utils/laboratoireCommandes";
+import { DashboardKpiSkeleton } from "@/components/ui/page-skeletons";
 
 const STER_KEY = "dental_sterilization_data";
 
@@ -1205,11 +1206,7 @@ export default function DashboardPage() {
   }
 
   if (!mounted) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center bg-[var(--ds-bg)] p-6">
-        <p className="text-sm text-[var(--ds-text-muted)]">Chargement du tableau de bord…</p>
-      </div>
-    );
+    return <DashboardKpiSkeleton />;
   }
 
   return (

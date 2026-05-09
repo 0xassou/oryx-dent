@@ -75,6 +75,7 @@ import {
   type DentalPatientRecord,
 } from "@/utils/patientData";
 import { generateLabBonPDF } from "@/utils/generateLabBonPDF";
+import { LaboratoireListSkeleton } from "@/components/ui/page-skeletons";
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -239,41 +240,47 @@ export default function LaboratoirePage() {
   }, []);
 
   useEffect(() => {
-    void refreshPatients();
+    let cancelled = false;
     void (async () => {
-      const res = await getAppointmentsAction();
-      if (res.ok) {
-        setAppointments(res.data.map(appointmentJoinedRowToRdv));
+      setLabs(readLabsDirectoryFromStorage());
+      await refreshPatients();
+      if (cancelled) return;
+      const [apptRes, cmdRes] = await Promise.all([
+        getAppointmentsAction(),
+        getCommandesLaboAction(),
+      ]);
+      if (cancelled) return;
+      if (apptRes.ok) {
+        setAppointments(apptRes.data.map(appointmentJoinedRowToRdv));
       }
-    })();
-    setLabs(readLabsDirectoryFromStorage());
-    void (async () => {
-      const res = await getCommandesLaboAction();
-      if (!res.ok) {
-        console.error(res.error);
+      if (!cmdRes.ok) {
+        console.error(cmdRes.error);
         setCommandes([]);
-        return;
+      } else {
+        setCommandes(
+          cmdRes.data.map((r) => ({
+            id: r.id,
+            patient: r.patientNom ?? "—",
+            patientId: r.patientId,
+            travail: r.travail,
+            labo: r.laboratoire ?? "",
+            retourIso: r.dateRetour ?? todayIsoLocal(),
+            rdvPatientIso: r.datePose,
+            teinte: r.teinte,
+            materiau: r.materiau,
+            dent: r.dent,
+            coutLaboDa: r.coutLabo ?? 0,
+            statut: r.statut,
+            linkedPoseAppointmentId: r.rdvPoseId,
+            linkedRetourAppointmentId: r.rdvRetourId,
+          })),
+        );
       }
-      setCommandes(
-        res.data.map((r) => ({
-          id: r.id,
-          patient: r.patientNom ?? "—",
-          patientId: r.patientId,
-          travail: r.travail,
-          labo: r.laboratoire ?? "",
-          retourIso: r.dateRetour ?? todayIsoLocal(),
-          rdvPatientIso: r.datePose,
-          teinte: r.teinte,
-          materiau: r.materiau,
-          dent: r.dent,
-          coutLaboDa: r.coutLabo ?? 0,
-          statut: r.statut,
-          linkedPoseAppointmentId: r.rdvPoseId,
-          linkedRetourAppointmentId: r.rdvRetourId,
-        })),
-      );
+      setHydrated(true);
     })();
-    setHydrated(true);
+    return () => {
+      cancelled = true;
+    };
   }, [refreshPatients]);
 
   useEffect(() => {
@@ -560,6 +567,10 @@ export default function LaboratoirePage() {
         </AnimatedButton>
       </header>
 
+      {!hydrated ? (
+        <LaboratoireListSkeleton />
+      ) : (
+        <>
       <div className="grid grid-cols-1 gap-3 pb-5 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           variant="lab"
@@ -873,6 +884,9 @@ export default function LaboratoirePage() {
           }
         />
       ) : null}
+
+        </>
+      )}
 
       {isModalOpen && (
         <div
