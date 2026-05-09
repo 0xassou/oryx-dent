@@ -1,26 +1,31 @@
+import { getCookieCache } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Lecture de session Better Auth sans toucher PostgreSQL depuis l’Edge :
- * même contrat JSON que `/get-session`.
+ * Vérifie le cache de session JWE signé (cookie `better-auth.session_data`) —
+ * aligné sur `session.cookieCache.strategy: "jwe"` dans `lib/auth.ts`.
  */
-async function hasBetterAuthSession(request: NextRequest): Promise<boolean> {
+async function hasValidBetterAuthSessionCookie(
+  request: NextRequest,
+): Promise<boolean> {
+  const secret =
+    process.env.BETTER_AUTH_SECRET ?? process.env.AUTH_SECRET ?? "";
+  if (!secret) {
+    console.error(
+      "[proxy] BETTER_AUTH_SECRET (ou AUTH_SECRET) est requis pour valider la session.",
+    );
+    return false;
+  }
   try {
-    const url = new URL("/api/auth/get-session", request.nextUrl.origin);
-    const response = await fetch(url, {
-      headers: { cookie: request.headers.get("cookie") ?? "" },
-      cache: "no-store",
+    const isHttps = request.nextUrl.protocol === "https:";
+    const payload = await getCookieCache(request, {
+      secret,
+      strategy: "jwe",
+      isSecure: isHttps,
     });
-    let data: unknown = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-    if (!data || typeof data !== "object") return false;
-    const rec = data as { session?: unknown; user?: unknown };
-    return rec.session != null && rec.user != null;
-  } catch {
+    return Boolean(payload?.user);
+  } catch (e) {
+    console.error("[proxy] lecture du cookie de session", e);
     return false;
   }
 }
@@ -59,7 +64,7 @@ export async function proxy(req: NextRequest) {
   }
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
-    if (await hasBetterAuthSession(req)) {
+    if (await hasValidBetterAuthSessionCookie(req)) {
       return NextResponse.redirect(new URL("/", req.url));
     }
     return NextResponse.next();
@@ -69,10 +74,15 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const authed = await hasBetterAuthSession(req);
+  const authed = await hasValidBetterAuthSessionCookie(req);
 
   if (!authed) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    const url = new URL("/login", req.url);
+    url.searchParams.set(
+      "redirect",
+      `${pathname}${req.nextUrl.search}`,
+    );
+    return NextResponse.redirect(url);
   }
 
   const onChangePasswordPage =

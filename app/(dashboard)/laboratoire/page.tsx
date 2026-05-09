@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   AlertTriangle,
@@ -198,7 +199,8 @@ function commandeCardLeftAccent(
 type ActiveTab = "all" | "urgent" | "fabrication" | "ready" | "pose";
 type FilterKey = ActiveTab;
 
-export default function LaboratoirePage() {
+function LaboratoirePageContent() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<ActiveTab>("all");
 
   const [commandes, setCommandes] = useState<LaboratoireCommande[]>([]);
@@ -282,6 +284,14 @@ export default function LaboratoirePage() {
       cancelled = true;
     };
   }, [refreshPatients]);
+
+  useEffect(() => {
+    const cid = searchParams.get("commande")?.trim();
+    if (!cid || commandes.length === 0) return;
+    if (commandes.some((c) => c.id === cid)) {
+      queueMicrotask(() => setDrawerCommandId(cid));
+    }
+  }, [searchParams, commandes]);
 
   useEffect(() => {
     function onLabs() {
@@ -1261,6 +1271,13 @@ export default function LaboratoirePage() {
   );
 }
 
+export default function LaboratoirePage() {
+  return (
+    <Suspense fallback={<LaboratoireListSkeleton />}>
+      <LaboratoirePageContent />
+    </Suspense>
+  );
+}
 
 function StatusBadgeInline({ statut }: { statut: string }) {
   const styles: Record<string, string> = {

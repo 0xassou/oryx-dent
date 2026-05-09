@@ -27,6 +27,7 @@ import {
   getCabinetSettingsAction,
   replaceCabinetSettingsAction,
 } from "@/app/actions/cabinet-settings";
+import { replaceCabinetBlobFromServer } from "@/lib/client/cabinetBlob";
 
 /** Champ : label au-dessus (liste verticale). */
 const fieldRow =
@@ -44,35 +45,6 @@ const inputBase =
 
 /** Grille section Clinique & légal (infos + fiscal). */
 const clinicGrid = "grid w-full min-w-0 grid-cols-1 gap-6 md:grid-cols-2";
-
-/** Interrupteur ON/OFF — style glass / DS (préférences WhatsApp : ancien look). */
-function ToggleLegacy({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={[
-        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors",
-        checked ? "bg-[color:var(--ds-primary)]" : "bg-[var(--ds-primary-border)]",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform",
-          checked ? "translate-x-6" : "translate-x-1",
-        ].join(" ")}
-      />
-    </button>
-  );
-}
 
 /** Interrupteur animé (Notifications, 2FA). */
 function Toggle({
@@ -196,7 +168,7 @@ export default function SettingsPageClient({
     theme: "systeme",
     currency: "DA",
     weekStart: "dimanche",
-    whatsappReminders: false,
+    whatsappBusinessNumber: "",
     assistantPermissions: { ...DEFAULT_ASSISTANT_PERMISSIONS },
     mentionLegale: "",
     logoBase64: "",
@@ -217,6 +189,10 @@ export default function SettingsPageClient({
         merged.assistantPermissions = normalizeAssistantPermissions(
           parsed.assistantPermissions ?? prev.assistantPermissions,
         );
+        merged.whatsappBusinessNumber =
+          typeof merged.whatsappBusinessNumber === "string"
+            ? merged.whatsappBusinessNumber
+            : "";
         return merged;
       });
     })();
@@ -236,10 +212,11 @@ export default function SettingsPageClient({
   }, [isAdmin, activeTab]);
 
   async function handleSaveSettings() {
-    const res = await replaceCabinetSettingsAction({
-      ...settings,
-    } as Record<string, unknown>);
+    const payload = { ...settings } as Record<string, unknown>;
+    delete payload.whatsappReminders;
+    const res = await replaceCabinetSettingsAction(payload);
     if (res.ok) {
+      replaceCabinetBlobFromServer(payload);
       alert("Paramètres sauvegardés");
     } else {
       alert(res.error);
@@ -956,6 +933,69 @@ export default function SettingsPageClient({
                   </div>
                 </div>
 
+                <div className="mt-6 space-y-4 rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-6 shadow-sm">
+                  <div>
+                    <h3 className="text-base font-bold text-[var(--ds-text)]">
+                      Rappels patients
+                    </h3>
+                    <p className="mt-0.5 text-sm text-[var(--ds-text-muted)]">
+                      Numéro du cabinet pour les messages WhatsApp manuels (ex. depuis la liste patients).
+                    </p>
+                  </div>
+
+                  <div className={fieldRow}>
+                    <label
+                      className={labelClass}
+                      htmlFor="settings-whatsapp-business"
+                    >
+                      Numéro WhatsApp Business du cabinet
+                    </label>
+                    <input
+                      id="settings-whatsapp-business"
+                      type="text"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="Ex. 2137XXXXXXXX (sans +)"
+                      value={settings.whatsappBusinessNumber}
+                      onChange={(e) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          whatsappBusinessNumber: e.target.value,
+                        }))
+                      }
+                      className={inputBase}
+                    />
+                    <p className="text-xs text-[var(--ds-text-muted)]">
+                      Indicatif pays inclus. Si vide, le numéro principal du cabinet peut servir de secours pour les liens manuels.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3 border-t border-[var(--ds-primary-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-[var(--ds-text)]">
+                        Rappels automatiques
+                      </p>
+                      <span className="inline-flex shrink-0 rounded-full border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Bientôt disponible
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled
+                      className="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed items-center rounded-full border-0 bg-[var(--ds-primary-border)] opacity-45"
+                      role="switch"
+                      aria-checked={false}
+                      aria-label="Rappels automatiques — bientôt disponible"
+                      title="Bientôt disponible"
+                    >
+                      <span className="inline-block h-4 w-4 translate-x-1 transform rounded-full bg-white shadow-sm" />
+                    </button>
+                  </div>
+                  <p className="text-xs leading-relaxed text-[var(--ds-text-muted)]">
+                    Les rappels automatiques nécessitent un abonnement WhatsApp Business API. Disponible prochainement.
+                  </p>
+                </div>
+
                 <div className={`${panelClass} mb-6`}>
                   <h2 className="mb-4 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
                     Notifications
@@ -1002,24 +1042,7 @@ export default function SettingsPageClient({
                 </h2>
 
                 <div className="mt-8 flex flex-col gap-8">
-                  <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--ds-text)]">
-                        Rappels WhatsApp automatiques
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
-                        Avant les rendez-vous.
-                      </p>
-                    </div>
-                    <ToggleLegacy
-                      checked={settings.whatsappReminders}
-                      onChange={(value) =>
-                        setSettings((prev) => ({ ...prev, whatsappReminders: value }))
-                      }
-                    />
-                  </div>
-
-                  <div className={`w-full min-w-0 border-t border-[var(--ds-primary-border)] pt-8 ${fieldRow}`}>
+                  <div className={`w-full min-w-0 ${fieldRow}`}>
                     <label className={labelClassMuted} htmlFor="settings-theme">
                       Thème
                     </label>

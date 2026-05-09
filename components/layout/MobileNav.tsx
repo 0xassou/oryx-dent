@@ -22,7 +22,9 @@ export default function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { role, ready } = useRole();
-  const items = NAV_ITEMS.filter((i) => !ready || canAccessNav(role, i.key));
+  const items = NAV_ITEMS.filter(
+    (i) => !ready || (role !== null && canAccessNav(role, i.key)),
+  );
   const leftItems = items.slice(0, Math.min(2, items.length));
   const rightItems = items.slice(Math.min(2, items.length));
 

@@ -50,17 +50,29 @@ function getAvatarColor(seed: string) {
 
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 
+function normalizeDigitsForWa(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("213")) return digits;
+  if (digits.startsWith("0")) return `213${digits.slice(1)}`;
+  return digits;
+}
+
+/** Numéro wa.me : d’abord Paramètres › Rappels patients, sinon téléphone cabinet. */
 function getCabinetWhatsappNumber(): string {
   if (typeof window === "undefined") return "";
   try {
     const s = getCabinetBlob() as Record<string, unknown>;
+    const wa =
+      typeof s.whatsappBusinessNumber === "string"
+        ? s.whatsappBusinessNumber.trim()
+        : "";
+    if (wa) {
+      const n = normalizeDigitsForWa(wa);
+      if (n) return n;
+    }
     const tel = typeof s.telephone === "string" ? s.telephone : "";
-    const digits = tel.replace(/[^\d]/g, "");
-    if (!digits) return "";
-    if (digits.startsWith("213")) return digits;
-    if (digits.startsWith("0")) return `213${digits.slice(1)}`;
-    // fallback: on assume déjà au bon format
-    return digits;
+    return normalizeDigitsForWa(tel);
   } catch {
     return "";
   }

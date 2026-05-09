@@ -20,7 +20,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const toastFiredRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || role === null) return;
     if (canAccessPath(role, pathname)) {
       toastFiredRef.current = null;
       return;
@@ -32,6 +32,6 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     router.replace("/");
   }, [pathname, role, ready, router]);
 
-  if (ready && !canAccessPath(role, pathname)) return null;
+  if (ready && role !== null && !canAccessPath(role, pathname)) return null;
   return <>{children}</>;
 }

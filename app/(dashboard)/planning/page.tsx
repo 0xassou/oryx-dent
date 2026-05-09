@@ -729,6 +729,11 @@ function PlanningPageContent() {
   >(undefined);
   const [appointments, setAppointments] = useState<Rdv[]>([]);
   const [consultations, setConsultations] = useState<ConsultationRow[]>([]);
+  const [scrollAnchorIso, setScrollAnchorIso] = useState<string | null>(null);
+  const handleScrollAnchorConsumed = useCallback(
+    () => setScrollAnchorIso(null),
+    [],
+  );
 
   const reloadConsultations = useCallback(async () => {
     const res = await getConsultationsDuJourAction();
@@ -835,8 +840,6 @@ function PlanningPageContent() {
     },
     [view],
   );
-  const [scrollAnchorIso, setScrollAnchorIso] = useState<string | null>(null);
-  const handleScrollAnchorConsumed = useCallback(() => setScrollAnchorIso(null), []);
   const [planningReady, setPlanningReady] = useState(false);
 
   useEffect(() => {
@@ -858,6 +861,14 @@ function PlanningPageContent() {
     if (patientName) setNewRdvDefaultPatientName(patientName);
     else setNewRdvDefaultPatientName("");
     if (searchParams.get("newRdv") === "true") setIsNewRdvModalOpen(true);
+
+    const listDay = searchParams.get("listDay")?.trim() ?? "";
+    if (listDay && isValidDateKeyString(listDay)) {
+      setListSelectedDay(listDay);
+      const [y, m, d] = listDay.split("-").map(Number);
+      setCurrentDate(new Date(y, (m ?? 1) - 1, d ?? 1));
+      setScrollAnchorIso(listDay);
+    }
   }, [searchParams]);
 
   useEffect(() => {

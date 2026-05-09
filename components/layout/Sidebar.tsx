@@ -127,13 +127,13 @@ export default function Sidebar({
   const { role, ready } = useRole();
 
   const navPrincipal = NAV_PRINCIPAL.filter(
-    (i) => !ready || canAccessNav(role, i.key),
+    (i) => !ready || (role !== null && canAccessNav(role, i.key)),
   );
   const navGestion = NAV_GESTION.filter((i) => {
     if (i.key === "financesDepenses" && role === "admin") {
       return false;
     }
-    return !ready || canAccessNav(role, i.key);
+    return !ready || (role !== null && canAccessNav(role, i.key));
   });
 
   return (

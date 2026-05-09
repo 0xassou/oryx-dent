@@ -16,7 +16,7 @@ export interface RoleGateProps {
 
 export function RoleGate({ role, children, fallback = null, deny = false }: RoleGateProps) {
   const { role: current, ready } = useRole();
-  if (!ready) return null;
+  if (!ready || current === null) return null;
   const allowed = Array.isArray(role) ? role : [role];
   const match = allowed.includes(current);
   const ok = deny ? !match : match;

@@ -15,3 +15,6 @@ Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-h
 ### Domain docs
 
 Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+## Contraintes Next.js 16
+`middleware.ts` n'est pas utilisable dans ce projet (Next.js 16 + proxy.ts). La protection des routes se fait dans `proxy.ts`.

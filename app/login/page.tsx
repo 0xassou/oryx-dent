@@ -289,6 +289,20 @@ function TabButton({
   );
 }
 
+function safePostLoginPath(): string {
+  if (typeof window === "undefined") return "/";
+  const raw = new URLSearchParams(window.location.search).get("redirect");
+  if (
+    !raw ||
+    !raw.startsWith("/") ||
+    raw.startsWith("//") ||
+    raw.includes("://")
+  ) {
+    return "/";
+  }
+  return raw;
+}
+
 function ConnexionPanel() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -325,35 +339,23 @@ function ConnexionPanel() {
         setLoading(false);
         return;
       }
-      type DataShape = {
-        user?: { name?: string | null; email?: string };
-      };
-      const data = "data" in res ? res.data : null;
-      const user =
-        data && typeof data === "object" && "user" in data
-          ? (data as DataShape).user
-          : undefined;
       const resolved = await resolveAppRoleForSessionAction();
-      if (resolved.ok) {
-        setCurrentRole(resolved.role);
-        setCurrentUser({
-          email: resolved.email,
-          nom: resolved.nom,
-          role: resolved.role,
-        });
-      } else {
-        const displayName =
-          user?.name && user.name.trim().length > 0
-            ? user.name.trim()
-            : "Utilisateur";
-        setCurrentRole("admin");
-        setCurrentUser({
-          email: user?.email ?? cleanEmail.toLowerCase(),
-          nom: displayName,
-          role: "admin",
-        });
+      if (!resolved.ok) {
+        await authClient.signOut();
+        setError(
+          resolved.error ??
+            "Impossible de résoudre votre accès. Réessayez ou contactez l’administrateur.",
+        );
+        setLoading(false);
+        return;
       }
-      router.push("/");
+      setCurrentRole(resolved.role);
+      setCurrentUser({
+        email: resolved.email,
+        nom: resolved.nom,
+        role: resolved.role,
+      });
+      router.push(safePostLoginPath());
       router.refresh();
     } catch {
       setError("Connexion impossible pour le moment.");

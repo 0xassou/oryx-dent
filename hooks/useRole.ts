@@ -9,16 +9,22 @@ import {
   type Role,
 } from "@/utils/roles";
 
-export function useRole(): { role: Role; user: CurrentUser | null; ready: boolean } {
-  const [role, setRole] = useState<Role>("admin");
+export function useRole(): {
+  role: Role | null;
+  user: CurrentUser | null;
+  ready: boolean;
+} {
+  const [role, setRole] = useState<Role | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     function sync() {
-      setRole(getCurrentRole());
-      setUser(getCurrentUser());
-      setReady(true);
+      const nextRole = getCurrentRole();
+      const nextUser = getCurrentUser();
+      setRole(nextRole);
+      setUser(nextUser);
+      setReady(nextRole !== null);
     }
     sync();
     window.addEventListener(ORYX_ROLE_CHANGED_EVENT, sync);

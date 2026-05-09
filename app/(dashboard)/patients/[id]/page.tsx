@@ -2105,7 +2105,9 @@ export default function PatientDetailPage() {
 
   const ficheTimeline = useMemo<PatientFicheTimelineItem[]>(() => {
     type Entry = { row: PatientTreatmentRow; src: "acts" };
-    const entries: Entry[] = allTreatments.map((row) => ({ row, src: "acts" }));
+    const entries: Entry[] = allTreatments
+      .filter((row) => row.kind !== "state")
+      .map((row) => ({ row, src: "acts" }));
     const normalized: PatientFicheTimelineItem[] = entries.map((e, idx) => {
       const row = e.row;
       const cat = row.category as PatientFicheTimelineItem["categorie"];

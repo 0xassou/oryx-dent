@@ -67,25 +67,30 @@ export type Invitation = {
 const INVITATION_TOKEN_VERSION = 1;
 
 function getInvitationSecret(): string {
-  if (
-    typeof process !== "undefined" &&
-    process.env.NEXT_PUBLIC_ORYX_INVITATION_SECRET
-  ) {
-    return process.env.NEXT_PUBLIC_ORYX_INVITATION_SECRET;
+  const raw =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_ORYX_INVITATION_SECRET
+      : undefined;
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.trim();
   }
-  return "oryx-invitation-hmac-v1";
+  throw new Error(
+    "[Oryx] NEXT_PUBLIC_ORYX_INVITATION_SECRET est requis pour signer ou vérifier les invitations.",
+  );
 }
 
 /** Mono-cabinet : identifiant stable pour les tokens d’invitation (plus de localStorage). */
 export function getCabinetId(): string {
-  if (
-    typeof process !== "undefined" &&
-    typeof process.env.NEXT_PUBLIC_ORYX_CABINET_ID === "string" &&
-    process.env.NEXT_PUBLIC_ORYX_CABINET_ID.trim()
-  ) {
-    return process.env.NEXT_PUBLIC_ORYX_CABINET_ID.trim();
+  const raw =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_ORYX_CABINET_ID
+      : undefined;
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.trim();
   }
-  return "default";
+  throw new Error(
+    "[Oryx] NEXT_PUBLIC_ORYX_CABINET_ID est requis pour les invitations et l’identification cabinet.",
+  );
 }
 
 /** Id stable d’un membre (même clé côté admin qu’après acceptation sur un autre appareil). */
@@ -286,7 +291,7 @@ export type CurrentUser = {
   role: Role;
 };
 
-let memoryRole: Role = "admin";
+let memoryRole: Role | null = null;
 let memoryUser: CurrentUser | null = null;
 
 /* ───────────────────────── Matrice de permissions ───────────────────────── */
@@ -368,7 +373,7 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   }
 }
 
-export function getCurrentRole(): Role {
+export function getCurrentRole(): Role | null {
   return memoryRole;
 }
 
@@ -391,7 +396,7 @@ export function setCurrentUser(user: CurrentUser | null): void {
 }
 
 export function clearSession(): void {
-  memoryRole = "admin";
+  memoryRole = null;
   memoryUser = null;
   if (isBrowser()) {
     window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));

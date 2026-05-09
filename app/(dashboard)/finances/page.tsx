@@ -17,7 +17,7 @@ function FinancesPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { role, ready } = useRole();
-  const isAdmin = role === "admin";
+  const isAdmin = ready && role === "admin";
 
   useEffect(() => {
     const pid = (searchParams.get("patient") ?? "").trim();
