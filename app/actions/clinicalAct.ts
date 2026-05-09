@@ -8,6 +8,7 @@
 
 import { executeClinicalAct } from "@/lib/server/clinical-act/executeClinicalAct";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
 import type { ExecuteClinicalActResult } from "@/lib/server/clinical-act/types";
 
 export type SubmitClinicalActInput = {
@@ -25,6 +26,10 @@ export type SubmitClinicalActResult =
 export async function submitClinicalActAction(
   input: SubmitClinicalActInput,
 ): Promise<SubmitClinicalActResult> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) {
+    return { ok: false, error: auth.error };
+  }
   const clinicId = process.env.CLINIC_ID ?? input.clinicId;
   if (!clinicId?.trim()) {
     return {

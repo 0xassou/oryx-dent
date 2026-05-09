@@ -1,8 +1,7 @@
-import { getSession } from "@/app/actions/auth";
+import { isCabinetAdminFromSession } from "@/lib/server/auth/require-session";
 import SettingsPageClient from "@/components/settings/SettingsPageClient";
 
 export default async function SettingsPage() {
-  const session = await getSession();
-  const isAdmin = session?.userId === "admin";
+  const isAdmin = await isCabinetAdminFromSession();
   return <SettingsPageClient isAdmin={isAdmin} />;
 }

@@ -1,6 +1,10 @@
 /**
- * Documents & imagerie par patient (localStorage `dental_patient_documents`).
+ * Documents & imagerie par patient (JSONB cabinet `dental_patient_documents`).
  */
+
+"use client";
+
+import { getCabinetValue, persistCabinetPartial } from "@/lib/client/cabinetBlob";
 
 export const DENTAL_PATIENT_DOCUMENTS_KEY = "dental_patient_documents";
 
@@ -30,9 +34,7 @@ type Store = Record<string, PatientDocument[]>;
 function readStore(): Store {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem(DENTAL_PATIENT_DOCUMENTS_KEY);
-    if (raw == null || raw === "") return {};
-    const data = JSON.parse(raw) as unknown;
+    const data = getCabinetValue<unknown>(DENTAL_PATIENT_DOCUMENTS_KEY);
     if (!data || typeof data !== "object") return {};
     return data as Store;
   } catch {
@@ -42,7 +44,7 @@ function readStore(): Store {
 
 function writeStore(store: Store) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DENTAL_PATIENT_DOCUMENTS_KEY, JSON.stringify(store));
+  void persistCabinetPartial({ [DENTAL_PATIENT_DOCUMENTS_KEY]: store });
 }
 
 function parseDoc(raw: unknown): PatientDocument | null {

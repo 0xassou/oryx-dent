@@ -1,6 +1,8 @@
 /**
- * Dépenses cabinet (localStorage `dental_expenses_data`).
+ * Dépenses cabinet : affichage mappé depuis PostgreSQL (`depenses`).
  */
+
+import type { DepenseRow } from "@/app/actions/depenses";
 
 export const DENTAL_EXPENSES_STORAGE_KEY = "dental_expenses_data";
 
@@ -27,67 +29,25 @@ export type DentalExpense = {
   justificatif_url: string;
 };
 
-function parseExpense(raw: unknown): DentalExpense | null {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  if (typeof o.id !== "string" || typeof o.date !== "string") return null;
-  if (typeof o.libelle !== "string") return null;
-  const montant =
-    typeof o.montant === "number"
-      ? o.montant
-      : Number(o.montant);
-  if (!Number.isFinite(montant) || montant < 0) return null;
-  const cat = o.categorie;
-  if (typeof cat !== "string" || !CATEGORY_SET.has(cat)) return null;
-  const just =
-    typeof o.justificatif_url === "string" ? o.justificatif_url : "";
+export function depenseRowToDentalExpense(row: DepenseRow): DentalExpense {
+  const montant = Math.round(parseFloat(String(row.montant)) || 0);
+  const desc = (row.description ?? "").trim();
+  const catRaw = String(row.categorie ?? "").trim();
+  const categorie: ExpenseCategory = CATEGORY_SET.has(catRaw)
+    ? (catRaw as ExpenseCategory)
+    : "Frais";
+  const day =
+    row.date.length >= 10
+      ? row.date.slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
   return {
-    id: o.id,
-    date: o.date,
-    libelle: o.libelle,
+    id: row.id,
+    date: `${day}T12:00:00.000Z`,
+    libelle: desc || "Dépense",
     montant,
-    categorie: cat as ExpenseCategory,
-    justificatif_url: just,
+    categorie,
+    justificatif_url: row.justificatif ?? "",
   };
-}
-
-export function readExpensesFromStorage(): DentalExpense[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DENTAL_EXPENSES_STORAGE_KEY);
-    if (raw == null || raw === "") return [];
-    const data = JSON.parse(raw) as unknown;
-    if (!Array.isArray(data)) return [];
-    const out: DentalExpense[] = [];
-    for (const item of data) {
-      const e = parseExpense(item);
-      if (e) out.push(e);
-    }
-    return out;
-  } catch (e) {
-    console.error("Storage error:", e);
-    return [];
-  }
-}
-
-export function writeExpensesToStorage(items: DentalExpense[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(DENTAL_EXPENSES_STORAGE_KEY, JSON.stringify(items));
-  } catch (e) {
-    console.error("Storage error:", e);
-  }
-}
-
-export function addExpenseToStorage(
-  partial: Omit<DentalExpense, "id">,
-): DentalExpense {
-  const id = `exp-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  const row: DentalExpense = { id, ...partial };
-  const list = readExpensesFromStorage();
-  list.unshift(row);
-  writeExpensesToStorage(list);
-  return row;
 }
 
 export function sumExpensesByCategory(

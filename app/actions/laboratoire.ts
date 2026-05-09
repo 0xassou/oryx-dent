@@ -2,6 +2,17 @@
 
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
+
+const SELECT_LABO_JOIN = `
+  SELECT
+    c.*,
+    p.nom AS join_patient_nom,
+    p.prenom AS join_patient_prenom
+  FROM commandes_labo c
+  LEFT JOIN patients p ON c.patient_id = p.id
+`;
 import type { LaboratoireStatut } from "@/utils/laboratoireCommandes";
 
 type CommandeLaboStatutDb =
@@ -157,10 +168,19 @@ function toNumber(v: unknown): number {
 function mapRow(r: Record<string, unknown>): CommandeLabo {
   const cout = toNumber(r.cout_labo);
   const hist = Array.isArray(r.historique) ? r.historique : [];
+  const nomStored =
+    r.patient_nom != null ? String(r.patient_nom).trim() : "";
+  const fromJoin = [r.join_patient_prenom, r.join_patient_nom]
+    .filter((x) => x != null && String(x).trim() !== "")
+    .map((x) => String(x).trim())
+    .join(" ")
+    .trim();
+  const patientNomResolved =
+    nomStored !== "" ? nomStored : fromJoin !== "" ? fromJoin : undefined;
   return {
     id: String(r.id ?? ""),
     patientId: r.patient_id != null ? String(r.patient_id) : undefined,
-    patientNom: r.patient_nom != null ? String(r.patient_nom) : undefined,
+    patientNom: patientNomResolved,
     travail: String(r.travail ?? ""),
     laboratoire: r.laboratoire != null ? String(r.laboratoire) : undefined,
     dent: r.dent != null ? String(r.dent) : undefined,
@@ -180,14 +200,16 @@ function mapRow(r: Record<string, unknown>): CommandeLabo {
 }
 
 export async function getCommandesLaboAction(): Promise<LaboratoireOk<CommandeLabo[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
-      `SELECT * FROM commandes_labo ORDER BY created_at DESC`,
+      `${SELECT_LABO_JOIN} ORDER BY c.created_at DESC`,
     );
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getCommandesLaboAction]", e);
+    logServerError("getCommandesLaboAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -195,15 +217,20 @@ export async function getCommandesLaboAction(): Promise<LaboratoireOk<CommandeLa
 export async function getCommandeLaboByIdAction(
   id: string,
 ): Promise<LaboratoireOk<CommandeLabo | null>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
     const pool = getPostgresPool();
-    const { rows } = await pool.query(`SELECT * FROM commandes_labo WHERE id = $1`, [rid]);
+    const { rows } = await pool.query(
+      `${SELECT_LABO_JOIN} WHERE c.id = $1`,
+      [rid],
+    );
     if (rows.length === 0) return { ok: true, data: null };
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
-    console.error("[getCommandeLaboByIdAction]", e);
+    logServerError("getCommandeLaboByIdAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -211,6 +238,8 @@ export async function getCommandeLaboByIdAction(
 export async function createCommandeLaboAction(
   data: CommandeLaboInput,
 ): Promise<LaboratoireOk<CommandeLabo>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const id = randomUUID();
@@ -253,7 +282,7 @@ export async function createCommandeLaboAction(
     if (!r) return { ok: false, error: "Insertion sans retour" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createCommandeLaboAction]", e);
+    logServerError("createCommandeLaboAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -262,6 +291,8 @@ export async function updateCommandeLaboAction(
   id: string,
   data: Partial<CommandeLaboInput>,
 ): Promise<LaboratoireOk<CommandeLabo>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -299,7 +330,10 @@ export async function updateCommandeLaboAction(
     if (data.historique !== undefined) add("historique", JSON.stringify(data.historique ?? []));
 
     if (patches.length === 0) {
-      const { rows } = await pool.query(`SELECT * FROM commandes_labo WHERE id = $1`, [rid]);
+      const { rows } = await pool.query(
+        `${SELECT_LABO_JOIN} WHERE c.id = $1`,
+        [rid],
+      );
       const r = rows[0];
       if (!r) return { ok: false, error: "Commande introuvable" };
       return { ok: true, data: mapRow(r as Record<string, unknown>) };
@@ -314,7 +348,7 @@ export async function updateCommandeLaboAction(
     if (!r) return { ok: false, error: "Commande introuvable" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updateCommandeLaboAction]", e);
+    logServerError("updateCommandeLaboAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -322,6 +356,8 @@ export async function updateCommandeLaboAction(
 export async function deleteCommandeLaboAction(
   id: string,
 ): Promise<LaboratoireOk<void>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -330,7 +366,7 @@ export async function deleteCommandeLaboAction(
     if ((del.rowCount ?? 0) === 0) return { ok: false, error: "Commande introuvable" };
     return { ok: true, data: undefined };
   } catch (e) {
-    console.error("[deleteCommandeLaboAction]", e);
+    logServerError("deleteCommandeLaboAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

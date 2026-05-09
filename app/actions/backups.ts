@@ -2,20 +2,12 @@
 
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { getSession } from "@/app/actions/auth";
+import { requireCabinetAdminSession } from "@/lib/server/auth/require-session";
 import {
   BACKUP_FILENAME_RE,
   getBackupsDirectory,
   runBackupToDisk,
 } from "@/lib/server/backup/oryx-backup";
-
-async function requireAdminSession(): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await getSession();
-  if (!session || session.userId !== "admin") {
-    return { ok: false, error: "Réservé aux administrateurs." };
-  }
-  return { ok: true };
-}
 
 export interface BackupListEntry {
   filename: string;
@@ -27,7 +19,7 @@ export async function getBackupsAction(): Promise<
   | { ok: true; backups: BackupListEntry[] }
   | { ok: false; error: string }
 > {
-  const gate = await requireAdminSession();
+  const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
 
   const dir = getBackupsDirectory();
@@ -56,7 +48,7 @@ export async function createBackupAction(): Promise<
   | { ok: true; filename: string }
   | { ok: false; error: string }
 > {
-  const gate = await requireAdminSession();
+  const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
 
   try {

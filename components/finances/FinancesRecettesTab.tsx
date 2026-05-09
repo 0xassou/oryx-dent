@@ -34,12 +34,12 @@ import {
 } from "@/utils/patientData";
 import { formatPhoneNumber } from "@/utils/formatters";
 import { generateFacturePDF } from "@/utils/generateFacturePDF";
+import { getCabinetBlob } from "@/lib/client/cabinetBlob";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem("dental_settings");
-    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    return getCabinetBlob() as Record<string, unknown>;
   } catch {
     return {};
   }
@@ -227,7 +227,7 @@ export function FinancesRecettesTab() {
         }
         const rec = patientRowToDentalPatientRecord(created.data);
         const fullName = displayPatientName(rec);
-        writeMinimalPatientProfile({
+        await writeMinimalPatientProfile({
           id: rec.id,
           nom: fullName,
           age: 0,
@@ -239,7 +239,7 @@ export function FinancesRecettesTab() {
           dateNaissance: "",
           alerts: [],
         });
-        initializeEmptyDentalChart(rec.id);
+        await initializeEmptyDentalChart(rec.id);
         patientLabel = fullName;
         patientId = rec.id;
       } else {

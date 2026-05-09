@@ -1,6 +1,10 @@
 /**
- * Répertoire des laboratoires partenaires — `dental_labs_directory`.
+ * Répertoire des laboratoires partenaires — clé JSONB cabinet `dental_labs_directory`.
  */
+
+"use client";
+
+import { getCabinetValue, persistCabinetPartial } from "@/lib/client/cabinetBlob";
 
 export const DENTAL_LABS_DIRECTORY_KEY = "dental_labs_directory";
 
@@ -84,13 +88,12 @@ function seedLabs(): DentalLabPartner[] {
 export function readLabsDirectoryFromStorage(): DentalLabPartner[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(DENTAL_LABS_DIRECTORY_KEY);
-    if (raw == null || raw === "") {
+    const data = getCabinetValue<unknown>(DENTAL_LABS_DIRECTORY_KEY);
+    if (data == null) {
       const seed = seedLabs();
       writeLabsDirectoryToStorage(seed);
       return seed;
     }
-    const data = JSON.parse(raw) as unknown;
     if (!Array.isArray(data)) {
       const seed = seedLabs();
       writeLabsDirectoryToStorage(seed);
@@ -116,7 +119,7 @@ export function readLabsDirectoryFromStorage(): DentalLabPartner[] {
 
 export function writeLabsDirectoryToStorage(items: DentalLabPartner[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DENTAL_LABS_DIRECTORY_KEY, JSON.stringify(items));
+  void persistCabinetPartial({ [DENTAL_LABS_DIRECTORY_KEY]: items });
   window.dispatchEvent(new CustomEvent(LABS_DIRECTORY_UPDATED_EVENT));
 }
 

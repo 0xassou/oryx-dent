@@ -32,11 +32,12 @@ import {
   type FactureDocument,
 } from "@/utils/factureDocuments";
 import {
-  readExpensesFromStorage,
+  depenseRowToDentalExpense,
   sumExpensesByCategory,
   type DentalExpense,
 } from "@/utils/expensesData";
 import { getFacturesAction } from "@/app/actions/factures";
+import { getDepensesAction } from "@/app/actions/depenses";
 import { factureJoinedRowToDocument } from "@/utils/factureDbMapping";
 
 type RevenusDatum = {
@@ -170,8 +171,7 @@ function RevenusTooltip({
   );
 }
 
-function getDepenses6Mois() {
-  const depenses = readExpensesFromStorage?.() ?? [];
+function getDepenses6Mois(depenses: DentalExpense[]) {
   const result: { mois: string; total: number; isDemo?: boolean }[] = [];
   let hasData = false;
 
@@ -185,12 +185,9 @@ function getDepenses6Mois() {
     const total = depenses
       .filter((d) => {
         if (!d.date) return false;
-        const parts = d.date.split("/");
-        if (parts.length !== 3) return false;
-        return (
-          parseInt(parts[1], 10) - 1 === month &&
-          parseInt(parts[2], 10) === year
-        );
+        const dt = new Date(d.date);
+        if (Number.isNaN(dt.getTime())) return false;
+        return dt.getMonth() === month && dt.getFullYear() === year;
       })
       .reduce((s, d) => s + (d.montant ?? 0), 0);
 
@@ -271,6 +268,7 @@ function computeCroissanceCA(factures: FactureDocument[]): number {
 export function FinancesDashboardTab() {
   const [mounted, setMounted] = useState(false);
   const [factureDocs, setFactureDocs] = useState<FactureDocument[]>([]);
+  const [expenseRows, setExpenseRows] = useState<DentalExpense[]>([]);
   const [period, setPeriod] = useState<PeriodKey>("month");
   const [activeDetail, setActiveDetail] = useState<string | null>(null);
   const [transactionTab, setTransactionTab] = useState<
@@ -287,10 +285,17 @@ export function FinancesDashboardTab() {
     setFactureDocs(res.data.map(factureJoinedRowToDocument));
   }, []);
 
+  const reloadDepenses = useCallback(async () => {
+    const res = await getDepensesAction();
+    if (!res.ok) return;
+    setExpenseRows(res.data.map(depenseRowToDentalExpense));
+  }, []);
+
   useEffect(() => {
     if (!mounted) return;
     void reloadFactures();
-  }, [mounted, reloadFactures]);
+    void reloadDepenses();
+  }, [mounted, reloadFactures, reloadDepenses]);
 
   useEffect(() => {
     if (!mounted || typeof window === "undefined") return;
@@ -318,7 +323,7 @@ export function FinancesDashboardTab() {
       };
     }
     const factures = factureDocs;
-    const expenses = readExpensesFromStorage();
+    const expenses = expenseRows;
     const tr = totalRecettesFacturesPayees(factures, period);
     const list = expensesInPeriod(expenses, period);
     const td = list.reduce((a, e) => a + e.montant, 0);
@@ -347,7 +352,7 @@ export function FinancesDashboardTab() {
       periodExpensesList: list,
       pieSlices: slices,
     };
-  }, [mounted, period, factureDocs]);
+  }, [mounted, period, factureDocs, expenseRows]);
 
   const realTransactions = useMemo(
     () => getRealTransactionsFromFactures(factureDocs),
@@ -381,7 +386,10 @@ export function FinancesDashboardTab() {
     () => getTopActes(factureDocs),
     [factureDocs],
   );
-  const depenses6M = useMemo(() => getDepenses6Mois(), [mounted]);
+  const depenses6M = useMemo(
+    () => getDepenses6Mois(mounted ? expenseRows : []),
+    [mounted, expenseRows],
+  );
 
   const totalTop = useMemo(
     () => topActes.reduce((acc, a) => acc + a.montant, 0),

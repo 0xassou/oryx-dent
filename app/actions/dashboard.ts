@@ -1,6 +1,8 @@
 "use server";
 
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 
 export type DashboardUpcomingAppointment = {
   id: string;
@@ -54,6 +56,10 @@ function mapUpcomingRow(r: Record<string, unknown>): DashboardUpcomingAppointmen
 }
 
 export async function getDashboardStatsAction(): Promise<DashboardStats> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) {
+    throw new Error(auth.error);
+  }
   const pool = getPostgresPool();
 
   const qTotalPatients = pool.query(`SELECT COUNT(*)::int AS count FROM patients`);
@@ -140,5 +146,42 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     commandesLaboUrgentes,
     prochainsRdv,
   };
+}
+
+/** Agrégat des libellés d’actes (JSON factures) sur ~30 jours — une requête. */
+export async function getDashboardActesDistributionAction(): Promise<
+  { name: string; value: number }[]
+> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) {
+    throw new Error(auth.error);
+  }
+  const pool = getPostgresPool();
+  try {
+    const { rows } = await pool.query<{ name: string; cnt: string }>(
+      `
+      SELECT COALESCE(
+        NULLIF(trim(elem->>'category'), ''),
+        NULLIF(trim(elem->>'acte'), ''),
+        'Autre'
+      ) AS name,
+      COUNT(*)::text AS cnt
+      FROM factures f
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(f.actes, '[]'::jsonb)) AS elem
+      WHERE f.date >= (CURRENT_DATE - INTERVAL '30 days')
+        AND jsonb_typeof(COALESCE(f.actes, '[]'::jsonb)) = 'array'
+      GROUP BY 1
+      ORDER BY COUNT(*) DESC
+      LIMIT 8
+      `,
+    );
+    return rows.map((r) => ({
+      name: String(r.name ?? "Autre"),
+      value: Number.parseInt(String(r.cnt ?? "0"), 10) || 0,
+    }));
+  } catch (e) {
+    logServerError("getDashboardActesDistributionAction", e);
+    return [];
+  }
 }
 

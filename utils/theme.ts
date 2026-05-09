@@ -1,3 +1,7 @@
+"use client";
+
+import { getCabinetValue, persistCabinetPartial } from "@/lib/client/cabinetBlob";
+
 export type Theme = "violet" | "blue" | "emerald" | "dark";
 
 export const THEMES: {
@@ -34,12 +38,23 @@ export const THEMES: {
 
 const THEME_KEY = "oryx_theme";
 
-export function getStoredTheme(): Theme {
-  if (typeof window === "undefined") return "violet";
-  return (localStorage.getItem(THEME_KEY) as Theme) ?? "violet";
+function isTheme(v: string | null): v is Theme {
+  return v === "violet" || v === "blue" || v === "emerald" || v === "dark";
 }
 
-export function applyTheme(theme: Theme) {
+/** Thème courant : attribut DOM (ex. hérité de la page login), puis réglages cabinet (PostgreSQL). */
+export function getStoredTheme(): Theme {
+  if (typeof window === "undefined") return "violet";
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (isTheme(attr)) return attr;
+  const fromCabinet = getCabinetValue<string>(THEME_KEY);
+  if (typeof fromCabinet === "string" && isTheme(fromCabinet)) return fromCabinet;
+  return "violet";
+}
+
+export function applyTheme(theme: Theme, options?: { persist?: boolean }) {
   document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem(THEME_KEY, theme);
+  if (options?.persist) {
+    void persistCabinetPartial({ [THEME_KEY]: theme });
+  }
 }

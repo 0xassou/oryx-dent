@@ -23,6 +23,10 @@ import {
   getStoredTheme,
   type Theme,
 } from "@/utils/theme";
+import {
+  getCabinetSettingsAction,
+  replaceCabinetSettingsAction,
+} from "@/app/actions/cabinet-settings";
 
 /** Champ : label au-dessus (liste verticale). */
 const fieldRow =
@@ -203,10 +207,11 @@ export default function SettingsPageClient({
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem("dental_settings");
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as Record<string, unknown>;
+    let cancelled = false;
+    (async () => {
+      const res = await getCabinetSettingsAction();
+      if (!res.ok || cancelled) return;
+      const parsed = res.data as Record<string, unknown>;
       setSettings((prev) => {
         const merged = { ...prev, ...parsed };
         merged.assistantPermissions = normalizeAssistantPermissions(
@@ -214,9 +219,10 @@ export default function SettingsPageClient({
         );
         return merged;
       });
-    } catch {
-      // Ignore malformed localStorage payload.
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -229,12 +235,14 @@ export default function SettingsPageClient({
     }
   }, [isAdmin, activeTab]);
 
-  function handleSaveSettings() {
-    try {
-      localStorage.setItem("dental_settings", JSON.stringify(settings));
+  async function handleSaveSettings() {
+    const res = await replaceCabinetSettingsAction({
+      ...settings,
+    } as Record<string, unknown>);
+    if (res.ok) {
       alert("Paramètres sauvegardés");
-    } catch (e) {
-      console.error("Storage error:", e);
+    } else {
+      alert(res.error);
     }
   }
 
@@ -875,7 +883,7 @@ export default function SettingsPageClient({
                         key={theme.id}
                         type="button"
                         onClick={() => {
-                          applyTheme(theme.id);
+                          applyTheme(theme.id, { persist: true });
                           setCurrentTheme(theme.id);
                         }}
                         className={`relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all ${

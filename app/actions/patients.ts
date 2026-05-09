@@ -2,11 +2,31 @@
 
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 import type {
   CreatePatientInput,
   PatientInput,
   PatientRow,
 } from "@/lib/types/patients-db";
+
+/** Colonnes réelles de `patients` — jamais de fragments SQL depuis les clés client brutes. */
+const PATIENT_UPDATE_COLUMN_WHITELIST = new Set<string>([
+  "nom",
+  "prenom",
+  "telephone",
+  "telephone2",
+  "email",
+  "date_naissance",
+  "groupe_sanguin",
+  "sexe",
+  "adresse",
+  "mutuelle",
+  "mutuelle_nom",
+  "mutuelle_numero",
+  "antecedents",
+  "notes",
+]);
 
 function toIsoTimestamp(v: unknown): string {
   if (v == null) return new Date(0).toISOString();
@@ -43,6 +63,9 @@ function mapRow(r: Record<string, unknown>): PatientRow {
     notes: r.notes == null ? null : String(r.notes),
     created_at: toIsoTimestamp(r.created_at),
     updated_at: toIsoTimestamp(r.updated_at),
+    ...(r.rdv_count != null
+      ? { rdv_count: Number(r.rdv_count) || 0 }
+      : {}),
   };
 }
 
@@ -51,6 +74,8 @@ export async function searchPatientsAutocompleteAction(
   query: string,
   limit = 15,
 ): Promise<{ ok: true; data: PatientRow[] } | { ok: false; error: string }> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const q = query.trim().toLowerCase();
   if (q.length < 1) return { ok: true, data: [] };
   const lim = Math.min(Math.max(1, limit), 50);
@@ -70,7 +95,7 @@ export async function searchPatientsAutocompleteAction(
       data: rows.map((row) => mapRow(row as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[searchPatientsAutocompleteAction]", e);
+    logServerError("searchPatientsAutocompleteAction", e);
     const message =
       e instanceof Error ? e.message : "Impossible de rechercher les patients.";
     return { ok: false, error: message };
@@ -80,17 +105,23 @@ export async function searchPatientsAutocompleteAction(
 export async function getPatientsAction(): Promise<
   { ok: true; data: PatientRow[] } | { ok: false; error: string }
 > {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
-      `SELECT * FROM patients ORDER BY nom ASC, prenom ASC`,
+      `SELECT p.*, COALESCE((
+          SELECT COUNT(*)::int FROM appointments a WHERE a.patient_id = p.id
+        ), 0) AS rdv_count
+       FROM patients p
+       ORDER BY p.nom ASC, p.prenom ASC`,
     );
     return {
       ok: true,
       data: rows.map((row) => mapRow(row as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[getPatientsAction]", e);
+    logServerError("getPatientsAction", e);
     const message =
       e instanceof Error ? e.message : "Impossible de charger les patients.";
     return { ok: false, error: message };
@@ -102,6 +133,8 @@ export async function getPatientByIdAction(
 ): Promise<
   { ok: true; data: PatientRow | null } | { ok: false; error: string }
 > {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
@@ -111,7 +144,7 @@ export async function getPatientByIdAction(
     if (rows.length === 0) return { ok: true, data: null };
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
-    console.error("[getPatientByIdAction]", e);
+    logServerError("getPatientByIdAction", e);
     const message =
       e instanceof Error ? e.message : "Impossible de charger le patient.";
     return { ok: false, error: message };
@@ -121,6 +154,8 @@ export async function getPatientByIdAction(
 export async function createPatientAction(
   data: CreatePatientInput,
 ): Promise<{ ok: true; data: PatientRow } | { ok: false; error: string }> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const explicitId = data.id?.trim();
     const id = explicitId || randomUUID();
@@ -179,7 +214,7 @@ export async function createPatientAction(
         );
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createPatientAction]", e);
+    logServerError("createPatientAction", e);
     const message =
       e instanceof Error ? e.message : "Impossible de créer le patient.";
     return { ok: false, error: message };
@@ -192,10 +227,13 @@ export async function updatePatientAction(
   id: string,
   data: Partial<PatientInput>,
 ): Promise<{ ok: true; data: PatientRow } | { ok: false; error: string }> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const keys = (Object.keys(data) as PatientInputKey[]).filter(
-      (k) => data[k] !== undefined,
+      (k) =>
+        data[k] !== undefined && PATIENT_UPDATE_COLUMN_WHITELIST.has(String(k)),
     );
 
     if (keys.length === 0) {
@@ -232,7 +270,7 @@ export async function updatePatientAction(
     }
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updatePatientAction]", e);
+    logServerError("updatePatientAction", e);
     const message =
       e instanceof Error ? e.message : "Impossible de mettre à jour le patient.";
     return { ok: false, error: message };
@@ -242,6 +280,8 @@ export async function updatePatientAction(
 export async function deletePatientAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rowCount } = await pool.query(
@@ -253,7 +293,7 @@ export async function deletePatientAction(
     }
     return { ok: true };
   } catch (e) {
-    console.error("[deletePatientAction]", e);
+    logServerError("deletePatientAction", e);
     const message =
       e instanceof Error ? e.message : "Impossible de supprimer le patient.";
     return { ok: false, error: message };

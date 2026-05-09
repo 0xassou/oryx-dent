@@ -2,7 +2,10 @@
  * Logique métier : déduction de stock à partir d'un acte clinique et de protocoles.
  */
 
+"use client";
+
 import protocolsSeed from "@/data/protocols_seed.json";
+import { getCabinetValue, persistCabinetPartial } from "@/lib/client/cabinetBlob";
 
 export const STOCK_UPDATED_EVENT = "dental-stock-updated";
 
@@ -297,9 +300,7 @@ export function saveDentalStock(_stock: StockLine[]): void {
 export function loadProtocols(): ActProtocolMap {
   if (typeof window === "undefined") return { ...DEFAULT_ACT_PROTOCOLS };
   try {
-    const raw = localStorage.getItem(DENTAL_PROTOCOLS_LS_KEY);
-    if (!raw) return { ...DEFAULT_ACT_PROTOCOLS };
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = getCabinetValue<unknown>(DENTAL_PROTOCOLS_LS_KEY);
     if (
       !parsed ||
       typeof parsed !== "object" ||
@@ -329,10 +330,7 @@ export function isProductLinkedToProtocol(
 export function saveProtocols(protocols: ActProtocolMap): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(
-      DENTAL_PROTOCOLS_LS_KEY,
-      JSON.stringify(protocols),
-    );
+    void persistCabinetPartial({ [DENTAL_PROTOCOLS_LS_KEY]: protocols });
   } catch (e) {
     console.error("Storage error:", e);
   }

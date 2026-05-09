@@ -2,6 +2,8 @@
 
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireStocksAccessSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 import type { StockInput, StockRow } from "@/lib/types/stocks-db";
 
 const SELECT = `
@@ -39,12 +41,14 @@ function mapRow(r: Record<string, unknown>): StockRow {
 }
 
 export async function getStocksAction(): Promise<StocksOk<StockRow[]>> {
+  const auth = await requireStocksAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(`${SELECT} ORDER BY nom ASC`);
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getStocksAction]", e);
+    logServerError("[getStocksAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -55,6 +59,8 @@ export async function getStocksAction(): Promise<StocksOk<StockRow[]>> {
 export async function createStockAction(
   data: StockInput & { id?: string },
 ): Promise<StocksOk<StockRow>> {
+  const auth = await requireStocksAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const id = data.id?.trim() || randomUUID();
     const pool = getPostgresPool();
@@ -82,7 +88,7 @@ export async function createStockAction(
     if (!row) return { ok: false, error: "Insertion stock sans retour" };
     return { ok: true, data: mapRow(row as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createStockAction]", e);
+    logServerError("[createStockAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -94,6 +100,8 @@ export async function updateStockAction(
   id: string,
   data: Partial<StockInput>,
 ): Promise<StocksOk<StockRow>> {
+  const auth = await requireStocksAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -141,7 +149,7 @@ export async function updateStockAction(
     if (!r) return { ok: false, error: "Produit introuvable après mise à jour" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updateStockAction]", e);
+    logServerError("[updateStockAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -152,6 +160,8 @@ export async function updateStockAction(
 export async function deleteStockAction(
   id: string,
 ): Promise<StocksOk<void>> {
+  const auth = await requireStocksAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -159,7 +169,7 @@ export async function deleteStockAction(
     await pool.query(`DELETE FROM stocks WHERE id = $1`, [rid]);
     return { ok: true, data: undefined };
   } catch (e) {
-    console.error("[deleteStockAction]", e);
+    logServerError("[deleteStockAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),

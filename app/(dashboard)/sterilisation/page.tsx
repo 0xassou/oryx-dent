@@ -27,6 +27,10 @@ import {
   formatDateKeyLocal,
   type AppointmentRdv,
 } from "@/utils/appointmentData";
+import {
+  getCabinetValue,
+  persistCabinetPartial,
+} from "@/lib/client/cabinetBlob";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -143,9 +147,17 @@ function buildDefaultKits(): IndividualKit[] {
 
 function readKits(): IndividualKit[] | null {
   try {
-    const raw = localStorage.getItem(KITS_LS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
+    if (typeof window === "undefined") return null;
+    let parsed: unknown = getCabinetValue(KITS_LS_KEY);
+    if (parsed == null) {
+      const raw = localStorage.getItem(KITS_LS_KEY);
+      if (!raw) return null;
+      parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        void persistCabinetPartial({ [KITS_LS_KEY]: parsed });
+        localStorage.removeItem(KITS_LS_KEY);
+      }
+    }
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
     return parsed as IndividualKit[];
   } catch {
@@ -154,11 +166,8 @@ function readKits(): IndividualKit[] | null {
 }
 
 function writeKits(kits: IndividualKit[]) {
-  try {
-    localStorage.setItem(KITS_LS_KEY, JSON.stringify(kits));
-  } catch {
-    /* ignore */
-  }
+  if (typeof window === "undefined") return;
+  void persistCabinetPartial({ [KITS_LS_KEY]: kits });
 }
 
 /**
@@ -443,11 +452,21 @@ function migrateCycleShape(c: AutoclaveCycle): AutoclaveCycle {
 
 function readStorage(): SterilizationDataV2 {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) {
+    if (typeof window === "undefined") {
       return { stockByType: DEFAULT_STOCK(), cycles: [] };
     }
-    const parsed = JSON.parse(raw) as unknown;
+    let parsed: unknown = getCabinetValue(LS_KEY);
+    if (parsed == null) {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) {
+        return { stockByType: DEFAULT_STOCK(), cycles: [] };
+      }
+      parsed = JSON.parse(raw) as unknown;
+      const migrated = migrateFromLegacy(parsed);
+      void persistCabinetPartial({ [LS_KEY]: migrated });
+      localStorage.removeItem(LS_KEY);
+      return migrated;
+    }
     return migrateFromLegacy(parsed);
   } catch {
     return { stockByType: DEFAULT_STOCK(), cycles: [] };
@@ -455,7 +474,8 @@ function readStorage(): SterilizationDataV2 {
 }
 
 function writeStorage(data: SterilizationDataV2) {
-  localStorage.setItem(LS_KEY, JSON.stringify(data));
+  if (typeof window === "undefined") return;
+  void persistCabinetPartial({ [LS_KEY]: data });
 }
 
 /** Stock cohérent avec un cycle #3 encore en attente de validation (1 examen + 1 endo en machine). */
@@ -633,8 +653,16 @@ export default function SterilisationPage() {
   useEffect(() => {
     if (!isMounted) return;
     try {
-      const raw = localStorage.getItem(JOURNEE_BANNER_LS_KEY);
-      if (raw === "1") setJourneeBannerCollapsed(true);
+      const v = getCabinetValue<string>(JOURNEE_BANNER_LS_KEY);
+      if (v === "1") setJourneeBannerCollapsed(true);
+      else if (v == null && typeof window !== "undefined") {
+        const raw = localStorage.getItem(JOURNEE_BANNER_LS_KEY);
+        if (raw === "1") {
+          setJourneeBannerCollapsed(true);
+          void persistCabinetPartial({ [JOURNEE_BANNER_LS_KEY]: "1" });
+          localStorage.removeItem(JOURNEE_BANNER_LS_KEY);
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -643,11 +671,9 @@ export default function SterilisationPage() {
   function toggleJourneeBanner() {
     setJourneeBannerCollapsed((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem(JOURNEE_BANNER_LS_KEY, next ? "1" : "0");
-      } catch {
-        /* ignore */
-      }
+      void persistCabinetPartial({
+        [JOURNEE_BANNER_LS_KEY]: next ? "1" : "0",
+      });
       return next;
     });
   }

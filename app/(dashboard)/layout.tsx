@@ -20,6 +20,9 @@ import { toTitleCase } from "@/utils/formatters";
 import { getAppointmentsByDateAction } from "@/app/actions/appointments";
 import { getStocksAction } from "@/app/actions/stocks";
 import { getFacturesAction } from "@/app/actions/factures";
+import { getCabinetSettingsAction } from "@/app/actions/cabinet-settings";
+import { resolveAppRoleForSessionAction } from "@/app/actions/team";
+import { replaceCabinetBlobFromServer } from "@/lib/client/cabinetBlob";
 import { stockRowToStockLine } from "@/utils/stockDbMapping";
 import { STOCK_UPDATED_EVENT } from "@/utils/stockLogic";
 import { FACTURES_UPDATED_EVENT } from "@/utils/factureDocuments";
@@ -169,24 +172,20 @@ export default function DashboardLayout({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/auth/get-session", {
-          credentials: "include",
-          cache: "no-store",
-        });
-        const data: unknown = await res.json().catch(() => null);
-        if (cancelled || data === null || typeof data !== "object") return;
-        const typed = data as {
-          session?: unknown;
-          user?: { email?: string; name?: string | null };
-        };
-        if (!typed.session || !typed.user) return;
-        const u = typed.user;
-        setCurrentUser({
-          email: u.email ?? "",
-          nom: u.name?.trim() ? u.name.trim() : "Administrateur",
-          role: "admin",
-        });
-        setCurrentRole("admin");
+        const [cab, resolved] = await Promise.all([
+          getCabinetSettingsAction(),
+          resolveAppRoleForSessionAction(),
+        ]);
+        if (cancelled) return;
+        if (cab.ok) replaceCabinetBlobFromServer(cab.data);
+        if (resolved.ok) {
+          setCurrentRole(resolved.role);
+          setCurrentUser({
+            email: resolved.email,
+            nom: resolved.nom,
+            role: resolved.role,
+          });
+        }
       } catch {
         /* noop */
       }

@@ -1,5 +1,5 @@
 /**
- * Commandes laboratoire / prothèses (localStorage `dental_lab_commandes`).
+ * Commandes laboratoire / prothèses — persistance PostgreSQL (Server Actions).
  */
 
 export const DENTAL_LAB_COMMANDES_KEY = "dental_lab_commandes";
@@ -270,43 +270,49 @@ function seedCommandes(): LaboratoireCommande[] {
   ];
 }
 
+/** Données labo : PostgreSQL via Server Actions uniquement (plus de localStorage). */
 export function readLabCommandesFromStorage(): LaboratoireCommande[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DENTAL_LAB_COMMANDES_KEY);
-    if (raw == null || raw === "") {
-      const seed = seedCommandes();
-      writeLabCommandesToStorage(seed);
-      return seed;
-    }
-    const data = JSON.parse(raw) as unknown;
-    if (!Array.isArray(data)) {
-      const seed = seedCommandes();
-      writeLabCommandesToStorage(seed);
-      return seed;
-    }
-    const out: LaboratoireCommande[] = [];
-    for (const item of data) {
-      const c = parseCommande(item);
-      if (c) out.push(c);
-    }
-    if (!out.length) {
-      const seed = seedCommandes();
-      writeLabCommandesToStorage(seed);
-      return seed;
-    }
-    return out;
-  } catch {
-    const seed = seedCommandes();
-    writeLabCommandesToStorage(seed);
-    return seed;
-  }
+  return [];
 }
 
-export function writeLabCommandesToStorage(items: LaboratoireCommande[]) {
+export function writeLabCommandesToStorage(_items: LaboratoireCommande[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DENTAL_LAB_COMMANDES_KEY, JSON.stringify(items));
   window.dispatchEvent(new CustomEvent(LAB_COMMANDES_UPDATED_EVENT));
+}
+
+/** Forme renvoyée par les Server Actions `commandes_labo` (champs camelCase UI). */
+export function mapServerCommandeLaboToUi(c: {
+  id: string;
+  patientId?: string;
+  patientNom?: string;
+  travail: string;
+  laboratoire?: string;
+  dent?: string;
+  teinte?: string;
+  materiau?: string;
+  coutLabo?: number;
+  statut: LaboratoireStatut;
+  dateRetour?: string;
+  datePose?: string;
+  rdvPoseId?: string;
+  rdvRetourId?: string;
+}): LaboratoireCommande {
+  return {
+    id: c.id,
+    patient: (c.patientNom ?? "").trim() || "—",
+    patientId: c.patientId,
+    dent: c.dent,
+    travail: c.travail,
+    labo: (c.laboratoire ?? "").trim() || "—",
+    retourIso: c.dateRetour ?? "",
+    teinte: c.teinte,
+    materiau: c.materiau,
+    rdvPatientIso: c.datePose,
+    statut: c.statut,
+    coutLaboDa: c.coutLabo,
+    linkedPoseAppointmentId: c.rdvPoseId,
+    linkedRetourAppointmentId: c.rdvRetourId,
+  };
 }
 
 export function listLogisticsAlerts(

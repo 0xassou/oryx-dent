@@ -28,6 +28,8 @@ async function hasBetterAuthSession(request: NextRequest): Promise<boolean> {
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/login" || pathname.startsWith("/login/")) return true;
   if (pathname.startsWith("/api/auth")) return true;
+  /** Cron HTTP (secret vérifié dans la route, pas de session cookie). */
+  if (pathname.startsWith("/api/cron/")) return true;
   /** Invitation par lien token (sans compte Better Auth). */
   if (pathname.startsWith("/invitation")) return true;
   return false;
@@ -48,7 +50,8 @@ async function getMustChangePassword(request: NextRequest): Promise<boolean> {
   }
 }
 
-export async function middleware(req: NextRequest) {
+/** Next.js 16+ : `proxy` remplace l’ancien export `middleware`. */
+export async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   if (pathname === "/api/team/must-change-password") {

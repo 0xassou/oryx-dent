@@ -3,12 +3,15 @@
 import { Plus, X } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
-  addExpenseToStorage,
+  depenseRowToDentalExpense,
   type DentalExpense,
   type ExpenseCategory,
   EXPENSE_CATEGORIES,
-  readExpensesFromStorage,
 } from "@/utils/expensesData";
+import {
+  createDepenseAction,
+  getDepensesAction,
+} from "@/app/actions/depenses";
 import { formatDZD, formatDate } from "@/utils/formatters";
 
 const JUSTIF_MAX_BYTES = 5 * 1024 * 1024;
@@ -58,13 +61,19 @@ export function FinancesDepensesTab() {
   const [formJustif, setFormJustif] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const reload = useCallback(() => {
-    setExpenses(readExpensesFromStorage());
+  const reload = useCallback(async () => {
+    const res = await getDepensesAction();
+    if (!res.ok) {
+      console.error(res.error);
+      setExpenses([]);
+      return;
+    }
+    setExpenses(res.data.map(depenseRowToDentalExpense));
   }, []);
 
   useEffect(() => {
     setMounted(true);
-    reload();
+    void reload();
   }, [reload]);
 
   function openModal() {
@@ -88,14 +97,17 @@ export function FinancesDepensesTab() {
       if (formJustif) {
         justificatif_url = await fileToDataUrl(formJustif);
       }
-      addExpenseToStorage({
-        date: new Date(`${formDate}T12:00:00`).toISOString(),
-        libelle: lib,
-        montant,
+      const ins = await createDepenseAction({
         categorie: formCategorie,
-        justificatif_url,
+        description: lib,
+        montant,
+        date: formDate,
+        justificatif: justificatif_url || null,
       });
-      setExpenses(readExpensesFromStorage());
+      if (!ins.ok) {
+        throw new Error(ins.error);
+      }
+      await reload();
       setModalOpen(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Enregistrement impossible.");

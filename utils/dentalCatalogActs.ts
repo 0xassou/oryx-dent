@@ -1,4 +1,8 @@
-/** Catalogue d'actes dentaires (localStorage `dental_catalog_acts`). */
+/** Catalogue d'actes dentaires (JSONB cabinet `dental_catalog_acts`). */
+
+"use client";
+
+import { getCabinetValue, persistCabinetPartial } from "@/lib/client/cabinetBlob";
 
 export const DENTAL_CATALOG_ACTS_KEY = "dental_catalog_acts";
 
@@ -63,9 +67,8 @@ function normalizeAct(raw: unknown): DentalCatalogAct | null {
 export function readCatalogFromStorage(): DentalCatalogAct[] {
   if (typeof window === "undefined") return [...DEFAULT_CATALOG_SEED];
   try {
-    const raw = localStorage.getItem(DENTAL_CATALOG_ACTS_KEY);
-    if (!raw) return [...DEFAULT_CATALOG_SEED];
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = getCabinetValue<unknown>(DENTAL_CATALOG_ACTS_KEY);
+    if (parsed == null) return [...DEFAULT_CATALOG_SEED];
     if (!Array.isArray(parsed)) return [...DEFAULT_CATALOG_SEED];
     const out = parsed
       .map(normalizeAct)
@@ -78,14 +81,14 @@ export function readCatalogFromStorage(): DentalCatalogAct[] {
 
 export function writeCatalogToStorage(acts: DentalCatalogAct[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DENTAL_CATALOG_ACTS_KEY, JSON.stringify(acts));
+  void persistCabinetPartial({ [DENTAL_CATALOG_ACTS_KEY]: acts });
 }
 
 /** Initialise le stockage avec les tarifs de référence si la clé est absente ou vide. */
 export function ensureCatalogSeeded(): DentalCatalogAct[] {
   if (typeof window === "undefined") return [...DEFAULT_CATALOG_SEED];
-  const raw = localStorage.getItem(DENTAL_CATALOG_ACTS_KEY);
-  if (!raw || raw === "[]") {
+  const parsed = getCabinetValue<unknown>(DENTAL_CATALOG_ACTS_KEY);
+  if (parsed == null || (Array.isArray(parsed) && parsed.length === 0)) {
     const seed = [...DEFAULT_CATALOG_SEED];
     writeCatalogToStorage(seed);
     return seed;

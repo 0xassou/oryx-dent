@@ -1,6 +1,12 @@
 "use server";
 
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireCabinetAdminSession } from "@/lib/server/auth/require-session";
+
+async function assertCabinetFinancesAdmin(): Promise<void> {
+  const g = await requireCabinetAdminSession();
+  if (!g.ok) throw new Error(g.error);
+}
 
 export type MonthlyRevenuePoint = {
   mois: string; // YYYY-MM-01
@@ -65,6 +71,7 @@ function startDateSqlForPeriode(periode: ExportPeriode): string {
 export async function getMonthlyRevenueLast12MonthsAction(): Promise<
   MonthlyRevenuePoint[]
 > {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const { rows } = await pool.query(
     `
@@ -95,6 +102,7 @@ export async function getMonthlyRevenueLast12MonthsAction(): Promise<
 }
 
 export async function getTopActesAction(): Promise<TopActePoint[]> {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const { rows } = await pool.query(
     `
@@ -113,6 +121,7 @@ export async function getTopActesAction(): Promise<TopActePoint[]> {
 }
 
 export async function getFinancesStatsKpisAction(): Promise<FinancesStatsKpis> {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
 
   const qTotalPatients = pool.query(`SELECT COUNT(*)::int AS count FROM patients`);
@@ -182,6 +191,7 @@ function escapeCsvCell(v: string): string {
 export async function exportFacturesCsvAction(
   periode: ExportPeriode,
 ): Promise<{ filename: string; csv: string }> {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const startExpr = startDateSqlForPeriode(periode);
   const { rows } = await pool.query(
@@ -235,6 +245,7 @@ export async function exportFacturesCsvAction(
 export async function exportFacturesPdfAction(
   periode: ExportPeriode,
 ): Promise<{ filename: string; pdfBase64: string }> {
+  await assertCabinetFinancesAdmin();
   // Implémentation minimale côté serveur (sans modifier le design UI).
   // On génère un PDF texte simple via jsPDF (déjà dans les deps).
   const { jsPDF } = await import("jspdf");
@@ -333,6 +344,7 @@ export async function exportFacturesPdfAction(
 export async function getRecettesVsDepensesLast6MonthsAction(): Promise<
   MonthlyRecettesDepensesPoint[]
 > {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const { rows } = await pool.query(
     `
@@ -373,6 +385,7 @@ export async function getRecettesVsDepensesLast6MonthsAction(): Promise<
 export async function getDepensesByCategorieThisMonthAction(): Promise<
   DepensesByCategoriePoint[]
 > {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const { rows } = await pool.query(
     `
@@ -390,6 +403,7 @@ export async function getDepensesByCategorieThisMonthAction(): Promise<
 }
 
 export async function getTopActesFacturesAction(): Promise<TopActeFacturePoint[]> {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const { rows } = await pool.query(
     `
@@ -412,6 +426,7 @@ export async function getTopActesFacturesAction(): Promise<TopActeFacturePoint[]
 export async function exportFinanceCsvAction(
   periode: ExportPeriode,
 ): Promise<{ filename: string; csv: string }> {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const startExpr = startDateSqlForPeriode(periode);
 
@@ -490,6 +505,7 @@ export async function exportFinanceCsvAction(
 export async function exportFinancePdfAction(
   periode: ExportPeriode,
 ): Promise<{ filename: string; pdfBase64: string }> {
+  await assertCabinetFinancesAdmin();
   const { jsPDF } = await import("jspdf");
   const pool = getPostgresPool();
   const startExpr = startDateSqlForPeriode(periode);
@@ -560,6 +576,7 @@ export type GestionFinanciereKpis = {
 };
 
 export async function getGestionFinanciereKpisAction(): Promise<GestionFinanciereKpis> {
+  await assertCabinetFinancesAdmin();
   const pool = getPostgresPool();
   const [recRes, depRes, recouvRes] = await Promise.all([
     pool.query(

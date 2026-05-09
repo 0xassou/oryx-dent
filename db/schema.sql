@@ -222,3 +222,38 @@ ALTER TABLE consultations ADD COLUMN IF NOT EXISTS type_acte TEXT;
 CREATE INDEX IF NOT EXISTS idx_consultations_appointment ON consultations(appointment_id);
 CREATE INDEX IF NOT EXISTS idx_consultations_patient ON consultations(patient_id);
 CREATE INDEX IF NOT EXISTS idx_consultations_statut ON consultations(statut);
+
+-- ─── Paramètres cabinet & état UI patient (remplace localStorage) ───
+CREATE TABLE IF NOT EXISTS cabinet_settings (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO cabinet_settings (id, settings) VALUES ('default', '{}'::jsonb)
+  ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS patient_ui_state (
+  patient_id TEXT PRIMARY KEY REFERENCES patients(id) ON DELETE CASCADE,
+  state JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ─── Indexation (colonnes fréquemment filtrées) ───
+CREATE INDEX IF NOT EXISTS idx_patients_nom ON patients(nom);
+CREATE INDEX IF NOT EXISTS idx_patients_email ON patients(email);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_statut ON appointments(statut);
+
+CREATE INDEX IF NOT EXISTS idx_factures_patient_id ON factures(patient_id);
+CREATE INDEX IF NOT EXISTS idx_factures_statut ON factures(statut);
+CREATE INDEX IF NOT EXISTS idx_factures_date ON factures(date);
+
+CREATE INDEX IF NOT EXISTS idx_stocks_categorie ON stocks(categorie);
+
+CREATE INDEX IF NOT EXISTS idx_commandes_labo_statut ON commandes_labo(statut);
+CREATE INDEX IF NOT EXISTS idx_commandes_labo_patient_id ON commandes_labo(patient_id);
+
+CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members(email);
+CREATE INDEX IF NOT EXISTS idx_team_members_role ON team_members(role);

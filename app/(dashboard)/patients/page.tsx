@@ -25,6 +25,8 @@ import {
   patientRowToDentalPatientRecord,
   writeMinimalPatientProfile,
 } from "@/utils/patientData";
+import { getCabinetBlob } from "@/lib/client/cabinetBlob";
+import { mergePatientUiStateAction } from "@/app/actions/patient-ui-state";
 
 const AVATAR_PALETTE = [
   { bg: "bg-violet-100 dark:bg-violet-900/40", text: "text-violet-700 dark:text-violet-300" },
@@ -50,10 +52,7 @@ const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
 function getCabinetWhatsappNumber(): string {
   if (typeof window === "undefined") return "";
   try {
-    const s = JSON.parse(localStorage.getItem("dental_settings") ?? "{}") as Record<
-      string,
-      unknown
-    >;
+    const s = getCabinetBlob() as Record<string, unknown>;
     const tel = typeof s.telephone === "string" ? s.telephone : "";
     const digits = tel.replace(/[^\d]/g, "");
     if (!digits) return "";
@@ -191,39 +190,49 @@ function PatientsPageContent() {
           ? "Homme"
           : "—";
 
-    // Profil complet localStorage (utilisé par la fiche patient)
     try {
-      if (typeof window !== "undefined") {
-        localStorage.setItem(
-          `patient_profile_${newId}`,
-          JSON.stringify({
-            id: newId,
-            prenom: payload.prenom.trim(),
-            nom: `${payload.prenom.trim()} ${payload.nom.trim()}`.trim(),
-            age: computeAgeFromDateIso(payload.dateNaissance),
-            genre: genreLabel,
-            profession: "—",
-            adresse: payload.adresse.trim() || "—",
-            telephone: record.telephone || "—",
-            telephoneSecondaire: payload.telephoneSecondaire.trim() || "",
-            email: payload.email.trim() || "—",
-            dateNaissance: payload.dateNaissance.trim(),
-            groupeSanguin: payload.groupeSanguin.trim() || "",
-            // La fiche affiche `mutuelle` → on la mappe sur `mutuelle_nom`
-            mutuelle: payload.mutuelleNom.trim() || "",
-            mutuelleNumero: payload.mutuelleNumero.trim() || "",
-            premiereVisite: "",
-            statut: "actif",
-            alerts: payload.allergies
-              ? [{ label: payload.allergies.trim(), level: "danger" }]
-              : [],
-          }),
-        );
+      const prof = await mergePatientUiStateAction(newId, {
+        profile: {
+          id: newId,
+          prenom: payload.prenom.trim(),
+          nom: `${payload.prenom.trim()} ${payload.nom.trim()}`.trim(),
+          age: computeAgeFromDateIso(payload.dateNaissance),
+          genre: genreLabel,
+          profession: "—",
+          adresse: payload.adresse.trim() || "—",
+          telephone: record.telephone || "—",
+          telephoneSecondaire: payload.telephoneSecondaire.trim() || "",
+          email: payload.email.trim() || "—",
+          dateNaissance: payload.dateNaissance.trim(),
+          groupeSanguin: payload.groupeSanguin.trim() || "",
+          mutuelle: payload.mutuelleNom.trim() || "",
+          mutuelleNumero: payload.mutuelleNumero.trim() || "",
+          premiereVisite: "",
+          statut: "actif",
+          alerts: payload.allergies
+            ? [{ label: payload.allergies.trim(), level: "danger" as const }]
+            : [],
+        },
+      });
+      if (!prof.ok) {
+        await writeMinimalPatientProfile({
+          id: newId,
+          nom: displayPatientName(record),
+          age: computeAgeFromDateIso(payload.dateNaissance),
+          genre: genreLabel,
+          profession: "—",
+          adresse: payload.adresse.trim() || "—",
+          telephone: record.telephone,
+          email: payload.email.trim() || "—",
+          dateNaissance: payload.dateNaissance.trim(),
+          alerts: payload.allergies
+            ? [payload.allergies.trim()].filter(Boolean)
+            : [],
+        });
       }
     } catch (e) {
       console.error("[patient_profile write]", e);
-      // fallback: profil minimal
-      writeMinimalPatientProfile({
+      await writeMinimalPatientProfile({
         id: newId,
         nom: displayPatientName(record),
         age: computeAgeFromDateIso(payload.dateNaissance),
@@ -237,7 +246,7 @@ function PatientsPageContent() {
       });
     }
 
-    initializeEmptyDentalChart(newId);
+    await initializeEmptyDentalChart(newId);
 
     await reload();
     setIsModalOpen(false);

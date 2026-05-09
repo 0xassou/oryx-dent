@@ -3,9 +3,8 @@
 import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Lock, ShieldCheck, User } from "lucide-react";
-import { loginAsMemberAction } from "@/app/actions/auth";
+import { acceptInvitationAction } from "@/app/actions/team";
 import {
-  acceptInvitation,
   parseInvitationToken,
   ROLE_LABEL,
   setCurrentRole,
@@ -13,6 +12,7 @@ import {
   type InvitationTokenPayload,
   type Role,
 } from "@/utils/roles";
+import { authClient } from "@/lib/auth-client";
 
 type Stage = "loading" | "invalid" | "form" | "done";
 
@@ -77,23 +77,36 @@ export default function InvitationPage({
       return;
     }
     setSubmitting(true);
-    const res = await acceptInvitation(token, nom, pwd);
+    const res = await acceptInvitationAction(token, nom, pwd);
     if (!res.ok) {
       setError(res.error);
       setSubmitting(false);
       return;
     }
-    const session = await loginAsMemberAction(res.member.id);
-    if (!session.ok) {
-      setError(session.error ?? "Impossible de créer la session");
+    const signIn = await authClient.signIn.email({
+      email: res.email,
+      password: pwd,
+    });
+    const signErr =
+      signIn &&
+      typeof signIn === "object" &&
+      "error" in signIn &&
+      signIn.error &&
+      typeof signIn.error === "object" &&
+      signIn.error !== null &&
+      "message" in signIn.error
+        ? String((signIn.error as { message?: string }).message ?? "")
+        : "";
+    if (signErr) {
+      setError(signErr || "Connexion impossible après inscription.");
       setSubmitting(false);
       return;
     }
-    setCurrentRole(res.member.role);
+    setCurrentRole(res.role as Role);
     setCurrentUser({
-      email: res.member.email,
-      nom: res.member.nom,
-      role: res.member.role,
+      email: res.email,
+      nom: nom.trim(),
+      role: res.role as Role,
     });
     setStage("done");
   }

@@ -280,8 +280,10 @@ export function TeamSection() {
                           <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
                             Mot de passe temporaire
                           </p>
-                          <p className="font-mono text-sm font-semibold text-[color:var(--ds-primary)]">
-                            {m.temp_password_display ?? "—"}
+                          <p className="text-xs leading-relaxed text-[var(--ds-text-muted)]">
+                            Pour des raisons de sécurité, le mot de passe en clair
+                            n&apos;est affiché qu&apos;une fois, dans la fenêtre de
+                            confirmation après création du compte.
                           </p>
                         </div>
                       ) : null}

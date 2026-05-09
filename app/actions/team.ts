@@ -4,6 +4,8 @@ import { generateId } from "@better-auth/core/utils/id";
 import { hashPassword } from "@better-auth/utils/password";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { getBetterAuthSession } from "@/lib/server/auth/better-auth-session";
+import { resolveCabinetRoleForEmail } from "@/lib/server/auth/cabinet-role";
+import { requireCabinetAdminSession } from "@/lib/server/auth/require-session";
 import { generateTempPassword } from "@/lib/team/generate-temp-password";
 import type {
   CreateTeamMemberInput,
@@ -12,6 +14,8 @@ import type {
   UpdateTeamMemberInput,
 } from "@/lib/types/team-db";
 import type { Role } from "@/utils/roles";
+import { parseInvitationToken } from "@/utils/roles";
+import { logServerError } from "@/lib/server/logger";
 
 function toIso(v: unknown): string {
   if (v == null) return new Date(0).toISOString();
@@ -41,6 +45,16 @@ function mapTeamRow(r: Record<string, unknown>): TeamMemberRow {
   };
 }
 
+/** Réponse API / UI : jamais de hash ni de mot de passe en clair. */
+function mapTeamMemberForClient(r: Record<string, unknown>): TeamMemberRow {
+  const m = mapTeamRow(r);
+  return {
+    ...m,
+    password_hash: null,
+    temp_password_display: null,
+  };
+}
+
 const ROLES: readonly TeamMemberRole[] = [
   "admin",
   "praticien",
@@ -50,39 +64,6 @@ const ROLES: readonly TeamMemberRole[] = [
 
 function isTeamMemberRole(v: string): v is TeamMemberRole {
   return (ROLES as readonly string[]).includes(v);
-}
-
-/**
- * Gestion équipe (liste / CRUD) : toute session Better Auth valide suffit.
- * La matrice fine par rôle (UI + futur garde-fou serveur) repose sur `team_members`.
- */
-async function requireSessionForTeamActions(): Promise<
-  { ok: true; sessionUserId: string; email: string } | { ok: false; error: string }
-> {
-  const session = await getBetterAuthSession();
-  if (!session?.user?.id || !session.user.email?.trim()) {
-    return { ok: false, error: "Non connecté" };
-  }
-  const email = session.user.email.trim().toLowerCase();
-  const pool = getPostgresPool();
-
-  const { rows: userRows } = await pool.query<{ id: string }>(
-    `SELECT id FROM "user" WHERE id = $1 AND lower("email") = lower($2) LIMIT 1`,
-    [session.user.id, email],
-  );
-  if (userRows.length > 0) {
-    return { ok: true, sessionUserId: session.user.id, email };
-  }
-
-  const { rows: adminRows } = await pool.query<{ id: string }>(
-    `SELECT id FROM team_members WHERE lower(email) = lower($1) AND actif = true AND role = 'admin' LIMIT 1`,
-    [email],
-  );
-  if (adminRows.length > 0) {
-    return { ok: true, sessionUserId: session.user.id, email };
-  }
-
-  return { ok: false, error: "Non connecté" };
 }
 
 /**
@@ -105,52 +86,33 @@ export async function resolveAppRoleForSessionAction(): Promise<
   const email = session.user.email.trim().toLowerCase();
   const pool = getPostgresPool();
   const { rows } = await pool.query<{
-    role: string;
     nom: string;
     prenom: string;
   }>(
-    `SELECT role, nom, prenom FROM team_members WHERE lower(email) = lower($1) AND actif = true LIMIT 1`,
+    `SELECT nom, prenom FROM team_members WHERE lower(email) = lower($1) AND actif = true LIMIT 1`,
     [email],
   );
-  if (rows.length === 0) {
-    const name =
-      session.user.name?.trim() ||
-      email.split("@")[0] ||
-      "Utilisateur";
-    return {
-      ok: true,
-      role: "admin",
-      email,
-      nom: name,
-    };
-  }
-  const r = rows[0]!;
-  if (!isTeamMemberRole(r.role)) {
-    return {
-      ok: true,
-      role: "assistant",
-      email,
-      nom: `${r.prenom} ${r.nom}`.trim(),
-    };
-  }
+  const cabinetRole = await resolveCabinetRoleForEmail(email);
   const roleMap: Record<TeamMemberRole, Role> = {
     admin: "admin",
     praticien: "praticien",
     assistant: "assistant",
     remplacant: "remplacant",
   };
-  return {
-    ok: true,
-    role: roleMap[r.role],
-    email,
-    nom: `${r.prenom} ${r.nom}`.trim(),
-  };
+  const role = roleMap[cabinetRole];
+  let nom =
+    session.user.name?.trim() || email.split("@")[0] || "Utilisateur";
+  if (rows.length > 0) {
+    const r = rows[0]!;
+    nom = `${r.prenom} ${r.nom}`.trim();
+  }
+  return { ok: true, role, email, nom };
 }
 
 export async function getTeamMembersAction(): Promise<
   { ok: true; data: TeamMemberRow[] } | { ok: false; error: string }
 > {
-  const gate = await requireSessionForTeamActions();
+  const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
   try {
     const pool = getPostgresPool();
@@ -159,10 +121,10 @@ export async function getTeamMembersAction(): Promise<
     );
     return {
       ok: true,
-      data: rows.map((row) => mapTeamRow(row as Record<string, unknown>)),
+      data: rows.map((row) => mapTeamMemberForClient(row as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[getTeamMembersAction]", e);
+    logServerError("getTeamMembersAction", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Impossible de charger l'équipe.",
@@ -185,7 +147,7 @@ export async function createTeamMemberAction(
     }
   | { ok: false; error: string }
 > {
-  const gate = await requireSessionForTeamActions();
+  const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
 
   const nom = data.nom.trim();
@@ -250,14 +212,10 @@ export async function createTeamMemberAction(
       await client.query("RELEASE SAVEPOINT team_member_auth");
     } catch (authErr) {
       await client.query("ROLLBACK TO SAVEPOINT team_member_auth");
-      console.error(
-        "[createTeamMemberAction] insert user/account (Better Auth) failed — continuing with team_members only",
-        {
-          message: authErr instanceof Error ? authErr.message : String(authErr),
-          stack: authErr instanceof Error ? authErr.stack : undefined,
-          cause: authErr instanceof Error ? authErr.cause : undefined,
-          raw: authErr,
-        },
+      logServerError(
+        "createTeamMemberAction:authInsert",
+        authErr,
+        { phase: "insert user/account Better Auth" },
       );
       authWarning =
         "Membre enregistré dans l'équipe, mais la création du compte de connexion a échoué. Vérifiez les tables Better Auth ou créez le compte manuellement.";
@@ -295,7 +253,7 @@ export async function createTeamMemberAction(
     await client.query("COMMIT");
     return {
       ok: true,
-      member: mapTeamRow(row0),
+      member: mapTeamMemberForClient(row0),
       tempPassword: tempPlain,
       ...(authWarning ? { authWarning } : {}),
     };
@@ -303,19 +261,9 @@ export async function createTeamMemberAction(
     try {
       await client.query("ROLLBACK");
     } catch (rollbackErr) {
-      console.error("[createTeamMemberAction] ROLLBACK failed", {
-        message: rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
-        stack: rollbackErr instanceof Error ? rollbackErr.stack : undefined,
-        raw: rollbackErr,
-      });
+      logServerError("createTeamMemberAction:rollback", rollbackErr);
     }
-    console.error("[createTeamMemberAction] fatal error (full)", {
-      message: e instanceof Error ? e.message : String(e),
-      name: e instanceof Error ? e.name : typeof e,
-      stack: e instanceof Error ? e.stack : undefined,
-      cause: e instanceof Error ? e.cause : undefined,
-      raw: e,
-    });
+    logServerError("createTeamMemberAction", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Création impossible.",
@@ -329,7 +277,7 @@ export async function updateTeamMemberAction(
   id: string,
   data: UpdateTeamMemberInput,
 ): Promise<{ ok: true; data: TeamMemberRow } | { ok: false; error: string }> {
-  const gate = await requireSessionForTeamActions();
+  const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
   if (!id?.trim()) return { ok: false, error: "Identifiant manquant." };
 
@@ -399,9 +347,9 @@ export async function updateTeamMemberAction(
       await pool.query(`UPDATE "user" SET "updatedAt" = NOW() WHERE id = $1`, [id]);
     }
 
-    return { ok: true, data: mapTeamRow(row) };
+    return { ok: true, data: mapTeamMemberForClient(row) };
   } catch (e) {
-    console.error("[updateTeamMemberAction]", e);
+    logServerError("updateTeamMemberAction", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Mise à jour impossible.",
@@ -415,10 +363,11 @@ export async function updateTeamMemberAction(
 export async function deleteTeamMemberAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const gate = await requireSessionForTeamActions();
+  const gate = await requireCabinetAdminSession();
   if (!gate.ok) return gate;
+  if (!gate.userId) return { ok: false, error: "Session invalide." };
   if (!id?.trim()) return { ok: false, error: "Identifiant manquant." };
-  if (id === gate.sessionUserId) {
+  if (id === gate.userId) {
     return { ok: false, error: "Vous ne pouvez pas supprimer votre propre compte." };
   }
 
@@ -437,7 +386,7 @@ export async function deleteTeamMemberAction(
     return { ok: true };
   } catch (e) {
     await client.query("ROLLBACK");
-    console.error("[deleteTeamMemberAction]", e);
+    logServerError("deleteTeamMemberAction", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Suppression impossible.",
@@ -495,17 +444,24 @@ export async function completeFirstPasswordChangeAction(
         error: "Compte credential introuvable. Contactez l’administrateur.",
       };
     }
-    await client.query(
+    const tm = await client.query(
       `
       UPDATE team_members
       SET must_change_password = false,
           temp_password_display = NULL,
           password_hash = $1,
           updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $2 AND lower(trim(email)) = lower(trim($3))
       `,
-      [pwdHash, userId],
+      [pwdHash, userId, email],
     );
+    if ((tm.rowCount ?? 0) === 0) {
+      await client.query("ROLLBACK");
+      return {
+        ok: false,
+        error: "Mise à jour du membre d’équipe impossible (email ou identifiant incohérent).",
+      };
+    }
     await client.query("COMMIT");
     return { ok: true };
   } catch (e) {
@@ -514,10 +470,124 @@ export async function completeFirstPasswordChangeAction(
     } catch {
       /* noop */
     }
-    console.error("[completeFirstPasswordChangeAction]", e);
+    logServerError("completeFirstPasswordChangeAction", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Mise à jour impossible.",
+    };
+  } finally {
+    client.release();
+  }
+}
+
+function splitInvitationDisplayName(full: string): { nom: string; prenom: string } {
+  const t = full.trim();
+  if (!t) return { prenom: "Invité", nom: "Cabinet" };
+  const parts = t.split(/\s+/);
+  if (parts.length === 1) {
+    const one = parts[0]!;
+    return { prenom: one, nom: one };
+  }
+  return { prenom: parts[0]!, nom: parts.slice(1).join(" ") };
+}
+
+/**
+ * Acceptation d’invitation (token signé) : crée `user` + `account` Better Auth et `team_members`.
+ * Pas d’authentification préalable (lien public).
+ */
+export async function acceptInvitationAction(
+  rawToken: string,
+  displayName: string,
+  password: string,
+): Promise<
+  | { ok: true; email: string; role: TeamMemberRole; memberId: string }
+  | { ok: false; error: string }
+> {
+  const parsed = await parseInvitationToken(rawToken.trim());
+  if (!parsed.ok) return parsed;
+
+  if (password.length < 8) {
+    return { ok: false, error: "Le mot de passe doit contenir au moins 8 caractères." };
+  }
+
+  const email = parsed.data.email;
+  const roleInput = parsed.data.role;
+  if (roleInput !== "assistant" && roleInput !== "remplacant") {
+    return { ok: false, error: "Rôle d’invitation invalide." };
+  }
+  const role: TeamMemberRole = roleInput;
+
+  const { nom, prenom } = splitInvitationDisplayName(displayName);
+  const memberId = generateId();
+  const pwdHash = await hashPassword(password);
+  const displayNameFull = `${prenom} ${nom}`.trim();
+
+  const pool = getPostgresPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const dupTeam = await client.query(
+      `SELECT id FROM team_members WHERE lower(email) = lower($1)`,
+      [email],
+    );
+    if (dupTeam.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return {
+        ok: false,
+        error: "Ce compte est déjà enregistré. Connectez-vous avec cet e-mail.",
+      };
+    }
+
+    const dupUser = await client.query(
+      `SELECT id FROM "user" WHERE lower("email") = lower($1)`,
+      [email],
+    );
+    if (dupUser.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "Un compte existe déjà avec cet e-mail." };
+    }
+
+    await client.query(
+      `
+      INSERT INTO "user" (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, 1, NULL, NOW(), NOW())
+      `,
+      [memberId, displayNameFull, email],
+    );
+
+    await client.query(
+      `
+      INSERT INTO "account" (id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt")
+      VALUES ($1, $2, 'credential', $2, $3, NOW(), NOW())
+      `,
+      [generateId(), memberId, pwdHash],
+    );
+
+    await client.query(
+      `
+      INSERT INTO team_members (
+        id, nom, prenom, email, role, telephone, specialite, actif,
+        password_hash, must_change_password, temp_password_display,
+        created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, NULL, NULL, true, $6, false, NULL, NOW(), NOW())
+      `,
+      [memberId, nom, prenom, email, role, pwdHash],
+    );
+
+    await client.query("COMMIT");
+    return { ok: true, email, role, memberId };
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      /* noop */
+    }
+    logServerError("acceptInvitationAction", e);
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Inscription impossible.",
     };
   } finally {
     client.release();

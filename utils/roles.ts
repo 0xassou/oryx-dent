@@ -76,17 +76,16 @@ function getInvitationSecret(): string {
   return "oryx-invitation-hmac-v1";
 }
 
-const CABINET_STORAGE_KEY = "oryx_cabinet_id";
-
-/** Identifiant de cabinet côté admin, persisté et embarqué dans l’URL d’invitation. */
+/** Mono-cabinet : identifiant stable pour les tokens d’invitation (plus de localStorage). */
 export function getCabinetId(): string {
-  if (!isBrowser()) return "default-cabinet";
-  let id = window.localStorage.getItem(CABINET_STORAGE_KEY);
-  if (!id) {
-    id = `cb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    window.localStorage.setItem(CABINET_STORAGE_KEY, id);
+  if (
+    typeof process !== "undefined" &&
+    typeof process.env.NEXT_PUBLIC_ORYX_CABINET_ID === "string" &&
+    process.env.NEXT_PUBLIC_ORYX_CABINET_ID.trim()
+  ) {
+    return process.env.NEXT_PUBLIC_ORYX_CABINET_ID.trim();
   }
-  return id;
+  return "default";
 }
 
 /** Id stable d’un membre (même clé côté admin qu’après acceptation sur un autre appareil). */
@@ -287,6 +286,9 @@ export type CurrentUser = {
   role: Role;
 };
 
+let memoryRole: Role = "admin";
+let memoryUser: CurrentUser | null = null;
+
 /* ───────────────────────── Matrice de permissions ───────────────────────── */
 
 /** Onglet de navigation : autorisé pour un ensemble de rôles. */
@@ -367,79 +369,52 @@ function safeParse<T>(raw: string | null, fallback: T): T {
 }
 
 export function getCurrentRole(): Role {
-  if (!isBrowser()) return "admin";
-  const raw = window.localStorage.getItem(STORAGE_KEYS.currentRole);
-  if (
-    raw === "admin" ||
-    raw === "praticien" ||
-    raw === "assistant" ||
-    raw === "remplacant"
-  ) {
-    return raw;
-  }
-  if (raw === "replacant") return "remplacant";
-  return "admin";
+  return memoryRole;
 }
 
 export function setCurrentRole(role: Role): void {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(STORAGE_KEYS.currentRole, role);
-  window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));
+  memoryRole = role;
+  if (isBrowser()) {
+    window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));
+  }
 }
 
 export function getCurrentUser(): CurrentUser | null {
-  if (!isBrowser()) return null;
-  const raw = window.localStorage.getItem(STORAGE_KEYS.currentUser);
-  return safeParse<CurrentUser | null>(raw, null);
+  return memoryUser;
 }
 
 export function setCurrentUser(user: CurrentUser | null): void {
-  if (!isBrowser()) return;
-  if (user) {
-    window.localStorage.setItem(
-      STORAGE_KEYS.currentUser,
-      JSON.stringify(user),
-    );
-  } else {
-    window.localStorage.removeItem(STORAGE_KEYS.currentUser);
+  memoryUser = user;
+  if (isBrowser()) {
+    window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));
   }
-  window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));
 }
 
 export function clearSession(): void {
-  if (!isBrowser()) return;
-  window.localStorage.removeItem(STORAGE_KEYS.currentRole);
-  window.localStorage.removeItem(STORAGE_KEYS.currentUser);
-  window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));
+  memoryRole = "admin";
+  memoryUser = null;
+  if (isBrowser()) {
+    window.dispatchEvent(new CustomEvent(ORYX_ROLE_CHANGED_EVENT));
+  }
 }
 
 /* ───────────────────────── Équipe ───────────────────────── */
 
+/** @deprecated L’équipe est gérée en PostgreSQL (`getTeamMembersAction`). */
 export function loadTeam(): TeamMember[] {
-  if (!isBrowser()) return [];
-  return safeParse<TeamMember[]>(
-    window.localStorage.getItem(STORAGE_KEYS.team),
-    [],
-  );
+  return [];
 }
 
-export function saveTeam(team: TeamMember[]): void {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(STORAGE_KEYS.team, JSON.stringify(team));
-}
+/** @deprecated No-op — voir `getTeamMembersAction`. */
+export function saveTeam(_team: TeamMember[]): void {}
 
+/** @deprecated Invitations via flux serveur / tokens signés uniquement. */
 export function loadInvitations(): Invitation[] {
-  if (!isBrowser()) return [];
-  return safeParse<Invitation[]>(
-    window.localStorage.getItem(STORAGE_KEYS.invitations),
-    [],
-  );
+  return [];
 }
 
-export function saveInvitations(list: Invitation[]): void {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(STORAGE_KEYS.invitations, JSON.stringify(list));
-}
+/** @deprecated No-op. */
+export function saveInvitations(_list: Invitation[]): void {}
 
 /**
  * Côté admin : enregistre l’équipe + copie d’invitation, et génère le token signé

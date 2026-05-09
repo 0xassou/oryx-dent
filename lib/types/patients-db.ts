@@ -21,6 +21,8 @@ export type PatientRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Présent quand la liste patients charge les comptages en une requête. */
+  rdv_count?: number;
 };
 
 export type PatientInput = {

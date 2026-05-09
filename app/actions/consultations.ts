@@ -2,6 +2,8 @@
 
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 
 export type ConsultationStatut =
   | "en_attente"
@@ -103,6 +105,8 @@ const SELECT_JOIN = `
 export async function getConsultationsDuJourAction(): Promise<
   ActionResult<ConsultationRow[]>
 > {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
@@ -121,7 +125,7 @@ export async function getConsultationsDuJourAction(): Promise<
       data: rows.map((r) => mapRow(r as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[getConsultationsDuJourAction]", e);
+    logServerError("[getConsultationsDuJourAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -134,6 +138,8 @@ export async function createConsultationAction(data: {
   /** Motif / type d’acte si sans rendez-vous (appointment_id null). */
   type_acte?: string | null;
 }): Promise<ActionResult<ConsultationRow>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const appointmentId = data.appointment_id?.trim() || null;
   const patientId = data.patient_id?.trim();
   const motif = data.type_acte?.trim() || null;
@@ -197,7 +203,7 @@ export async function createConsultationAction(data: {
     if (!row) return { ok: false, error: "Insertion sans retour." };
     return { ok: true, data: mapRow(row as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createConsultationAction]", e);
+    logServerError("[createConsultationAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -206,6 +212,8 @@ export async function updateStatutConsultationAction(
   id: string,
   statut: ConsultationStatut,
 ): Promise<ActionResult<ConsultationRow>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const cid = id?.trim();
   if (!cid) return { ok: false, error: "id requis." };
   if (!(STATUTS_VALIDES as readonly string[]).includes(statut)) {
@@ -241,7 +249,7 @@ export async function updateStatutConsultationAction(
     if (!row) return { ok: false, error: "Consultation introuvable après update." };
     return { ok: true, data: mapRow(row as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updateStatutConsultationAction]", e);
+    logServerError("[updateStatutConsultationAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -249,6 +257,8 @@ export async function updateStatutConsultationAction(
 export async function getConsultationByAppointmentAction(
   appointmentId: string,
 ): Promise<ActionResult<ConsultationRow | null>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const aid = appointmentId?.trim();
   if (!aid) return { ok: false, error: "appointment_id requis." };
   try {
@@ -260,7 +270,7 @@ export async function getConsultationByAppointmentAction(
     if (rows.length === 0) return { ok: true, data: null };
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
-    console.error("[getConsultationByAppointmentAction]", e);
+    logServerError("[getConsultationByAppointmentAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

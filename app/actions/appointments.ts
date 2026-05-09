@@ -2,6 +2,8 @@
 
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 import type {
   AppointmentInput,
   AppointmentRowJoined,
@@ -100,6 +102,8 @@ function mapPatientRow(r: Record<string, unknown>): PatientRow {
 export async function getAppointmentsAction(): Promise<
   AppointmentsOk<AppointmentRowJoined[]>
 > {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
@@ -108,7 +112,7 @@ export async function getAppointmentsAction(): Promise<
     );
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getAppointmentsAction]", e);
+    logServerError("[getAppointmentsAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -119,6 +123,8 @@ export async function getAppointmentsAction(): Promise<
 export async function getInactivePatientsAction(
   daysSince: number,
 ): Promise<AppointmentsOk<PatientRow[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const days = Math.max(1, Math.floor(Number(daysSince) || 90));
   try {
     const pool = getPostgresPool();
@@ -138,7 +144,7 @@ export async function getInactivePatientsAction(
     );
     return { ok: true, data: rows.map((r) => mapPatientRow(r as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getInactivePatientsAction]", e);
+    logServerError("[getInactivePatientsAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -149,6 +155,8 @@ export async function getInactivePatientsAction(
 export async function getAppointmentsByDateAction(
   date: string,
 ): Promise<AppointmentsOk<AppointmentRowJoined[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const day = date.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     return { ok: false, error: "Date invalide" };
@@ -163,7 +171,7 @@ export async function getAppointmentsByDateAction(
     );
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getAppointmentsByDateAction]", e);
+    logServerError("[getAppointmentsByDateAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -174,6 +182,8 @@ export async function getAppointmentsByDateAction(
 export async function getAppointmentsByPatientAction(
   patientId: string,
 ): Promise<AppointmentsOk<AppointmentRowJoined[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const pid = patientId.trim();
   if (!pid) return { ok: false, error: "patientId requis" };
   try {
@@ -186,7 +196,7 @@ export async function getAppointmentsByPatientAction(
     );
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getAppointmentsByPatientAction]", e);
+    logServerError("[getAppointmentsByPatientAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -197,6 +207,8 @@ export async function getAppointmentsByPatientAction(
 export async function createAppointmentAction(
   data: AppointmentInput & { id?: string },
 ): Promise<AppointmentsOk<AppointmentRowJoined>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const id = data.id?.trim() || randomUUID();
     const pool = getPostgresPool();
@@ -231,7 +243,7 @@ export async function createAppointmentAction(
     if (!r) return { ok: false, error: "Insertion RDV sans retour JOIN" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createAppointmentAction]", e);
+    logServerError("[createAppointmentAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -243,6 +255,8 @@ export async function updateAppointmentAction(
   id: string,
   data: Partial<AppointmentInput>,
 ): Promise<AppointmentsOk<AppointmentRowJoined>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -308,7 +322,7 @@ export async function updateAppointmentAction(
     if (!r) return { ok: false, error: "RDV introuvable après mise à jour" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updateAppointmentAction]", e);
+    logServerError("[updateAppointmentAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -319,6 +333,8 @@ export async function updateAppointmentAction(
 export async function deleteAppointmentAction(
   id: string,
 ): Promise<AppointmentsOk<void>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -326,7 +342,7 @@ export async function deleteAppointmentAction(
     await pool.query(`DELETE FROM appointments WHERE id = $1`, [rid]);
     return { ok: true, data: undefined };
   } catch (e) {
-    console.error("[deleteAppointmentAction]", e);
+    logServerError("[deleteAppointmentAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),

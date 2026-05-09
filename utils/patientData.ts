@@ -1,10 +1,10 @@
 /**
- * Données patient côté client : profil localStorage (`patient_profile_*`),
- * schéma dentaire (`patient_acts_*`). La liste des patients est en PostgreSQL
- * (Server Actions `app/actions/patients.ts`).
+ * Données patient côté client : profil et actes cockpit dans `patient_ui_state`
+ * (Server Actions). La liste des patients est en PostgreSQL.
  */
 
 import type { PatientRow } from "@/lib/types/patients-db";
+import { mergePatientUiStateAction } from "@/app/actions/patient-ui-state";
 
 export function capitalizeStoragePart(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "";
@@ -15,15 +15,11 @@ export function isReservedDemoPatientId(id: string): boolean {
   return /^[1-4]$/.test(id.trim());
 }
 
-/** Schéma dentaire vide (aucun acte) pour les nouveaux patients. */
-export function initializeEmptyDentalChart(patientId: string) {
+/** Schéma dentaire vide (aucun acte cockpit) pour les nouveaux patients. */
+export async function initializeEmptyDentalChart(patientId: string) {
   if (typeof window === "undefined") return;
   if (isReservedDemoPatientId(patientId)) return;
-  try {
-    localStorage.setItem(`patient_acts_${patientId}`, JSON.stringify([]));
-  } catch (e) {
-    console.error("Storage error:", e);
-  }
+  await mergePatientUiStateAction(patientId, { acts: [] });
 }
 
 export type DentalPatientRecord = {
@@ -113,14 +109,30 @@ export type MinimalPatientProfileForLs = {
   alerts: string[];
 };
 
-export function writeMinimalPatientProfile(profile: MinimalPatientProfileForLs) {
+export async function writeMinimalPatientProfile(
+  profile: MinimalPatientProfileForLs,
+) {
   if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(
-      `patient_profile_${profile.id}`,
-      JSON.stringify(profile),
-    );
-  } catch (e) {
-    console.error("Storage error:", e);
-  }
+  await mergePatientUiStateAction(profile.id, {
+    profile: {
+      id: profile.id,
+      nom: profile.nom,
+      age: profile.age,
+      genre: profile.genre,
+      profession: profile.profession,
+      adresse: profile.adresse,
+      telephone: profile.telephone,
+      email: profile.email,
+      dateNaissance: profile.dateNaissance,
+      telephoneSecondaire: "",
+      groupeSanguin: "",
+      mutuelle: "",
+      premiereVisite: "",
+      statut: "actif",
+      alerts: profile.alerts.map((label) => ({
+        label,
+        level: "warning" as const,
+      })),
+    },
+  });
 }

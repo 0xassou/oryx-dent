@@ -32,6 +32,10 @@ import {
   stockRowToStockLine,
   stockLineToStockInput,
 } from "@/utils/stockDbMapping";
+import {
+  getCabinetValue,
+  persistCabinetPartial,
+} from "@/lib/client/cabinetBlob";
 
 const CATEGORIES = [
   "Composites & Ciments",
@@ -634,19 +638,31 @@ export default function StocksPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const modalMode = editingProduct ? "edit" : "create";
 
-  // PostgreSQL pour le stock ; historique conserve le localStorage (comportement existant).
+  // PostgreSQL pour le stock ; historique et UI dans cabinet_settings (JSONB).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const rawHistory = localStorage.getItem(STOCK_HISTORY_LS_KEY);
-        if (!rawHistory) {
-          if (!cancelled) setStockHistory([]);
-        } else {
-          const parsedHistory = JSON.parse(rawHistory);
-          if (Array.isArray(parsedHistory) && !cancelled) {
-            setStockHistory(parsedHistory as StockHistoryItem[]);
+        let hist = getCabinetValue<StockHistoryItem[]>(STOCK_HISTORY_LS_KEY);
+        if (!Array.isArray(hist) && typeof window !== "undefined") {
+          const rawHistory = localStorage.getItem(STOCK_HISTORY_LS_KEY);
+          if (rawHistory) {
+            try {
+              const parsedHistory = JSON.parse(rawHistory) as unknown;
+              if (Array.isArray(parsedHistory)) {
+                hist = parsedHistory as StockHistoryItem[];
+                void persistCabinetPartial({
+                  [STOCK_HISTORY_LS_KEY]: hist,
+                });
+                localStorage.removeItem(STOCK_HISTORY_LS_KEY);
+              }
+            } catch {
+              /* ignore */
+            }
           }
+        }
+        if (!cancelled) {
+          setStockHistory(Array.isArray(hist) ? hist : []);
         }
 
         const res = await getStocksAction();
@@ -676,9 +692,21 @@ export default function StocksPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STOCK_COLLAPSED_CATS_LS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as unknown;
+      let parsed: unknown = getCabinetValue<string[]>(
+        STOCK_COLLAPSED_CATS_LS_KEY,
+      );
+      if (!Array.isArray(parsed) && typeof window !== "undefined") {
+        const raw = localStorage.getItem(STOCK_COLLAPSED_CATS_LS_KEY);
+        if (raw) {
+          parsed = JSON.parse(raw) as unknown;
+          if (Array.isArray(parsed)) {
+            void persistCabinetPartial({
+              [STOCK_COLLAPSED_CATS_LS_KEY]: parsed,
+            });
+            localStorage.removeItem(STOCK_COLLAPSED_CATS_LS_KEY);
+          }
+        }
+      }
       if (Array.isArray(parsed)) {
         setCollapsedCats(
           new Set(
@@ -693,14 +721,9 @@ export default function StocksPage() {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    try {
-      localStorage.setItem(
-        STOCK_HISTORY_LS_KEY,
-        JSON.stringify(stockHistory),
-      );
-    } catch {
-      // Ignore : quota / navigateur privé, etc.
-    }
+    void persistCabinetPartial({
+      [STOCK_HISTORY_LS_KEY]: stockHistory,
+    });
   }, [stockHistory, hasHydrated]);
 
   useEffect(() => {
@@ -789,9 +812,9 @@ export default function StocksPage() {
     setCollapsedCats((prev) => {
       const next = new Set(prev);
       for (const cat of ruptureCategories) next.delete(cat);
-      try {
-        localStorage.setItem(STOCK_COLLAPSED_CATS_LS_KEY, JSON.stringify([...next]));
-      } catch { /* ignore */ }
+      void persistCabinetPartial({
+        [STOCK_COLLAPSED_CATS_LS_KEY]: [...next],
+      });
       return next;
     });
     setFiltre("");
@@ -823,14 +846,9 @@ export default function StocksPage() {
       const next = new Set(prev);
       if (next.has(cat)) next.delete(cat);
       else next.add(cat);
-      try {
-        localStorage.setItem(
-          STOCK_COLLAPSED_CATS_LS_KEY,
-          JSON.stringify([...next]),
-        );
-      } catch {
-        /* ignore */
-      }
+      void persistCabinetPartial({
+        [STOCK_COLLAPSED_CATS_LS_KEY]: [...next],
+      });
       return next;
     });
   }

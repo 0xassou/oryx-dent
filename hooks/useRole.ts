@@ -22,10 +22,8 @@ export function useRole(): { role: Role; user: CurrentUser | null; ready: boolea
     }
     sync();
     window.addEventListener(ORYX_ROLE_CHANGED_EVENT, sync);
-    window.addEventListener("storage", sync);
     return () => {
       window.removeEventListener(ORYX_ROLE_CHANGED_EVENT, sync);
-      window.removeEventListener("storage", sync);
     };
   }, []);
 

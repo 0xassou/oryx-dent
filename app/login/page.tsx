@@ -25,13 +25,8 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { loginAsMemberAction } from "@/app/actions/auth";
 import { resolveAppRoleForSessionAction } from "@/app/actions/team";
-import {
-  findMemberByCredentials,
-  setCurrentRole,
-  setCurrentUser,
-} from "@/utils/roles";
+import { setCurrentRole, setCurrentUser } from "@/utils/roles";
 import { authClient } from "@/lib/auth-client";
 
 type TabKey = "connexion" | "inscription";
@@ -312,25 +307,6 @@ function ConnexionPanel() {
     }
     setLoading(true);
     const cleanEmail = email.trim();
-    const member = findMemberByCredentials(cleanEmail, password);
-    if (member) {
-      const res = await loginAsMemberAction(member.id);
-      if (res.ok) {
-        setCurrentRole(member.role);
-        setCurrentUser({
-          email: member.email,
-          nom: member.nom,
-          role: member.role,
-        });
-        router.push("/");
-        router.refresh();
-        setLoading(false);
-        return;
-      }
-      setError(res.error ?? "Erreur");
-      setLoading(false);
-      return;
-    }
     try {
       const raw = await authClient.signIn.email({
         email: cleanEmail.toLowerCase(),

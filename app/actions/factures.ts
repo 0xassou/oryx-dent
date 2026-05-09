@@ -2,6 +2,8 @@
 
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 import type { FactureInput, FactureRowJoined } from "@/lib/types/factures-db";
 import { montantsToStatutPostgreSQL } from "@/utils/factureDbMapping";
 
@@ -45,6 +47,8 @@ function mapRow(row: Record<string, unknown>): FactureRowJoined {
 export async function getFacturesAction(): Promise<
   FacturesOk<FactureRowJoined[]>
 > {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
@@ -55,7 +59,7 @@ export async function getFacturesAction(): Promise<
       data: rows.map((r) => mapRow(r as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[getFacturesAction]", e);
+    logServerError("[getFacturesAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -66,6 +70,8 @@ export async function getFacturesAction(): Promise<
 export async function getFacturesByPatientAction(
   patientId: string,
 ): Promise<FacturesOk<FactureRowJoined[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const pid = patientId.trim();
   if (!pid) return { ok: false, error: "patientId requis" };
   try {
@@ -79,7 +85,7 @@ export async function getFacturesByPatientAction(
       data: rows.map((r) => mapRow(r as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[getFacturesByPatientAction]", e);
+    logServerError("[getFacturesByPatientAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -90,6 +96,8 @@ export async function getFacturesByPatientAction(
 export async function getFacturesByDateAction(
   date: string,
 ): Promise<FacturesOk<FactureRowJoined[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const day = date.trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     return { ok: false, error: "Date invalide" };
@@ -105,7 +113,7 @@ export async function getFacturesByDateAction(
       data: rows.map((r) => mapRow(r as Record<string, unknown>)),
     };
   } catch (e) {
-    console.error("[getFacturesByDateAction]", e);
+    logServerError("[getFacturesByDateAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -116,6 +124,8 @@ export async function getFacturesByDateAction(
 export async function createFactureAction(
   data: FactureInput & { id?: string },
 ): Promise<FacturesOk<FactureRowJoined>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const id = data.id?.trim() || randomUUID();
     const day = data.date.trim().slice(0, 10);
@@ -147,7 +157,7 @@ export async function createFactureAction(
     if (!r) return { ok: false, error: "Insertion facture sans retour JOIN" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createFactureAction]", e);
+    logServerError("[createFactureAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -159,6 +169,8 @@ export async function updateFactureAction(
   id: string,
   data: Partial<FactureInput>,
 ): Promise<FacturesOk<FactureRowJoined>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -214,7 +226,7 @@ export async function updateFactureAction(
     if (!r) return { ok: false, error: "Facture introuvable après MAJ" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updateFactureAction]", e);
+    logServerError("[updateFactureAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -226,6 +238,8 @@ export async function updateFactureAction(
 export async function reconcileFactureStatutAfterAmountsAction(
   id: string,
 ): Promise<FacturesOk<FactureRowJoined>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -245,7 +259,7 @@ export async function reconcileFactureStatutAfterAmountsAction(
     const st = montantsToStatutPostgreSQL(montant, montantPaye);
     return updateFactureAction(rid, { statut: st });
   } catch (e) {
-    console.error("[reconcileFactureStatutAfterAmountsAction]", e);
+    logServerError("[reconcileFactureStatutAfterAmountsAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -256,6 +270,8 @@ export async function reconcileFactureStatutAfterAmountsAction(
 export async function deleteFactureAction(
   id: string,
 ): Promise<FacturesOk<void>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -263,7 +279,7 @@ export async function deleteFactureAction(
     await pool.query(`DELETE FROM factures WHERE id = $1`, [rid]);
     return { ok: true, data: undefined };
   } catch (e) {
-    console.error("[deleteFactureAction]", e);
+    logServerError("[deleteFactureAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),
@@ -275,6 +291,8 @@ export async function deleteFactureAction(
 export async function deleteFactureByFinanceLineIdAction(
   financeLineId: string,
 ): Promise<FacturesOk<number>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const fid = financeLineId.trim();
   if (!fid) return { ok: false, error: "financeLineId requis" };
   try {
@@ -285,7 +303,7 @@ export async function deleteFactureByFinanceLineIdAction(
     );
     return { ok: true, data: r.rowCount ?? 0 };
   } catch (e) {
-    console.error("[deleteFactureByFinanceLineIdAction]", e);
+    logServerError("[deleteFactureByFinanceLineIdAction]", e);
     return {
       ok: false,
       error: e instanceof Error ? e.message : String(e),

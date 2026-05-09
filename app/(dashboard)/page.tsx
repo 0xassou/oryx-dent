@@ -69,11 +69,20 @@ import {
   QuickStats,
   RecentPatients,
 } from "@/components/dashboard/QuickStatsAndPatients";
-import { getDashboardStatsAction } from "@/app/actions/dashboard";
+import {
+  getDashboardActesDistributionAction,
+  getDashboardStatsAction,
+} from "@/app/actions/dashboard";
+import { getCommandesLaboAction } from "@/app/actions/laboratoire";
+import {
+  getCabinetBlob,
+  getCabinetValue,
+  persistCabinetPartial,
+} from "@/lib/client/cabinetBlob";
 import {
   LAB_COMMANDES_UPDATED_EVENT,
   listLogisticsAlerts,
-  readLabCommandesFromStorage,
+  mapServerCommandeLaboToUi,
   type LaboratoireCommande,
 } from "@/utils/laboratoireCommandes";
 
@@ -100,13 +109,7 @@ type SterData = {
 
 function readSterData(): SterData {
   if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(STER_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as SterData;
-  } catch {
-    return {};
-  }
+  return getCabinetValue<SterData>(STER_KEY) ?? {};
 }
 
 function countSterileKitsReady(ster: SterData): number {
@@ -264,43 +267,17 @@ const ACTES_COLORS = [
   "#f43f5e",
 ];
 
-function computeActesChartDataFromPatients(
-  patients: DentalPatientRecord[],
+function mapActesDistributionToChart(
+  rows: { name: string; value: number }[],
 ): ActeChartDatum[] {
-  if (typeof window === "undefined") return ACTES_CHART_FALLBACK;
-  try {
-    const actesCount: Record<string, number> = {};
-    patients.forEach((p) => {
-      const raw = localStorage.getItem(`patient_acts_${p.id}`);
-      if (!raw) return;
-      try {
-        const acts = JSON.parse(raw) as {
-          category?: string;
-          acte?: string;
-        }[];
-        if (!Array.isArray(acts)) return;
-        acts.forEach((a) => {
-          const cat = a.category ?? a.acte ?? "Autre";
-          actesCount[cat] = (actesCount[cat] ?? 0) + 1;
-        });
-      } catch {
-        /* ignore */
-      }
-    });
-    const total = Object.values(actesCount).reduce((s, v) => s + v, 0);
-    const newActesData = Object.entries(actesCount)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, value], i) => ({
-        name,
-        value,
-        pct: total > 0 ? Math.round((value / total) * 100) : 0,
-        color: ACTES_COLORS[i % ACTES_COLORS.length],
-      }));
-    return newActesData.length > 0 ? newActesData : ACTES_CHART_FALLBACK;
-  } catch {
-    return ACTES_CHART_FALLBACK;
-  }
+  if (!rows.length) return ACTES_CHART_FALLBACK;
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  return rows.slice(0, 5).map((r, i) => ({
+    name: r.name,
+    value: r.value,
+    pct: total > 0 ? Math.round((r.value / total) * 100) : 0,
+    color: ACTES_COLORS[i % ACTES_COLORS.length],
+  }));
 }
 
 const TASKS_STORAGE_KEY = "dental_dashboard_tasks";
@@ -354,8 +331,9 @@ function parseDashboardTasks(raw: string | null): DashboardTask[] | null {
 
 function loadDashboardTasks(): DashboardTask[] {
   if (typeof window === "undefined") return DEFAULT_DASHBOARD_TASKS;
-  const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-  if (raw == null || raw === "") return DEFAULT_DASHBOARD_TASKS;
+  const v = getCabinetValue<unknown>(TASKS_STORAGE_KEY);
+  if (v == null) return DEFAULT_DASHBOARD_TASKS;
+  const raw = typeof v === "string" ? v : JSON.stringify(v);
   const parsed = parseDashboardTasks(raw);
   if (parsed == null) return DEFAULT_DASHBOARD_TASKS;
   return parsed;
@@ -841,9 +819,7 @@ function getDoctorName() {
   if (typeof window === "undefined")
     return { nom: "Assil", initiales: "A" };
   try {
-    const s = JSON.parse(
-      localStorage.getItem("dental_settings") ?? "{}",
-    ) as Record<string, unknown>;
+    const s = getCabinetBlob() as Record<string, unknown>;
     const prenom = toTitleCase(
       typeof s.praticienPrenom === "string" ? s.praticienPrenom : "",
     );
@@ -899,6 +875,15 @@ export default function DashboardPage() {
     [labCommandes],
   );
 
+  const refreshActesChart = useCallback(async () => {
+    try {
+      const rows = await getDashboardActesDistributionAction();
+      setActesChartData(mapActesDistributionToChart(rows));
+    } catch {
+      setActesChartData(ACTES_CHART_FALLBACK);
+    }
+  }, []);
+
   const loadPatientsFromServer = useCallback(async () => {
     const res = await getPatientsAction();
     if (!res.ok) {
@@ -928,8 +913,8 @@ export default function DashboardPage() {
       }
     }
     setPatientsThisMonthCount(createdThisMonth);
-    setActesChartData(computeActesChartDataFromPatients(list));
-  }, []);
+    void refreshActesChart();
+  }, [refreshActesChart]);
 
   const reloadTodayPlansIntoFlux = useCallback(async () => {
     const todayKey = getLocalDateISO();
@@ -969,6 +954,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setDoctorInfo(getDoctorName());
+    function onCabinetReady() {
+      setDoctorInfo(getDoctorName());
+    }
+    window.addEventListener("oryx-cabinet-ready", onCabinetReady);
+    return () => window.removeEventListener("oryx-cabinet-ready", onCabinetReady);
   }, []);
 
   useEffect(() => {
@@ -1000,10 +990,13 @@ export default function DashboardPage() {
     const todayKey = getLocalDateISO();
 
     void (async () => {
+      const fluxRaw = getCabinetValue<unknown>(FLUX_STORAGE_KEY);
       const parsed = parsePersistedFlux(
-        typeof window !== "undefined"
-          ? localStorage.getItem(FLUX_STORAGE_KEY)
-          : null,
+        fluxRaw == null
+          ? null
+          : typeof fluxRaw === "string"
+            ? fluxRaw
+            : JSON.stringify(fluxRaw),
       );
       const baseFlux = parsed ?? FLUX_INITIAL;
       const appsRes = await getAppointmentsByDateAction(todayKey);
@@ -1026,15 +1019,23 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    function refreshLab() {
-      setLabCommandes(readLabCommandesFromStorage());
+    async function refreshLab() {
+      const res = await getCommandesLaboAction();
+      if (res.ok) {
+        setLabCommandes(res.data.map(mapServerCommandeLaboToUi));
+      } else {
+        setLabCommandes([]);
+      }
     }
-    refreshLab();
-    window.addEventListener(LAB_COMMANDES_UPDATED_EVENT, refreshLab);
-    window.addEventListener("focus", refreshLab);
+    void refreshLab();
+    const h = () => {
+      void refreshLab();
+    };
+    window.addEventListener(LAB_COMMANDES_UPDATED_EVENT, h);
+    window.addEventListener("focus", h);
     return () => {
-      window.removeEventListener(LAB_COMMANDES_UPDATED_EVENT, refreshLab);
-      window.removeEventListener("focus", refreshLab);
+      window.removeEventListener(LAB_COMMANDES_UPDATED_EVENT, h);
+      window.removeEventListener("focus", h);
     };
   }, [mounted]);
 
@@ -1077,22 +1078,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    void persistCabinetPartial({ [TASKS_STORAGE_KEY]: tasks });
   }, [mounted, tasks]);
 
   useEffect(() => {
     if (!mounted) return;
-    try {
-      localStorage.setItem(
-        FLUX_STORAGE_KEY,
-        JSON.stringify({
-          dateISO: getLocalDateISO(),
-          rows: fluxRows,
-        }),
-      );
-    } catch {
-      /* ignore quota */
-    }
+    void persistCabinetPartial({
+      [FLUX_STORAGE_KEY]: {
+        dateISO: getLocalDateISO(),
+        rows: fluxRows,
+      },
+    });
   }, [mounted, fluxRows]);
 
   function addDirectEntryToFlux(payload: DirectEntryPayload) {
@@ -1113,7 +1109,7 @@ export default function DashboardPage() {
         }
         const rec = patientRowToDentalPatientRecord(created.data);
         const fullName = displayPatientName(rec);
-        writeMinimalPatientProfile({
+        await writeMinimalPatientProfile({
           id: rec.id,
           nom: fullName,
           age: 0,
@@ -1125,7 +1121,7 @@ export default function DashboardPage() {
           dateNaissance: "",
           alerts: note ? [note] : [],
         });
-        initializeEmptyDentalChart(rec.id);
+        await initializeEmptyDentalChart(rec.id);
         patientLabel = fullName;
         patientId = rec.id;
         await loadPatientsFromServer();

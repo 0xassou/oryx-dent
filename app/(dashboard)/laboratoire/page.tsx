@@ -25,7 +25,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { LabWhatsAppButton } from "@/components/laboratoire/LabWhatsAppButton";
 import { PatientCombobox } from "@/components/laboratoire/PatientCombobox";
 import { StatusBadge } from "@/components/laboratoire/StatusBadge";
-import { addExpenseToStorage } from "@/utils/expensesData";
+import { createDepenseAction } from "@/app/actions/depenses";
 import { showAppToast } from "@/utils/appToast";
 import {
   APPOINTMENTS_UPDATED_EVENT,
@@ -53,6 +53,7 @@ import {
   isRdvPatientBeforeRetourLabo,
   laboratoireStatutLabel,
   laboratoireStatutToastPhrase,
+  mapServerCommandeLaboToUi,
   type LaboratoireCommande,
   type LaboratoireStatut,
   todayIsoLocal,
@@ -108,18 +109,22 @@ function formatDatePretty(iso: string | undefined): string {
   return s;
 }
 
-function maybeCreateLabExpense(cmd: LaboratoireCommande): LaboratoireCommande {
+async function maybeCreateLabExpenseAsync(
+  cmd: LaboratoireCommande,
+): Promise<LaboratoireCommande> {
   if (cmd.statut !== "RECU_CABINET") return cmd;
   const cost = cmd.coutLaboDa ?? 0;
   if (cost <= 0 || cmd.labExpenseId) return cmd;
-  const exp = addExpenseToStorage({
-    date: new Date().toISOString().slice(0, 10),
-    libelle: `Labo: ${cmd.patient}`,
-    montant: cost,
+  const day = new Date().toISOString().slice(0, 10);
+  const res = await createDepenseAction({
     categorie: "Labo",
-    justificatif_url: "",
+    description: `Labo: ${cmd.patient}`,
+    montant: cost,
+    date: day,
+    justificatif: null,
   });
-  return { ...cmd, labExpenseId: exp.id };
+  if (!res.ok) return cmd;
+  return { ...cmd, labExpenseId: res.data.id };
 }
 
 function labDatesDiffer(
@@ -462,17 +467,22 @@ export default function LaboratoirePage() {
   const changeStatut = useCallback(
     (cmd: LaboratoireCommande, s: LaboratoireStatut) => {
       if (s === cmd.statut) return;
-      setCommandes((prev) =>
-        prev.map((c) => {
-          if (c.id !== cmd.id) return c;
-          let next: LaboratoireCommande = { ...c, statut: s };
-          if (s === "RECU_CABINET") next = maybeCreateLabExpense(next);
-          return next;
-        }),
-      );
       void (async () => {
         const up = await updateCommandeLaboAction(cmd.id, { statut: s });
-        if (!up.ok) console.error(up.error);
+        if (!up.ok) {
+          console.error(up.error);
+          return;
+        }
+        let next: LaboratoireCommande = {
+          ...mapServerCommandeLaboToUi(up.data),
+          labExpenseId: cmd.labExpenseId,
+        };
+        if (s === "RECU_CABINET") {
+          next = await maybeCreateLabExpenseAsync(next);
+        }
+        setCommandes((prev) =>
+          prev.map((c) => (c.id !== cmd.id ? c : next)),
+        );
       })();
       showAppToast(
         `Statut mis à jour : ${capitalizeToastPhrase(
@@ -847,11 +857,19 @@ export default function LaboratoirePage() {
             )
           }
           onCoutCommit={() =>
-            setCommandes((prev) =>
-              prev.map((c) =>
-                c.id === drawerCommand.id ? maybeCreateLabExpense(c) : c,
-              ),
-            )
+            void (async () => {
+              const id = drawerCommand.id;
+              setCommandes((prev) => {
+                const cur = prev.find((c) => c.id === id);
+                if (!cur) return prev;
+                void maybeCreateLabExpenseAsync(cur).then((updated) => {
+                  setCommandes((p) =>
+                    p.map((c) => (c.id === id ? updated : c)),
+                  );
+                });
+                return prev;
+              });
+            })()
           }
         />
       ) : null}

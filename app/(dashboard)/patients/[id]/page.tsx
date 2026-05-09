@@ -72,6 +72,17 @@ import {
   updatePatientAction,
 } from "@/app/actions/patients";
 import {
+  deletePatientUiStateAction,
+  getPatientUiStateAction,
+  mergePatientUiStateAction,
+} from "@/app/actions/patient-ui-state";
+import {
+  getCabinetBlob,
+  getCabinetValue,
+  persistCabinetPartial,
+} from "@/lib/client/cabinetBlob";
+import { getCabinetProtocolsStorage } from "@/lib/client/cabinetProtocolStorage";
+import {
   computeAgeFromDateIso,
   patientRowToDentalPatientRecord,
   resolvePatientDisplayParts,
@@ -109,14 +120,13 @@ import {
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = localStorage.getItem("dental_settings");
-    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    return getCabinetBlob() as Record<string, unknown>;
   } catch {
     return {};
   }
 }
 
-const STERILIZATION_LS_KEY = "dental_sterilization_data";
+const STERILIZATION_CABINET_KEY = "dental_sterilization_data";
 
 type SterilizationKitRow = {
   id: string;
@@ -142,9 +152,10 @@ type SterilizationStorage = {
  * Déduit un kit stérile (→ sale) selon la catégorie du protocole.
  * Chirurgie / extraction → kit chirurgie ; sinon → kit examen.
  */
-function tryMarkSterilizationKitSale(protocolCategory: string):
+async function tryMarkSterilizationKitSale(protocolCategory: string): Promise<
   | { used: true; typeLabel: string; numero: number }
-  | { used: false; typeLabel: string } {
+  | { used: false; typeLabel: string }
+> {
   const cat = protocolCategory.toLowerCase();
   const targetType =
     cat.includes("chirurgie") || cat.includes("extraction")
@@ -157,9 +168,11 @@ function tryMarkSterilizationKitSale(protocolCategory: string):
   }
 
   try {
-    const raw = localStorage.getItem(STERILIZATION_LS_KEY);
-    const sterData: SterilizationStorage = raw
-      ? (JSON.parse(raw) as SterilizationStorage)
+    const existing = getCabinetValue<SterilizationStorage>(
+      STERILIZATION_CABINET_KEY,
+    );
+    const sterData: SterilizationStorage = existing
+      ? { ...existing, cycles: existing.cycles ?? [], kits: existing.kits ?? [] }
       : { cycles: [], kits: [] };
 
     const stock = sterData.stockByType?.[targetType];
@@ -180,7 +193,9 @@ function tryMarkSterilizationKitSale(protocolCategory: string):
         enCours: st.enCours,
       };
       if (!sterData.cycles) sterData.cycles = [];
-      localStorage.setItem(STERILIZATION_LS_KEY, JSON.stringify(sterData));
+      await persistCabinetPartial({
+        [STERILIZATION_CABINET_KEY]: sterData,
+      });
       return {
         used: true,
         typeLabel,
@@ -199,7 +214,9 @@ function tryMarkSterilizationKitSale(protocolCategory: string):
     sterData.kits[idx] = { ...sterData.kits[idx], status: "sale" };
     if (!sterData.cycles) sterData.cycles = [];
 
-    localStorage.setItem(STERILIZATION_LS_KEY, JSON.stringify(sterData));
+    await persistCabinetPartial({
+      [STERILIZATION_CABINET_KEY]: sterData,
+    });
     return {
       used: true,
       typeLabel,
@@ -1126,6 +1143,9 @@ export default function PatientDetailPage() {
   const [allTreatments, setAllTreatments] = useState<PatientTreatmentRow[]>(
     [],
   );
+  const [watchedTeeth, setWatchedTeeth] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     setIsMounted(true);
@@ -1163,36 +1183,56 @@ export default function PatientDetailPage() {
         return;
       }
       if (typeof window !== "undefined") {
-        const rawProfile = localStorage.getItem(`patient_profile_${id}`);
-        if (rawProfile) {
-          try {
-            const p = JSON.parse(rawProfile) as {
-              nom?: string;
-              telephone?: string;
-            };
-            if (typeof p.nom === "string") {
-              const { prenom, nom } = splitNomComplet(p.nom);
-              await createPatientAction({
-                id,
-                prenom: prenom || p.nom.trim(),
-                nom: nom || "",
-                telephone:
-                  typeof p.telephone === "string" ? p.telephone : "—",
-              });
-            }
-          } catch {
-            /* ignore */
-          }
-        } else {
-          const mock = MOCK_PROFILES[id];
-          if (mock) {
-            const { prenom, nom } = splitNomComplet(mock.nom);
+        let createdFromProfile = false;
+        const uiBootstrap = await getPatientUiStateAction(id);
+        if (uiBootstrap.ok && uiBootstrap.data.profile) {
+          const pr = uiBootstrap.data.profile as Record<string, unknown>;
+          const nomRaw = typeof pr.nom === "string" ? pr.nom : null;
+          if (nomRaw) {
+            const { prenom, nom } = splitNomComplet(nomRaw);
+            const tel =
+              typeof pr.telephone === "string" ? pr.telephone : "—";
             await createPatientAction({
               id,
-              prenom: prenom || mock.nom.trim(),
+              prenom: prenom || nomRaw.trim(),
               nom: nom || "",
-              telephone: mock.telephone,
+              telephone: tel,
             });
+            createdFromProfile = true;
+          }
+        }
+        if (!createdFromProfile) {
+          const rawProfile = localStorage.getItem(`patient_profile_${id}`);
+          if (rawProfile) {
+            try {
+              const p = JSON.parse(rawProfile) as {
+                nom?: string;
+                telephone?: string;
+              };
+              if (typeof p.nom === "string") {
+                const { prenom, nom } = splitNomComplet(p.nom);
+                await createPatientAction({
+                  id,
+                  prenom: prenom || p.nom.trim(),
+                  nom: nom || "",
+                  telephone:
+                    typeof p.telephone === "string" ? p.telephone : "—",
+                });
+              }
+            } catch {
+              /* ignore */
+            }
+          } else {
+            const mock = MOCK_PROFILES[id];
+            if (mock) {
+              const { prenom, nom } = splitNomComplet(mock.nom);
+              await createPatientAction({
+                id,
+                prenom: prenom || mock.nom.trim(),
+                nom: nom || "",
+                telephone: mock.telephone,
+              });
+            }
           }
         }
       }
@@ -1212,7 +1252,9 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    const fallback: PatientProfile = MOCK_PROFILES[id] ?? {
+    let cancelled = false;
+
+    const fallbackProfile: PatientProfile = MOCK_PROFILES[id] ?? {
       id,
       nom: `Patient #${id}`,
       age: 0,
@@ -1229,35 +1271,91 @@ export default function PatientDetailPage() {
       statut: "actif",
       alerts: [],
     };
-    if (typeof window === "undefined") {
-      setPatientProfile(fallback);
-      return;
-    }
-    const raw = localStorage.getItem(`patient_profile_${id}`);
-    if (!raw) {
-      setPatientProfile(fallback);
-      return;
-    }
-    try {
-      const saved = JSON.parse(raw) as Partial<PatientProfile>;
-      const merged: PatientProfile = { ...fallback, ...saved, id };
-      merged.alerts = normalizePatientAlerts(saved.alerts ?? fallback.alerts);
-      merged.statut =
-        saved.statut === "inactif" ? "inactif" : "actif";
-      setPatientProfile(merged);
-    } catch {
-      setPatientProfile(fallback);
-    }
-  }, [id]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !id) return;
-    const saved = localStorage.getItem(`patient_acts_${id}`);
-    if (saved) {
-      setAllTreatments(JSON.parse(saved) as PatientTreatmentRow[]);
-    } else {
-      setAllTreatments(MOCK_ALL_TREATMENTS);
-    }
+    void (async () => {
+      const uiRes = await getPatientUiStateAction(id);
+      if (cancelled) return;
+
+      let profileRaw: Partial<PatientProfile> | null = null;
+      if (
+        uiRes.ok &&
+        uiRes.data.profile &&
+        typeof uiRes.data.profile === "object"
+      ) {
+        profileRaw = uiRes.data.profile as Partial<PatientProfile>;
+      }
+      if (!profileRaw && typeof window !== "undefined") {
+        const raw = localStorage.getItem(`patient_profile_${id}`);
+        if (raw) {
+          try {
+            profileRaw = JSON.parse(raw) as Partial<PatientProfile>;
+            await mergePatientUiStateAction(id, { profile: profileRaw });
+            localStorage.removeItem(`patient_profile_${id}`);
+          } catch {
+            profileRaw = null;
+          }
+        }
+      }
+      if (profileRaw) {
+        const merged: PatientProfile = {
+          ...fallbackProfile,
+          ...profileRaw,
+          id,
+        };
+        merged.alerts = normalizePatientAlerts(
+          profileRaw.alerts ?? fallbackProfile.alerts,
+        );
+        merged.statut =
+          profileRaw.statut === "inactif" ? "inactif" : "actif";
+        setPatientProfile(merged);
+      } else {
+        setPatientProfile(fallbackProfile);
+      }
+
+      let acts: PatientTreatmentRow[] | undefined;
+      if (uiRes.ok && Array.isArray(uiRes.data.acts)) {
+        acts = uiRes.data.acts as PatientTreatmentRow[];
+      } else if (typeof window !== "undefined") {
+        const rawActs = localStorage.getItem(`patient_acts_${id}`);
+        if (rawActs) {
+          try {
+            acts = JSON.parse(rawActs) as PatientTreatmentRow[];
+            await mergePatientUiStateAction(id, { acts });
+            localStorage.removeItem(`patient_acts_${id}`);
+          } catch {
+            acts = undefined;
+          }
+        }
+      }
+      if (acts !== undefined) {
+        setAllTreatments(acts);
+      } else {
+        setAllTreatments(MOCK_ALL_TREATMENTS);
+      }
+
+      let watchedArr: number[] | null = null;
+      if (uiRes.ok && Array.isArray(uiRes.data.watched_teeth)) {
+        watchedArr = uiRes.data.watched_teeth as number[];
+      } else if (typeof window !== "undefined") {
+        const rawW = localStorage.getItem(`oryx_watched_${id}`);
+        if (rawW) {
+          try {
+            watchedArr = JSON.parse(rawW) as number[];
+            await mergePatientUiStateAction(id, {
+              watched_teeth: watchedArr,
+            });
+            localStorage.removeItem(`oryx_watched_${id}`);
+          } catch {
+            watchedArr = null;
+          }
+        }
+      }
+      setWatchedTeeth(watchedArr ? new Set(watchedArr) : new Set());
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -1343,12 +1441,8 @@ export default function PatientDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (isMounted && allTreatments.length > 0) {
-      localStorage.setItem(
-        `patient_acts_${id}`,
-        JSON.stringify(allTreatments),
-      );
-    }
+    if (!isMounted || !id || allTreatments.length === 0) return;
+    void mergePatientUiStateAction(id, { acts: allTreatments });
   }, [allTreatments, isMounted, id]);
 
   useEffect(() => {
@@ -1409,16 +1503,6 @@ export default function PatientDetailPage() {
   const cockpitProtocolOptions = useMemo(() => {
     return protocolOptionsForTab(clinicalProtocolsList, cockpitTab);
   }, [clinicalProtocolsList, cockpitTab]);
-  const WATCHED_KEY = `oryx_watched_${id}`;
-  const [watchedTeeth, setWatchedTeeth] = useState<Set<number>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const raw = localStorage.getItem(WATCHED_KEY);
-      return raw ? new Set(JSON.parse(raw) as number[]) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
   const [confirmAbsent, setConfirmAbsent] = useState<number | null>(null);
   const [validateSoinLoading, setValidateSoinLoading] = useState(false);
   const [toast, setToast] = useState<{
@@ -1450,13 +1534,8 @@ export default function PatientDetailPage() {
         return;
       }
       try {
-        if (typeof window !== "undefined") {
-          localStorage.removeItem(`patient_profile_${id}`);
-          localStorage.removeItem(`patient_acts_${id}`);
-          localStorage.removeItem(`patient_finances_${id}`);
-          localStorage.removeItem(`oryx_watched_${id}`);
-          clearPatientDocuments(id);
-        }
+        await deletePatientUiStateAction(id);
+        clearPatientDocuments(id);
       } catch {
         /* ignore */
       }
@@ -1531,10 +1610,11 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let list = loadProtocolsFromStorage(localStorage);
+    const storage = getCabinetProtocolsStorage();
+    let list = loadProtocolsFromStorage(storage);
     if (!list || list.length === 0) {
       list = buildProtocolesFromSeed();
-      saveProtocolsToStorage(localStorage, list);
+      saveProtocolsToStorage(storage, list);
     }
     setClinicalProtocolsList(list);
   }, []);
@@ -1550,16 +1630,6 @@ export default function PatientDetailPage() {
   useEffect(() => {
     setConfirmAbsent(null);
   }, [selectedTooth]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !id) return;
-    try {
-      const raw = localStorage.getItem(`oryx_watched_${id}`);
-      setWatchedTeeth(raw ? new Set(JSON.parse(raw) as number[]) : new Set());
-    } catch {
-      setWatchedTeeth(new Set());
-    }
-  }, [id]);
 
   useEffect(() => {
     if (!drawerProtocolId) {
@@ -1667,7 +1737,7 @@ export default function PatientDetailPage() {
       statut: editPatientStatut === "inactif" ? "inactif" : "actif",
     };
     setPatientProfile(nextProfile);
-    localStorage.setItem(`patient_profile_${id}`, JSON.stringify(nextProfile));
+    void mergePatientUiStateAction(id, { profile: nextProfile });
     const { prenom, nom } = splitNomComplet(nextProfile.nom);
     const g = nextProfile.genre.trim();
     const sexe =
@@ -1761,7 +1831,9 @@ export default function PatientDetailPage() {
         setClinicalStockLines(nextStock);
         notifyStockUpdated();
 
-        const kitDeduction = tryMarkSterilizationKitSale(protocol.categorie);
+        const kitDeduction = await tryMarkSterilizationKitSale(
+          protocol.categorie,
+        );
         const toastMessage = kitDeduction.used
           ? `Acte enregistré avec succès. Kit ${kitDeduction.typeLabel} #${kitDeduction.numero} marqué comme sale.`
           : `Acte enregistré avec succès. Attention : Aucun kit ${kitDeduction.typeLabel} stérile disponible !`;
@@ -4495,11 +4567,10 @@ export default function PatientDetailPage() {
                           const next = new Set(prev);
                           if (next.has(selectedTooth)) next.delete(selectedTooth);
                           else next.add(selectedTooth);
-                          if (typeof window !== "undefined") {
-                            localStorage.setItem(
-                              WATCHED_KEY,
-                              JSON.stringify([...next]),
-                            );
+                          if (id) {
+                            void mergePatientUiStateAction(id, {
+                              watched_teeth: [...next],
+                            });
                           }
                           return next;
                         })

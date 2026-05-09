@@ -2,6 +2,8 @@
 
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
+import { requireDepensesAccessSession } from "@/lib/server/auth/require-session";
+import { logServerError } from "@/lib/server/logger";
 
 export type DepenseCategorie =
   | "Loyer"
@@ -66,6 +68,8 @@ function mapRow(r: Record<string, unknown>): DepenseRow {
 }
 
 export async function getDepensesAction(): Promise<DepensesOk<DepenseRow[]>> {
+  const auth = await requireDepensesAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const { rows } = await pool.query(
@@ -73,7 +77,7 @@ export async function getDepensesAction(): Promise<DepensesOk<DepenseRow[]>> {
     );
     return { ok: true, data: rows.map((x) => mapRow(x as Record<string, unknown>)) };
   } catch (e) {
-    console.error("[getDepensesAction]", e);
+    logServerError("[getDepensesAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -81,6 +85,8 @@ export async function getDepensesAction(): Promise<DepensesOk<DepenseRow[]>> {
 export async function createDepenseAction(
   data: DepenseInput & { id?: string },
 ): Promise<DepensesOk<DepenseRow>> {
+  const auth = await requireDepensesAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
     const id = data.id?.trim() || randomUUID();
@@ -106,7 +112,7 @@ export async function createDepenseAction(
     if (!r) return { ok: false, error: "Insertion dépense sans retour" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[createDepenseAction]", e);
+    logServerError("[createDepenseAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -115,6 +121,8 @@ export async function updateDepenseAction(
   id: string,
   data: Partial<DepenseInput>,
 ): Promise<DepensesOk<DepenseRow>> {
+  const auth = await requireDepensesAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -155,12 +163,14 @@ export async function updateDepenseAction(
     if (!r) return { ok: false, error: "Dépense introuvable" };
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
-    console.error("[updateDepenseAction]", e);
+    logServerError("[updateDepenseAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 export async function deleteDepenseAction(id: string): Promise<DepensesOk<void>> {
+  const auth = await requireDepensesAccessSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
@@ -168,7 +178,7 @@ export async function deleteDepenseAction(id: string): Promise<DepensesOk<void>>
     await pool.query(`DELETE FROM depenses WHERE id = $1`, [rid]);
     return { ok: true, data: undefined };
   } catch (e) {
-    console.error("[deleteDepenseAction]", e);
+    logServerError("[deleteDepenseAction]", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
