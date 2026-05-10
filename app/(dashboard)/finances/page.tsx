@@ -7,7 +7,7 @@ import { FileText, LineChart, Receipt, TrendingUp } from "lucide-react";
 import { FinancesRecettesTab } from "@/components/finances/FinancesRecettesTab";
 import { FinancesStatistiquesTab } from "@/components/finances/FinancesStatistiquesTab";
 import { FinancesRapportsTab } from "@/components/finances/FinancesRapportsTab";
-import { GestionFinanciereDepensesTab } from "@/components/finances/GestionFinanciereDepensesTab";
+import { DepensesManager } from "@/components/depenses/DepensesManager";
 import { useRole } from "@/hooks/useRole";
 
 type MainTab = "recettes" | "depenses" | "statistiques" | "rapports";
@@ -95,7 +95,7 @@ function FinancesPageContent() {
 
       <div className="mt-8" role="tabpanel">
         {tab === "recettes" ? <FinancesRecettesTab /> : null}
-        {tab === "depenses" ? <GestionFinanciereDepensesTab /> : null}
+        {tab === "depenses" ? <DepensesManager showPageHeading={false} /> : null}
         {tab === "statistiques" ? <FinancesStatistiquesTab /> : null}
         {tab === "rapports" ? <FinancesRapportsTab /> : null}
       </div>

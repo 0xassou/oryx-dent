@@ -126,7 +126,8 @@ export async function getConsultationsDuJourAction(): Promise<
     };
   } catch (e) {
     logServerError("[getConsultationsDuJourAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -204,7 +205,8 @@ export async function createConsultationAction(data: {
     return { ok: true, data: mapRow(row as Record<string, unknown>) };
   } catch (e) {
     logServerError("[createConsultationAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -250,7 +252,8 @@ export async function updateStatutConsultationAction(
     return { ok: true, data: mapRow(row as Record<string, unknown>) };
   } catch (e) {
     logServerError("[updateStatutConsultationAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -271,6 +274,7 @@ export async function getConsultationByAppointmentAction(
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
     logServerError("[getConsultationByAppointmentAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }

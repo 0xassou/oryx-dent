@@ -1,3 +1,12 @@
+/* ARCHITECTURE : Une instance Oryx = un cabinet dentaire.
+   L'isolation multi-tenant est assurée par infrastructure
+   (instance dédiée par cabinet), pas par colonne cabinet_id.
+
+   TODO v2 : Si migration vers modèle multi-tenant partagé,
+   réintroduire cabinet_id sur toutes les tables et filtrer
+   toutes les requêtes par session.cabinetId.
+*/
+
 -- Module Patients — schéma PostgreSQL
 -- Appliquer : psql "$DATABASE_URL" -f db/schema.sql
 

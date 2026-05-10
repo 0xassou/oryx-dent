@@ -127,6 +127,11 @@
   --tooth-absente-root: #141414;
 }
 
+/* Fond page plein écran (loading, etc.) — reprend le --ds-bg du thème actif sur <html> */
+html {
+  --ds-background: var(--ds-bg);
+}
+
 /*
  * Boutons d’action plein violet (dark uniquement) : contour léger + libellé blanc.
  * Cible les utilitaires Tailwind bg-[var(--ds-primary)] et bg-[color:var(--ds-primary)].

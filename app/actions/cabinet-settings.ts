@@ -44,9 +44,10 @@ export async function getCabinetSettingsAction(): Promise<
     return { ok: true, data };
   } catch (e) {
     logServerError("getCabinetSettingsAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible de charger les réglages.",
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -76,9 +77,10 @@ export async function mergeCabinetSettingsAction(
     return r.ok ? r : { ok: false, error: r.error };
   } catch (e) {
     logServerError("mergeCabinetSettingsAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible d’enregistrer les réglages.",
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -107,9 +109,10 @@ export async function replaceCabinetSettingsAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("replaceCabinetSettingsAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible d’enregistrer les réglages.",
+      error: "Une erreur est survenue.",
     };
   }
 }

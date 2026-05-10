@@ -1,19 +1,20 @@
 import { SignJWT, jwtVerify } from "jose";
+import { resolveAuthSecret } from "@/lib/server/auth/resolve-auth-secret";
 
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET ?? "oryx-secret-change-me"
-);
+function getSecretKey(): Uint8Array {
+  return new TextEncoder().encode(resolveAuthSecret());
+}
 
 export async function createSession(userId: string) {
   return await new SignJWT({ userId })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("7d")
-    .sign(SECRET);
+    .sign(getSecretKey());
 }
 
 export async function verifySession(token: string) {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getSecretKey());
     return payload as { userId: string };
   } catch {
     return null;

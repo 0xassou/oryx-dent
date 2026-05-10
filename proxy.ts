@@ -1,5 +1,6 @@
 import { getCookieCache } from "better-auth/cookies";
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveAuthSecret } from "@/lib/server/auth/resolve-auth-secret";
 
 /**
  * Vérifie le cache de session JWE signé (cookie `better-auth.session_data`) —
@@ -8,12 +9,11 @@ import { NextResponse, type NextRequest } from "next/server";
 async function hasValidBetterAuthSessionCookie(
   request: NextRequest,
 ): Promise<boolean> {
-  const secret =
-    process.env.BETTER_AUTH_SECRET ?? process.env.AUTH_SECRET ?? "";
-  if (!secret) {
-    console.error(
-      "[proxy] BETTER_AUTH_SECRET (ou AUTH_SECRET) est requis pour valider la session.",
-    );
+  let secret: string;
+  try {
+    secret = resolveAuthSecret();
+  } catch (e) {
+    console.error("[proxy] secret d'authentification manquant", e);
     return false;
   }
   try {

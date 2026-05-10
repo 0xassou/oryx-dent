@@ -35,7 +35,7 @@ const NAV_PRINCIPAL: readonly NavItem[] = [
   { key: "patients", href: "/patients", label: "Patients", icon: Users, locked: false },
   { key: "planning", href: "/planning", label: "Planning", icon: Calendar, locked: false },
   { key: "workflow", href: "/workflow", label: "Salle d'attente", icon: ClipboardList, locked: false },
-  { key: "finances", href: "/finances", label: "Gestion Financière", icon: Banknote, locked: false },
+  { key: "finances", href: "/finances", label: "Finances", icon: Banknote, locked: false },
 ];
 
 const NAV_GESTION: readonly NavItem[] = [
@@ -129,12 +129,9 @@ export default function Sidebar({
   const navPrincipal = NAV_PRINCIPAL.filter(
     (i) => !ready || (role !== null && canAccessNav(role, i.key)),
   );
-  const navGestion = NAV_GESTION.filter((i) => {
-    if (i.key === "financesDepenses" && role === "admin") {
-      return false;
-    }
-    return !ready || (role !== null && canAccessNav(role, i.key));
-  });
+  const navGestion = NAV_GESTION.filter(
+    (i) => !ready || (role !== null && canAccessNav(role, i.key)),
+  );
 
   return (
     <>

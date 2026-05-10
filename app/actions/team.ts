@@ -15,7 +15,8 @@ import type {
   UpdateTeamMemberInput,
 } from "@/lib/types/team-db";
 import type { Role } from "@/utils/roles";
-import { parseInvitationToken } from "@/utils/roles";
+import { parseInvitationToken } from "@/lib/server/invitation-token";
+import type { InvitationTokenPayload } from "@/lib/types/invitation-token";
 import { logServerError } from "@/lib/server/logger";
 
 const TEAM_MEMBERS_CACHE_TAG = "team-members";
@@ -138,9 +139,10 @@ export async function getTeamMembersAction(): Promise<
     };
   } catch (e) {
     logServerError("getTeamMembersAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible de charger l'équipe.",
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -278,9 +280,10 @@ export async function createTeamMemberAction(
       logServerError("createTeamMemberAction:rollback", rollbackErr);
     }
     logServerError("createTeamMemberAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Création impossible.",
+      error: "Une erreur est survenue.",
     };
   } finally {
     client.release();
@@ -365,9 +368,10 @@ export async function updateTeamMemberAction(
     return { ok: true, data: mapTeamMemberForClient(row) };
   } catch (e) {
     logServerError("updateTeamMemberAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Mise à jour impossible.",
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -403,9 +407,10 @@ export async function deleteTeamMemberAction(
   } catch (e) {
     await client.query("ROLLBACK");
     logServerError("deleteTeamMemberAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Suppression impossible.",
+      error: "Une erreur est survenue.",
     };
   } finally {
     client.release();
@@ -488,13 +493,24 @@ export async function completeFirstPasswordChangeAction(
       /* noop */
     }
     logServerError("completeFirstPasswordChangeAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Mise à jour impossible.",
+      error: "Une erreur est survenue.",
     };
   } finally {
     client.release();
   }
+}
+
+/** Vérification d’invitation côté serveur uniquement (secret HMAC non exposé au client). */
+export async function parseInvitationTokenAction(
+  rawFromUrl: string,
+): Promise<
+  | { ok: true; data: InvitationTokenPayload }
+  | { ok: false; error: string }
+> {
+  return parseInvitationToken(rawFromUrl);
 }
 
 function splitInvitationDisplayName(full: string): { nom: string; prenom: string } {
@@ -603,9 +619,10 @@ export async function acceptInvitationAction(
       /* noop */
     }
     logServerError("acceptInvitationAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Inscription impossible.",
+      error: "Une erreur est survenue.",
     };
   } finally {
     client.release();

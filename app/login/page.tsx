@@ -124,12 +124,8 @@ export default function LoginPage() {
             <InscriptionPanel key="inscription" />
           )}
         </div>
-        <footer className="mt-5 text-center text-[11px] leading-6 text-[var(--ds-text-subtle)]">
-          © {new Date().getFullYear()} Oryx · Gestion Dentaire · Algérie
-          <br />
-          <FooterLink href="#">Confidentialité</FooterLink> ·{" "}
-          <FooterLink href="#">Conditions d&apos;utilisation</FooterLink> ·{" "}
-          <FooterLink href="#">Support</FooterLink>
+        <footer className="mt-5 text-center text-xs text-[var(--ds-text-muted)]">
+          Oryx © 2025
         </footer>
       </section>
     </div>
@@ -413,15 +409,11 @@ function ConnexionPanel() {
             className={INPUT_CLS}
           />
         </InputWrap>
+        <p className="mt-1.5 text-xs text-[var(--ds-text-muted)]">
+          Contactez votre administrateur de cabinet pour réinitialiser votre mot
+          de passe.
+        </p>
       </Field>
-      <div className="mb-5 mt-0.5 flex items-center justify-end">
-        <a
-          href="#"
-          className="text-[12px] font-semibold text-[var(--ds-primary)] transition-opacity hover:opacity-75"
-        >
-          Mot de passe oublié ?
-        </a>
-      </div>
       {error ? <FormError>{error}</FormError> : null}
       <PrimaryButton type="submit" disabled={loading}>
         {loading ? "Connexion…" : "Se connecter"}
@@ -755,17 +747,6 @@ function PwdStrength({ score }: { score: number }) {
         />
       ))}
     </div>
-  );
-}
-
-function FooterLink({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <a
-      href={href}
-      className="text-[var(--ds-text-subtle)] no-underline transition-colors hover:text-[var(--ds-primary)]"
-    >
-      {children}
-    </a>
   );
 }
 

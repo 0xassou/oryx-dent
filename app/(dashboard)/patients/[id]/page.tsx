@@ -1847,7 +1847,6 @@ export default function PatientDetailPage() {
       const res = await submitClinicalActAction({
         patientId: id,
         protocolId: protocol.id,
-        clinicId: process.env.NEXT_PUBLIC_CLINIC_ID?.trim() ?? "",
         consumables,
         customPriceOverrideCents: manualCents,
         clientProtocol,

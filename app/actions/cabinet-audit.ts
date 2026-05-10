@@ -66,10 +66,10 @@ export async function getRecentCabinetAuditAction(
     return { ok: true, data };
   } catch (e) {
     logServerError("getRecentCabinetAuditAction", e);
+    console.error(e);
     return {
       ok: false,
-      error:
-        e instanceof Error ? e.message : "Impossible de charger l’activité.",
+      error: "Une erreur est survenue.",
     };
   }
 }

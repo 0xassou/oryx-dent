@@ -212,7 +212,8 @@ export async function getCommandesLaboAction(): Promise<LaboratoireOk<CommandeLa
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
     logServerError("getCommandesLaboAction", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -233,7 +234,8 @@ export async function getCommandeLaboByIdAction(
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
     logServerError("getCommandeLaboByIdAction", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -303,7 +305,8 @@ export async function createCommandeLaboAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("createCommandeLaboAction", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -385,7 +388,8 @@ export async function updateCommandeLaboAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("updateCommandeLaboAction", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -403,7 +407,8 @@ export async function deleteCommandeLaboAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("deleteCommandeLaboAction", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 

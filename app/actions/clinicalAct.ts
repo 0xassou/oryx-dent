@@ -2,7 +2,7 @@
 
 /**
  * Action serveur : délègue à `executeClinicalAct` (PostgreSQL, transaction).
- * Configurez `DATABASE_URL` et `CLINIC_ID` (UUID du cabinet en base).
+ * Configurez `DATABASE_URL` et `CLINIC_ID` (UUID du cabinet en base, obligatoire en production).
  * Les `protocolId` doivent exister dans `clinical_protocols` (même valeur que côté UI si synchro).
  */
 
@@ -17,7 +17,6 @@ import type {
 export type SubmitClinicalActInput = {
   patientId: string;
   protocolId: string;
-  clinicId: string;
   consumables: { stockProductId: string; quantity: number }[];
   customPriceOverrideCents?: number | null;
   /** Métadonnées pour créer le protocole en base s’il manque (catalogue local / cockpit). */
@@ -35,13 +34,23 @@ export async function submitClinicalActAction(
   if (!auth.ok) {
     return { ok: false, error: auth.error };
   }
-  const clinicId = process.env.CLINIC_ID ?? input.clinicId;
-  if (!clinicId?.trim()) {
-    return {
-      ok: false,
-      error:
-        "Cabinet non configuré : définissez CLINIC_ID (serveur) ou transmettez clinicId.",
-    };
+  let clinicId: string;
+  if (process.env.NODE_ENV === "production") {
+    const v = process.env.CLINIC_ID?.trim();
+    if (!v) {
+      throw new Error("CLINIC_ID est requis en production");
+    }
+    clinicId = v;
+  } else {
+    const v = process.env.CLINIC_ID?.trim();
+    if (!v) {
+      return {
+        ok: false,
+        error:
+          "Cabinet non configuré : définissez CLINIC_ID côté serveur (.env).",
+      };
+    }
+    clinicId = v;
   }
 
   try {
@@ -50,15 +59,14 @@ export async function submitClinicalActAction(
       pool,
       input.patientId,
       input.protocolId,
-      clinicId.trim(),
+      clinicId,
       input.consumables,
       input.customPriceOverrideCents ?? null,
       input.clientProtocol ?? null,
     );
     return { ok: true, data };
   } catch (e) {
-    const message =
-      e instanceof Error ? e.message : "Erreur lors de l'exécution de l'acte clinique.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }

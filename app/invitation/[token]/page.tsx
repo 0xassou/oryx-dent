@@ -3,15 +3,12 @@
 import { use, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Lock, ShieldCheck, User } from "lucide-react";
-import { acceptInvitationAction } from "@/app/actions/team";
 import {
-  parseInvitationToken,
-  ROLE_LABEL,
-  setCurrentRole,
-  setCurrentUser,
-  type InvitationTokenPayload,
-  type Role,
-} from "@/utils/roles";
+  acceptInvitationAction,
+  parseInvitationTokenAction,
+} from "@/app/actions/team";
+import type { InvitationTokenPayload } from "@/lib/types/invitation-token";
+import { ROLE_LABEL, setCurrentRole, setCurrentUser, type Role } from "@/utils/roles";
 import { authClient } from "@/lib/auth-client";
 
 type Stage = "loading" | "invalid" | "form" | "done";
@@ -37,7 +34,7 @@ export default function InvitationPage({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await parseInvitationToken(token);
+      const res = await parseInvitationTokenAction(token);
       if (cancelled) return;
       if (!res.ok) {
         setParseError(res.error);

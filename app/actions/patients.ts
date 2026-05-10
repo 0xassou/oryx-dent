@@ -1,5 +1,14 @@
 "use server";
 
+/* ARCHITECTURE : Une instance Oryx = un cabinet dentaire.
+   L'isolation multi-tenant est assurée par infrastructure
+   (instance dédiée par cabinet), pas par colonne cabinet_id.
+
+   TODO v2 : Si migration vers modèle multi-tenant partagé,
+   réintroduire cabinet_id sur toutes les tables et filtrer
+   toutes les requêtes par session.cabinetId.
+*/
+
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
@@ -98,9 +107,8 @@ export async function searchPatientsAutocompleteAction(
     };
   } catch (e) {
     logServerError("searchPatientsAutocompleteAction", e);
-    const message =
-      e instanceof Error ? e.message : "Impossible de rechercher les patients.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -124,9 +132,8 @@ export async function getPatientsAction(): Promise<
     };
   } catch (e) {
     logServerError("getPatientsAction", e);
-    const message =
-      e instanceof Error ? e.message : "Impossible de charger les patients.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -147,9 +154,8 @@ export async function getPatientByIdAction(
     return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
   } catch (e) {
     logServerError("getPatientByIdAction", e);
-    const message =
-      e instanceof Error ? e.message : "Impossible de charger le patient.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -236,9 +242,8 @@ export async function createPatientAction(
     return { ok: true, data: row };
   } catch (e) {
     logServerError("createPatientAction", e);
-    const message =
-      e instanceof Error ? e.message : "Impossible de créer le patient.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -309,9 +314,8 @@ export async function updatePatientAction(
     return { ok: true, data: row };
   } catch (e) {
     logServerError("updatePatientAction", e);
-    const message =
-      e instanceof Error ? e.message : "Impossible de mettre à jour le patient.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -332,8 +336,7 @@ export async function deletePatientAction(
     return { ok: true };
   } catch (e) {
     logServerError("deletePatientAction", e);
-    const message =
-      e instanceof Error ? e.message : "Impossible de supprimer le patient.";
-    return { ok: false, error: message };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }

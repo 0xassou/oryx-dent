@@ -51,9 +51,10 @@ export async function getStocksAction(): Promise<StocksOk<StockRow[]>> {
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
     logServerError("[getStocksAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -107,9 +108,10 @@ export async function createStockAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[createStockAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -184,9 +186,10 @@ export async function updateStockAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[updateStockAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -204,9 +207,10 @@ export async function deleteStockAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("[deleteStockAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }

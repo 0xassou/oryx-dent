@@ -33,9 +33,10 @@ export async function getPatientUiStateAction(
     return { ok: true, data: {} };
   } catch (e) {
     logServerError("getPatientUiStateAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible de charger l’état patient.",
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -107,9 +108,10 @@ export async function mergePatientUiStateAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("mergePatientUiStateAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible d’enregistrer l’état patient.",
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -127,9 +129,10 @@ export async function deletePatientUiStateAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("deletePatientUiStateAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible de supprimer l’état patient.",
+      error: "Une erreur est survenue.",
     };
   }
 }

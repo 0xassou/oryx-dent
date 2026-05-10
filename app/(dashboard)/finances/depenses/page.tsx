@@ -1,15 +1,14 @@
 "use client";
 
-import { FinancesDepensesTab } from "@/components/finances/FinancesDepensesTab";
+import { DepensesManager } from "@/components/depenses/DepensesManager";
 
 /**
- * Accès direct à l’onglet Dépenses (sans Tableau de bord / Recettes).
- * Autorisé pour admin et assistante uniquement (voir `pathToNavKey` + NAV_ACCESS).
+ * Accès direct aux dépenses (hors onglets Recettes / Statistiques / Rapports).
  */
 export default function FinancesDepensesPage() {
   return (
     <div className="w-full">
-      <FinancesDepensesTab />
+      <DepensesManager showPageHeading={true} />
     </div>
   );
 }

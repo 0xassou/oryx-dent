@@ -498,9 +498,7 @@ function CreateMemberModal({
       specialite: specialite || null,
     });
     setBusy(false);
-    console.log("[TeamSection] createTeamMemberAction résultat complet", res);
     if (res.ok) {
-      console.log("[TeamSection] tempPassword reçu:", res.tempPassword);
       if (!res.tempPassword?.trim()) {
         setErr(
           "Compte créé mais le mot de passe temporaire est manquant. Rechargez la page ou recréez le membre.",

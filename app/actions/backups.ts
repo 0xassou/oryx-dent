@@ -55,8 +55,8 @@ export async function createBackupAction(): Promise<
     const { filename } = await runBackupToDisk();
     return { ok: true, filename };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Échec de la sauvegarde.";
-    return { ok: false, error: msg };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 

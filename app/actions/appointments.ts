@@ -137,9 +137,10 @@ export async function getAppointmentsAction(): Promise<
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
     logServerError("[getAppointmentsAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -169,9 +170,10 @@ export async function getInactivePatientsAction(
     return { ok: true, data: rows.map((r) => mapPatientRow(r as Record<string, unknown>)) };
   } catch (e) {
     logServerError("[getInactivePatientsAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -196,9 +198,10 @@ export async function getAppointmentsByDateAction(
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
     logServerError("[getAppointmentsByDateAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -221,9 +224,10 @@ export async function getAppointmentsByPatientAction(
     return { ok: true, data: rows.map((r) => mapRow(r as Record<string, unknown>)) };
   } catch (e) {
     logServerError("[getAppointmentsByPatientAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -291,9 +295,10 @@ export async function createAppointmentAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[createAppointmentAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -393,9 +398,10 @@ export async function updateAppointmentAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[updateAppointmentAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -413,9 +419,10 @@ export async function deleteAppointmentAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("[deleteAppointmentAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }

@@ -4,6 +4,9 @@ dist/
 build/
 .env
 .env.local
+.env.development.local
+.env.production.local
+.env*.local
 *.log
 .DS_Store
 Oryx dent/

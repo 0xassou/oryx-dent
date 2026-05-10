@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { FileText, Plus, Trash2, X } from "lucide-react";
 import {
   createDepenseAction,
   deleteDepenseAction,
@@ -10,6 +10,7 @@ import {
   type DepenseCategorie,
   type DepenseRow,
 } from "@/app/actions/depenses";
+import { showAppToast } from "@/utils/appToast";
 
 const CATEGORIES: DepenseCategorie[] = [
   "Loyer",
@@ -24,7 +25,31 @@ const CATEGORIES: DepenseCategorie[] = [
   "Autre",
 ];
 
+const JUSTIF_MAX_BYTES = 5 * 1024 * 1024;
+
 type PeriodFilter = "all" | "week" | "month";
+
+export type DepensesManagerProps = {
+  /** Si `false`, masque le bloc titre (h2 + sous-titre). Défaut : `true`. */
+  showPageHeading?: boolean;
+};
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (file.size > JUSTIF_MAX_BYTES) {
+      reject(new Error("Justificatif trop volumineux (max 5 Mo)."));
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => {
+      const x = r.result;
+      if (typeof x === "string") resolve(x);
+      else reject(new Error("Lecture impossible."));
+    };
+    r.onerror = () => reject(new Error("Lecture impossible."));
+    r.readAsDataURL(file);
+  });
+}
 
 function formatDateFr(iso: string): string {
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
@@ -59,12 +84,11 @@ function isInPeriod(isoDate: string, period: PeriodFilter): boolean {
     const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     return d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
   }
-  // week (7 jours glissants)
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
   return d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
 }
 
-export function GestionFinanciereDepensesTab() {
+export function DepensesManager({ showPageHeading = true }: DepensesManagerProps) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<DepenseRow[]>([]);
   const [period, setPeriod] = useState<PeriodFilter>("all");
@@ -77,11 +101,12 @@ export function GestionFinanciereDepensesTab() {
   const [formMontant, setFormMontant] = useState("");
   const [formDate, setFormDate] = useState(todayIso());
   const [formFournisseur, setFormFournisseur] = useState("");
+  const [formJustif, setFormJustif] = useState<File | null>(null);
 
   const reload = useCallback(async () => {
     const res = await getDepensesAction();
     if (!res.ok) {
-      console.error(res.error);
+      showAppToast(res.error);
       setRows([]);
       return;
     }
@@ -113,6 +138,7 @@ export function GestionFinanciereDepensesTab() {
     setFormMontant("");
     setFormDate(todayIso());
     setFormFournisseur("");
+    setFormJustif(null);
     setModalOpen(true);
   }
 
@@ -123,15 +149,26 @@ export function GestionFinanciereDepensesTab() {
     if (!Number.isFinite(montant) || montant <= 0) return;
     setSaving(true);
     try {
+      let justificatif: string | null = null;
+      if (formJustif) {
+        try {
+          justificatif = await fileToDataUrl(formJustif);
+        } catch (err) {
+          showAppToast(err instanceof Error ? err.message : "Justificatif invalide.");
+          setSaving(false);
+          return;
+        }
+      }
       const res = await createDepenseAction({
         categorie: formCategorie,
         description: formDescription.trim() || null,
         montant,
         date: formDate,
         fournisseur: formFournisseur.trim() || null,
+        justificatif,
       });
       if (!res.ok) {
-        console.error(res.error);
+        showAppToast(res.error);
         return;
       }
       setRows((prev) => [res.data, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
@@ -146,7 +183,7 @@ export function GestionFinanciereDepensesTab() {
     if (!ok) return;
     const res = await deleteDepenseAction(id);
     if (!res.ok) {
-      console.error(res.error);
+      showAppToast(res.error);
       return;
     }
     setRows((prev) => prev.filter((x) => x.id !== id));
@@ -155,7 +192,7 @@ export function GestionFinanciereDepensesTab() {
   async function quickEditDescription(id: string, next: string) {
     const res = await updateDepenseAction(id, { description: next.trim() || null });
     if (!res.ok) {
-      console.error(res.error);
+      showAppToast(res.error);
       return;
     }
     setRows((prev) => prev.map((x) => (x.id === id ? res.data : x)));
@@ -163,20 +200,27 @@ export function GestionFinanciereDepensesTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold tracking-tight text-[var(--ds-text)]">
-            Dépenses
-          </h2>
-          <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
-            Suivi des sorties d’argent (loyer, matériel, charges, labo…).
-          </p>
-        </div>
+      <div
+        className={[
+          "flex flex-col gap-4 sm:flex-row sm:items-start",
+          showPageHeading ? "sm:justify-between" : "sm:justify-end",
+        ].join(" ")}
+      >
+        {showPageHeading ? (
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold tracking-tight text-[var(--ds-text)]">
+              Dépenses
+            </h2>
+            <p className="mt-1 text-sm text-[var(--ds-text-muted)]">
+              Suivi des sorties d’argent (loyer, matériel, charges, labo…).
+            </p>
+          </div>
+        ) : null}
 
         <button
           type="button"
           onClick={openModal}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 sm:shrink-0"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
           Nouvelle dépense
@@ -233,7 +277,7 @@ export function GestionFinanciereDepensesTab() {
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-2xl border border-[var(--ds-primary-border)]/80">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[920px] text-sm">
             <thead>
               <tr className="border-b border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/50 text-left">
                 <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
@@ -251,6 +295,9 @@ export function GestionFinanciereDepensesTab() {
                 <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Montant
                 </th>
+                <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                  Justificatif
+                </th>
                 <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
                   Actions
                 </th>
@@ -260,14 +307,14 @@ export function GestionFinanciereDepensesTab() {
               {loading ? (
                 [...Array.from({ length: 6 })].map((_, i) => (
                   <tr key={i} className="border-b border-[var(--ds-primary-border)] last:border-0">
-                    <td className="px-4 py-3" colSpan={6}>
+                    <td className="px-4 py-3" colSpan={7}>
                       <div className="h-8 animate-pulse rounded-xl bg-muted" />
                     </td>
                   </tr>
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-10 text-center text-sm text-[var(--ds-text-muted)]" colSpan={6}>
+                  <td className="px-4 py-10 text-center text-sm text-[var(--ds-text-muted)]" colSpan={7}>
                     Aucune dépense pour ce filtre.
                   </td>
                 </tr>
@@ -300,6 +347,22 @@ export function GestionFinanciereDepensesTab() {
                     </td>
                     <td className="px-4 py-3 text-right font-['DM_Mono',monospace] font-bold tabular-nums text-[#ef4444]">
                       − {formatDZD(toNumber(r.montant))}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {r.justificatif ? (
+                        <a
+                          href={r.justificatif}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-2 text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                          aria-label="Ouvrir le justificatif"
+                          title="Justificatif"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </a>
+                      ) : (
+                        <span className="text-[var(--ds-text-muted)]">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -422,6 +485,19 @@ export function GestionFinanciereDepensesTab() {
                 />
               </div>
 
+              <div>
+                <label className="text-xs font-medium text-[var(--ds-text-muted)]" htmlFor="dep-justif">
+                  Justificatif (optionnel, max 5 Mo)
+                </label>
+                <input
+                  id="dep-justif"
+                  type="file"
+                  accept="image/*,.pdf,application/pdf"
+                  onChange={(e) => setFormJustif(e.target.files?.[0] ?? null)}
+                  className="mt-1.5 block w-full text-sm text-[var(--ds-text-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--ds-primary-soft)] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--ds-text)]"
+                />
+              </div>
+
               <div className="flex justify-end gap-2 border-t border-[var(--ds-primary-border)] pt-4">
                 <button
                   type="button"
@@ -445,4 +521,3 @@ export function GestionFinanciereDepensesTab() {
     </div>
   );
 }
-

@@ -62,9 +62,10 @@ export async function getFacturesAction(): Promise<
     };
   } catch (e) {
     logServerError("[getFacturesAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -88,9 +89,10 @@ export async function getFacturesByPatientAction(
     };
   } catch (e) {
     logServerError("[getFacturesByPatientAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -116,9 +118,10 @@ export async function getFacturesByDateAction(
     };
   } catch (e) {
     logServerError("[getFacturesByDateAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -179,9 +182,10 @@ export async function createFactureAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[createFactureAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -267,9 +271,10 @@ export async function updateFactureAction(
     return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[updateFactureAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -300,9 +305,10 @@ export async function reconcileFactureStatutAfterAmountsAction(
     return updateFactureAction(rid, { statut: st });
   } catch (e) {
     logServerError("[reconcileFactureStatutAfterAmountsAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -320,9 +326,10 @@ export async function deleteFactureAction(
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("[deleteFactureAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }
@@ -344,9 +351,10 @@ export async function deleteFactureByFinanceLineIdAction(
     return { ok: true, data: r.rowCount ?? 0 };
   } catch (e) {
     logServerError("[deleteFactureByFinanceLineIdAction]", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: "Une erreur est survenue.",
     };
   }
 }

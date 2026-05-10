@@ -248,9 +248,10 @@ export async function universalSearchAction(
     return { ok: true, hits };
   } catch (e) {
     logServerError("universalSearchAction", e);
+    console.error(e);
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Recherche impossible.",
+      error: "Une erreur est survenue.",
     };
   }
 }

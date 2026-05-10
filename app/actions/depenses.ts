@@ -78,7 +78,8 @@ export async function getDepensesAction(): Promise<DepensesOk<DepenseRow[]>> {
     return { ok: true, data: rows.map((x) => mapRow(x as Record<string, unknown>)) };
   } catch (e) {
     logServerError("[getDepensesAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -113,7 +114,8 @@ export async function createDepenseAction(
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
     logServerError("[createDepenseAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -164,7 +166,8 @@ export async function updateDepenseAction(
     return { ok: true, data: mapRow(r as Record<string, unknown>) };
   } catch (e) {
     logServerError("[updateDepenseAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 
@@ -179,7 +182,8 @@ export async function deleteDepenseAction(id: string): Promise<DepensesOk<void>>
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("[deleteDepenseAction]", e);
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
   }
 }
 

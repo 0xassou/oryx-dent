@@ -31,13 +31,9 @@ import {
   resteAPayer,
   type FactureDocument,
 } from "@/utils/factureDocuments";
-import {
-  depenseRowToDentalExpense,
-  sumExpensesByCategory,
-  type DentalExpense,
-} from "@/utils/expensesData";
+import { sumExpensesByBucket } from "@/utils/expensesData";
 import { getFacturesAction } from "@/app/actions/factures";
-import { getDepensesAction } from "@/app/actions/depenses";
+import { getDepensesAction, type DepenseRow } from "@/app/actions/depenses";
 import { factureJoinedRowToDocument } from "@/utils/factureDbMapping";
 
 type RevenusDatum = {
@@ -93,6 +89,14 @@ function getTopActes(factures: FactureDocument[]): TopActe[] {
 
 type PeriodKey = "week" | "month" | "year";
 
+type PeriodExpenseLine = {
+  id: string;
+  date: string;
+  categorie: string;
+  libelle: string;
+  montant: number;
+};
+
 function isDateInPeriod(d: Date, period: PeriodKey): boolean {
   const ref = new Date();
   const end = new Date(ref);
@@ -126,12 +130,13 @@ function totalRecettesFacturesPayees(
   return s;
 }
 
-function expensesInPeriod(
-  expenses: DentalExpense[],
+function depenseRowsInPeriod(
+  rows: DepenseRow[],
   period: PeriodKey,
-): DentalExpense[] {
-  return expenses.filter((e) => {
-    const d = new Date(e.date);
+): DepenseRow[] {
+  return rows.filter((r) => {
+    const day = r.date.length >= 10 ? r.date.slice(0, 10) : "";
+    const d = new Date(`${day}T12:00:00`);
     return !Number.isNaN(d.getTime()) && isDateInPeriod(d, period);
   });
 }
@@ -171,7 +176,7 @@ function RevenusTooltip({
   );
 }
 
-function getDepenses6Mois(depenses: DentalExpense[]) {
+function getDepenses6Mois(rows: DepenseRow[]) {
   const result: { mois: string; total: number; isDemo?: boolean }[] = [];
   let hasData = false;
 
@@ -182,14 +187,17 @@ function getDepenses6Mois(depenses: DentalExpense[]) {
     const month = date.getMonth();
     const year = date.getFullYear();
 
-    const total = depenses
+    const total = rows
       .filter((d) => {
-        if (!d.date) return false;
-        const dt = new Date(d.date);
+        if (!d.date || d.date.length < 10) return false;
+        const dt = new Date(`${d.date.slice(0, 10)}T12:00:00`);
         if (Number.isNaN(dt.getTime())) return false;
         return dt.getMonth() === month && dt.getFullYear() === year;
       })
-      .reduce((s, d) => s + (d.montant ?? 0), 0);
+      .reduce(
+        (s, d) => s + Math.round(parseFloat(String(d.montant)) || 0),
+        0,
+      );
 
     if (total > 0) hasData = true;
     result.push({ mois, total });
@@ -268,7 +276,7 @@ function computeCroissanceCA(factures: FactureDocument[]): number {
 export function FinancesDashboardTab() {
   const [mounted, setMounted] = useState(false);
   const [factureDocs, setFactureDocs] = useState<FactureDocument[]>([]);
-  const [expenseRows, setExpenseRows] = useState<DentalExpense[]>([]);
+  const [expenseRows, setExpenseRows] = useState<DepenseRow[]>([]);
   const [period, setPeriod] = useState<PeriodKey>("month");
   const [activeDetail, setActiveDetail] = useState<string | null>(null);
   const [transactionTab, setTransactionTab] = useState<
@@ -288,7 +296,7 @@ export function FinancesDashboardTab() {
   const reloadDepenses = useCallback(async () => {
     const res = await getDepensesAction();
     if (!res.ok) return;
-    setExpenseRows(res.data.map(depenseRowToDentalExpense));
+    setExpenseRows(res.data);
   }, []);
 
   useEffect(() => {
@@ -318,38 +326,64 @@ export function FinancesDashboardTab() {
         totalDepenses: 0,
         beneficeNet: 0,
         totalImpayes: 0,
-        periodExpensesList: [] as DentalExpense[],
+        periodExpensesList: [] as PeriodExpenseLine[],
         pieSlices: [] as { name: string; value: number; color: string }[],
       };
     }
     const factures = factureDocs;
-    const expenses = expenseRows;
+    const rows = expenseRows;
     const tr = totalRecettesFacturesPayees(factures, period);
-    const list = expensesInPeriod(expenses, period);
-    const td = list.reduce((a, e) => a + e.montant, 0);
+    const list = depenseRowsInPeriod(rows, period);
+    const periodExpensesList: PeriodExpenseLine[] = list.map((r) => {
+      const day =
+        r.date.length >= 10
+          ? r.date.slice(0, 10)
+          : new Date().toISOString().slice(0, 10);
+      return {
+        id: r.id,
+        date: `${day}T12:00:00.000Z`,
+        categorie: String(r.categorie ?? ""),
+        libelle: (r.description ?? "").trim() || "Dépense",
+        montant: Math.round(parseFloat(String(r.montant)) || 0),
+      };
+    });
+    const td = periodExpensesList.reduce((a, e) => a + e.montant, 0);
     const imp = factures.reduce((s, f) => s + resteAPayer(f), 0);
-    const byCat = sumExpensesByCategory(list);
+    const byBucket = sumExpensesByBucket(
+      list.map((r) => ({
+        categorie: String(r.categorie ?? ""),
+        montant: Math.round(parseFloat(String(r.montant)) || 0),
+      })),
+    );
     const slices = [
       {
-        name: "Produits & Stock",
-        value: byCat["Produits & Stock"],
+        name: "Charges fixes",
+        value: byBucket["Charges fixes"],
         color: "#14b8a6",
       },
       {
-        name: "Prothésiste / Labo",
-        value: byCat["Prothésiste / Labo"],
+        name: "Personnel",
+        value: byBucket["Personnel"],
+        color: "#f59e0b",
+      },
+      {
+        name: "Matériel & consommables",
+        value: byBucket["Matériel & consommables"],
+        color: "#06b6d4",
+      },
+      {
+        name: "Laboratoire & prothèses",
+        value: byBucket["Laboratoire & prothèses"],
         color: "#a855f7",
       },
-      { name: "Stock", value: byCat.Stock, color: "#06b6d4" },
-      { name: "Labo", value: byCat.Labo, color: "#6366f1" },
-      { name: "Frais", value: byCat.Frais, color: "#7c3aed" },
+      { name: "Autres", value: byBucket["Autres"], color: "#6b7280" },
     ].filter((x) => x.value > 0);
     return {
       totalRecettes: tr,
       totalDepenses: td,
       beneficeNet: tr - td,
       totalImpayes: imp,
-      periodExpensesList: list,
+      periodExpensesList,
       pieSlices: slices,
     };
   }, [mounted, period, factureDocs, expenseRows]);

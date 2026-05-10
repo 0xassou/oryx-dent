@@ -63,21 +63,7 @@ export type Invitation = {
   consumed?: boolean;
 };
 
-/** Chargé / signé sur le disque client (démo). Ne pas s’y fier pour la vraie sécurité. */
-const INVITATION_TOKEN_VERSION = 1;
-
-function getInvitationSecret(): string {
-  const raw =
-    typeof process !== "undefined"
-      ? process.env.NEXT_PUBLIC_ORYX_INVITATION_SECRET
-      : undefined;
-  if (typeof raw === "string" && raw.trim()) {
-    return raw.trim();
-  }
-  throw new Error(
-    "[Oryx] NEXT_PUBLIC_ORYX_INVITATION_SECRET est requis pour signer ou vérifier les invitations.",
-  );
-}
+export type { InvitationTokenPayload } from "@/lib/types/invitation-token";
 
 /** Mono-cabinet : identifiant stable pour les tokens d’invitation (plus de localStorage). */
 export function getCabinetId(): string {
@@ -101,188 +87,6 @@ export function makeMemberId(cabinetId: string, email: string): string {
     h = (h * 33) ^ key.charCodeAt(i);
   }
   return `m-${(h >>> 0).toString(16).padStart(8, "0")}`;
-}
-
-function base64UrlEncodeFromUtf8(input: string): string {
-  const utf8 = new TextEncoder().encode(input);
-  let bin = "";
-  for (let i = 0; i < utf8.length; i++) {
-    bin += String.fromCharCode(utf8[i]!);
-  }
-  const b64 = typeof btoa !== "undefined" ? btoa(bin) : "";
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function base64UrlDecodeToUtf8(data: string): string {
-  let b = data.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = (4 - (b.length % 4)) % 4;
-  if (pad) b += "=".repeat(pad);
-  const binary =
-    typeof atob !== "undefined" ? atob(b) : "";
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new TextDecoder("utf-8").decode(bytes);
-}
-
-function buildCanonicalString(
-  v: number,
-  email: string,
-  role: string,
-  cabinetId: string,
-  expiresAt: number,
-): string {
-  return [v, email.trim().toLowerCase(), role, cabinetId, String(expiresAt)].join(
-    "|",
-  );
-}
-
-export type InvitationTokenPayload = {
-  v: number;
-  email: string;
-  /** Ancien libellé "replacant" encore accepté à la lecture. */
-  role: InvitableRole | "replacant";
-  cabinetId: string;
-  expiresAt: number;
-  signature: string;
-};
-
-async function hmacSignHex(message: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(getInvitationSecret()),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-  const out = new Uint8Array(sig);
-  return Array.from(out, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function hmacVerify(message: string, signatureHex: string): Promise<boolean> {
-  const expected = await hmacSignHex(message);
-  if (expected.length !== signatureHex.length) return false;
-  let ok = 0;
-  for (let i = 0; i < expected.length; i++) {
-    ok |= expected.charCodeAt(i) ^ signatureHex.charCodeAt(i);
-  }
-  return ok === 0;
-}
-
-/**
- * Génère le segment d’URL d’une invitation (base64url sur JSON incluant la signature HMAC).
- */
-export async function encodeInvitationToken(data: {
-  email: string;
-  role: InvitableRole;
-  cabinetId: string;
-  expiresAtMs: number;
-}): Promise<string> {
-  const email = data.email.trim().toLowerCase();
-  const { role, cabinetId, expiresAtMs } = data;
-  const canonical = buildCanonicalString(
-    INVITATION_TOKEN_VERSION,
-    email,
-    role,
-    cabinetId,
-    expiresAtMs,
-  );
-  const signature = await hmacSignHex(canonical);
-  const payload: InvitationTokenPayload = {
-    v: INVITATION_TOKEN_VERSION,
-    email,
-    role,
-    cabinetId,
-    expiresAt: expiresAtMs,
-    signature,
-  };
-  return base64UrlEncodeFromUtf8(JSON.stringify(payload));
-}
-
-/**
- * Décodage + vérification (signature + expiration). Aucun localStorage requis.
- */
-export async function parseInvitationToken(
-  rawFromUrl: string,
-): Promise<
-  | { ok: true; data: InvitationTokenPayload }
-  | { ok: false; error: string }
-> {
-  const raw = (() => {
-    try {
-      return decodeURIComponent(rawFromUrl.trim());
-    } catch {
-      return rawFromUrl.trim();
-    }
-  })();
-  if (!raw) {
-    return { ok: false, error: "Invitation manquante" };
-  }
-  let parsed: unknown;
-  try {
-    const json = base64UrlDecodeToUtf8(raw);
-    parsed = JSON.parse(json) as unknown;
-  } catch {
-    return { ok: false, error: "Lien d’invitation invalide" };
-  }
-  if (!parsed || typeof parsed !== "object") {
-    return { ok: false, error: "Lien d’invitation invalide" };
-  }
-  const p = parsed as Record<string, unknown>;
-  if (p["v"] !== INVITATION_TOKEN_VERSION) {
-    return { ok: false, error: "Version d’invitation non supportée" };
-  }
-  const email = typeof p["email"] === "string" ? p["email"] : "";
-  const rawRole = p["role"];
-  const roleCanonical =
-    rawRole === "assistant"
-      ? "assistant"
-      : rawRole === "remplacant"
-        ? "remplacant"
-        : rawRole === "replacant"
-          ? "replacant"
-          : null;
-  const roleNorm: InvitableRole | null =
-    rawRole === "assistant"
-      ? "assistant"
-      : rawRole === "remplacant" || rawRole === "replacant"
-        ? "remplacant"
-        : null;
-  const cabinetId = typeof p["cabinetId"] === "string" ? p["cabinetId"] : "";
-  const expiresAt =
-    typeof p["expiresAt"] === "number" ? p["expiresAt"] : Number.NaN;
-  const signature = typeof p["signature"] === "string" ? p["signature"] : "";
-  if (!email || !roleCanonical || !roleNorm || !cabinetId || !Number.isFinite(expiresAt) || !signature) {
-    return { ok: false, error: "Données d’invitation incomplètes" };
-  }
-  if (Date.now() > expiresAt) {
-    return { ok: false, error: "Cette invitation a expiré (48 h maximum)" };
-  }
-  const canonical = buildCanonicalString(
-    INVITATION_TOKEN_VERSION,
-    email,
-    roleCanonical,
-    cabinetId,
-    expiresAt,
-  );
-  const good = await hmacVerify(canonical, signature);
-  if (!good) {
-    return { ok: false, error: "Signature d’invitation invalide" };
-  }
-  return {
-    ok: true,
-    data: {
-      v: INVITATION_TOKEN_VERSION,
-      email: email.toLowerCase(),
-      role: roleNorm,
-      cabinetId,
-      expiresAt,
-      signature,
-    },
-  };
 }
 
 export type CurrentUser = {
@@ -318,7 +122,7 @@ export const NAV_ACCESS: Record<NavKey, Role[]> = {
   planning: ["admin", "praticien", "assistant", "remplacant"],
   workflow: ["admin", "praticien", "assistant", "remplacant"],
   finances: ["admin"],
-  financesDepenses: ["admin"],
+  financesDepenses: ["admin", "assistant"],
   statistiques: ["admin"],
   stocks: ["admin", "assistant"],
   sterilisation: ["admin"],
@@ -421,51 +225,6 @@ export function loadInvitations(): Invitation[] {
 /** @deprecated No-op. */
 export function saveInvitations(_list: Invitation[]): void {}
 
-/**
- * Côté admin : enregistre l’équipe + copie d’invitation, et génère le token signé
- * encodé dans l’URL (autonome, lisible partout).
- */
-export async function createInvitation(
-  email: string,
-  role: InvitableRole,
-): Promise<{ invitation: Invitation; member: TeamMember }> {
-  const now = new Date();
-  const cabinetId = getCabinetId();
-  const normalizedEmail = email.trim().toLowerCase();
-  const expiresMs = now.getTime() + 48 * 60 * 60 * 1000;
-  const token = await encodeInvitationToken({
-    email: normalizedEmail,
-    role,
-    cabinetId,
-    expiresAtMs: expiresMs,
-  });
-  const invitation: Invitation = {
-    token,
-    email: normalizedEmail,
-    role,
-    dateInvitation: now.toISOString(),
-    expiresAt: new Date(expiresMs).toISOString(),
-  };
-  const member: TeamMember = {
-    id: makeMemberId(cabinetId, normalizedEmail),
-    email: invitation.email,
-    nom: email.split("@")[0] ?? email,
-    role,
-    statut: "invité",
-    dateInvitation: invitation.dateInvitation,
-  };
-  const invitations = loadInvitations().filter(
-    (i) => i.email !== invitation.email,
-  );
-  invitations.push(invitation);
-  saveInvitations(invitations);
-
-  const team = loadTeam().filter((m) => m.email !== invitation.email);
-  team.push(member);
-  saveTeam(team);
-  return { invitation, member };
-}
-
 export function isInvitationValid(inv: Invitation): boolean {
   if (inv.consumed) return false;
   return Date.parse(inv.expiresAt) > Date.now();
@@ -478,44 +237,6 @@ export function hashPassword(pwd: string): string {
     h = (h * 31 + pwd.charCodeAt(i)) | 0;
   }
   return `h_${h.toString(36)}_${pwd.length}`;
-}
-
-/**
- * Côté invité : le token d’URL contient tout (signature + exp). Aucun `oryx_invitations`
- * requis. Enregistre le membre dans le `oryx_team` de ce navigateur.
- */
-export async function acceptInvitation(
-  rawToken: string,
-  nom: string,
-  password: string,
-): Promise<{ ok: true; member: TeamMember } | { ok: false; error: string }> {
-  const v = await parseInvitationToken(rawToken);
-  if (!v.ok) return v;
-  const { email, role: rawRole, cabinetId } = v.data;
-  const role: InvitableRole =
-    rawRole === "replacant" ? "remplacant" : rawRole;
-  const id = makeMemberId(cabinetId, email);
-  const nowIso = new Date().toISOString();
-  const team = loadTeam();
-  const idx = team.findIndex((m) => m.email === email);
-  const displayName = nom.trim() || email.split("@")[0] || email;
-  const base: TeamMember = {
-    id,
-    email,
-    nom: displayName,
-    role,
-    statut: "actif",
-    dateInvitation: team[idx]?.dateInvitation ?? nowIso,
-    dateAcceptation: nowIso,
-    passwordHash: hashPassword(password),
-  };
-  if (idx >= 0) {
-    team[idx] = { ...team[idx], ...base, id, statut: "actif" };
-  } else {
-    team.push(base);
-  }
-  saveTeam(team);
-  return { ok: true, member: team.find((m) => m.id === id) ?? base };
 }
 
 export function setMemberStatus(
