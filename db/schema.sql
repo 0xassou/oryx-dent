@@ -257,3 +257,29 @@ CREATE INDEX IF NOT EXISTS idx_commandes_labo_patient_id ON commandes_labo(patie
 
 CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members(email);
 CREATE INDEX IF NOT EXISTS idx_team_members_role ON team_members(role);
+
+-- ─── Traçabilité actions équipe ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS cabinet_audit_log (
+  id            TEXT PRIMARY KEY,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  user_id       TEXT NOT NULL,
+  display_name  TEXT NOT NULL,
+  role          TEXT NOT NULL,
+  action_type   TEXT NOT NULL,
+  entity_type   TEXT NOT NULL,
+  entity_id     TEXT,
+  patient_id    TEXT REFERENCES patients(id) ON DELETE SET NULL,
+  summary       TEXT,
+  metadata      JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_cabinet_audit_created ON cabinet_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cabinet_audit_patient ON cabinet_audit_log(patient_id);
+CREATE INDEX IF NOT EXISTS idx_cabinet_audit_user ON cabinet_audit_log(user_id);
+
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_by_user_id TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_by_display_name TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_by_role TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_by_user_id TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_by_display_name TEXT;
+ALTER TABLE appointments ADD COLUMN IF NOT EXISTS updated_by_role TEXT;

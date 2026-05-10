@@ -10,6 +10,12 @@ export type AppointmentRow = {
   notes: string | null;
   praticien: string | null;
   salle: string | null;
+  created_by_user_id?: string | null;
+  created_by_display_name?: string | null;
+  created_by_role?: string | null;
+  updated_by_user_id?: string | null;
+  updated_by_display_name?: string | null;
+  updated_by_role?: string | null;
   created_at: string;
   updated_at: string;
 };

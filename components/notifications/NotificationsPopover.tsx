@@ -213,14 +213,18 @@ export function NotificationsPopover() {
         )}
       </button>
 
+      {/* Voile hors AnimatePresence : sinon il peut rester au-dessus du contenu (ex. Réglages)
+          pendant la sortie du panneau et bloquer tous les clics sous z-40. */}
+      {open ? (
+        <div
+          className="fixed inset-0 z-40"
+          aria-hidden="true"
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
+
       <AnimatePresence>
         {open && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              aria-hidden="true"
-              onClick={() => setOpen(false)}
-            />
             <motion.div
               role="dialog"
               aria-label="Notifications"
@@ -298,7 +302,6 @@ export function NotificationsPopover() {
                 )}
               </div>
             </motion.div>
-          </>
         )}
       </AnimatePresence>
     </div>

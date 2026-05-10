@@ -25,6 +25,13 @@ export type AppointmentRdv = {
   status?: "pending" | "confirmed" | "done";
   /** Affichage planning (dent concernée), optionnel — ne change pas la logique agenda. */
   dent?: string;
+  /** Traçabilité affichage planning */
+  createdByUserId?: string | null;
+  createdByDisplayName?: string | null;
+  createdByRole?: string | null;
+  updatedByUserId?: string | null;
+  updatedByDisplayName?: string | null;
+  updatedByRole?: string | null;
 };
 
 const APPT_META_SEP = "\n---oryx-appt-meta\n";
@@ -136,6 +143,12 @@ export function appointmentJoinedRowToRdv(
     patientId: row.patient_id ?? undefined,
     status: statutUiFromDb(row.statut),
     dent: meta.dent,
+    createdByUserId: row.created_by_user_id ?? null,
+    createdByDisplayName: row.created_by_display_name ?? null,
+    createdByRole: row.created_by_role ?? null,
+    updatedByUserId: row.updated_by_user_id ?? null,
+    updatedByDisplayName: row.updated_by_display_name ?? null,
+    updatedByRole: row.updated_by_role ?? null,
   };
 }
 

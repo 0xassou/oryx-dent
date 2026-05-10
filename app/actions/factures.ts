@@ -3,6 +3,8 @@
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { resolveCabinetActorSnapshot } from "@/lib/server/cabinet-actor";
+import { logCabinetAuditSafe } from "@/lib/server/cabinet-audit";
 import { logServerError } from "@/lib/server/logger";
 import type { FactureInput, FactureRowJoined } from "@/lib/types/factures-db";
 import { montantsToStatutPostgreSQL } from "@/utils/factureDbMapping";
@@ -127,6 +129,10 @@ export async function createFactureAction(
   const auth = await requireBetterAuthSession();
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const id = data.id?.trim() || randomUUID();
     const day = data.date.trim().slice(0, 10);
     const montant = Math.max(0, data.montant);
@@ -155,7 +161,22 @@ export async function createFactureAction(
     const one = await pool.query(`${SELECT_JOIN} WHERE f.id = $1`, [id]);
     const r = one.rows[0];
     if (!r) return { ok: false, error: "Insertion facture sans retour JOIN" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    const pname = [mapped.prenom, mapped.nom].filter(Boolean).join(" ").trim();
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "facture_creee",
+      entityType: "facture",
+      entityId: mapped.id,
+      patientId: mapped.patient_id,
+      summary: pname
+        ? `Facture créée · ${pname}`
+        : `Facture créée · ${mapped.montant} DA`,
+      metadata: { montant: mapped.montant, date: mapped.date },
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[createFactureAction]", e);
     return {
@@ -174,6 +195,10 @@ export async function updateFactureAction(
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const pool = getPostgresPool();
     const patches: string[] = [];
     const vals: unknown[] = [];
@@ -224,7 +249,22 @@ export async function updateFactureAction(
     ]);
     const r = rows[0];
     if (!r) return { ok: false, error: "Facture introuvable après MAJ" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    const pname = [mapped.prenom, mapped.nom].filter(Boolean).join(" ").trim();
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "facture_modifiee",
+      entityType: "facture",
+      entityId: mapped.id,
+      patientId: mapped.patient_id,
+      summary: pname
+        ? `Facture modifiée · ${pname}`
+        : "Facture modifiée",
+      metadata: {},
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[updateFactureAction]", e);
     return {

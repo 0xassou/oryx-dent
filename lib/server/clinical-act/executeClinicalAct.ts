@@ -3,7 +3,8 @@
  * ---------------------------------------------------------------------------
  * Enchaîne dans une **transaction SQL** unique :
  * 1. Dossier patient : entrée d'historique clinique.
- * 2. Stock : décrément selon override **pontuel** ou consommables par défaut du protocole.
+ * 2. Stock : décrément **au mieux** selon override ou défauts protocole (lignes en rupture
+ *    sont ignorées et listées dans `stockWarnings` ; l’acte est tout de même enregistré).
  * 3. Facturation : ligne « en attente de paiement » avec montant de base ou override.
  *
  * Règle métier : `customConsumablesOverride` et `customPriceOverrideCents` ne modifient
@@ -13,7 +14,10 @@
  */
 
 import type { Pool, PoolClient } from "pg";
+import { resolveProtocolDbUuid } from "@/lib/clinical/resolveProtocolDbUuid";
+import { isValidPostgresProtocolUuid } from "@/lib/onboarding/seedDefaultProtocols";
 import type {
+  ClientProtocolBackfill,
   ExecuteClinicalActInput,
   ExecuteClinicalActResult,
   ProtocolConsumableRow,
@@ -41,7 +45,7 @@ export class ProtocolConsumablesMissingError extends Error {
   }
 }
 
-/** Stock insuffisant pour une ligne donnée (transaction annulée). */
+/** Stock insuffisant (conservé pour appels externes ; `executeClinicalAct` ne bloque plus dessus). */
 export class InsufficientStockError extends Error {
   constructor(
     public readonly stockProductId: string,
@@ -97,11 +101,34 @@ function mergeConsumptionLines(lines: StockConsumptionLine[]): StockConsumptionL
 
 // ─── Accès base (requêtes paramétrées) ────────────────────────────────────────
 
+async function upsertProtocolFromClient(
+  client: PoolClient,
+  dbProtocolId: string,
+  clinicId: string,
+  snap: ClientProtocolBackfill,
+): Promise<void> {
+  const cents = Math.max(0, Math.floor(Number(snap.basePriceCents) || 0));
+  await client.query(
+    `
+    INSERT INTO clinical_protocols (id, clinic_id, name, category, base_price_cents, active)
+    VALUES ($1::uuid, $2::uuid, $3, $4, $5, true)
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      category = EXCLUDED.category,
+      base_price_cents = EXCLUDED.base_price_cents,
+      active = true
+    `,
+    [dbProtocolId, clinicId, snap.name, snap.category, cents],
+  );
+}
+
 async function fetchProtocol(
   client: PoolClient,
   protocolId: string,
   clinicId: string,
 ): Promise<ProtocolRow | null> {
+  const id = protocolId.trim();
+  if (!isValidPostgresProtocolUuid(id)) return null;
   const { rows } = await client.query<ProtocolRow>(
     `
     SELECT id, name, base_price_cents
@@ -110,7 +137,7 @@ async function fetchProtocol(
       AND clinic_id = $2::uuid
       AND active = true
     `,
-    [protocolId, clinicId],
+    [id, clinicId],
   );
   return rows[0] ?? null;
 }
@@ -131,32 +158,19 @@ async function fetchDefaultConsumables(
   return rows;
 }
 
-async function readAvailableQuantity(
-  client: PoolClient,
-  clinicId: string,
-  stockProductId: string,
-): Promise<number> {
-  const { rows } = await client.query<{ quantity: string }>(
-    `
-    SELECT quantity::text
-    FROM stock_items
-    WHERE clinic_id = $1::uuid AND id = $2::text
-    `,
-    [clinicId, stockProductId],
-  );
-  if (!rows[0]) return 0;
-  return Number(rows[0].quantity);
-}
+type StockDecrementAttempt =
+  | { ok: true }
+  | { ok: false; displayName: string };
 
 /**
- * Décrément atomique avec garde : `quantity >= déduction`.
- * Retourne la quantité **avant** déduction si succès.
+ * Tente un décrément atomique si `quantity >= déduction`.
+ * Ne lève pas d’erreur en rupture : retourne `ok: false` (l’appelant enregistre l’avertissement).
  */
-async function decrementStockLine(
+async function tryDecrementStockLine(
   client: PoolClient,
   clinicId: string,
   line: StockConsumptionLine,
-): Promise<void> {
+): Promise<StockDecrementAttempt> {
   if (line.quantity <= 0) {
     throw new Error(
       `Quantité invalide pour ${line.stockProductId} : ${line.quantity} (attendu > 0).`,
@@ -177,9 +191,18 @@ async function decrementStockLine(
   );
 
   if (rowCount === 0) {
-    const available = await readAvailableQuantity(client, clinicId, line.stockProductId);
-    throw new InsufficientStockError(line.stockProductId, line.quantity, available);
+    const { rows } = await client.query<{ label: string | null }>(
+      `
+      SELECT label
+      FROM stock_items
+      WHERE clinic_id = $1::uuid AND id = $2::text
+      `,
+      [clinicId, line.stockProductId],
+    );
+    const displayName = rows[0]?.label?.trim() || line.stockProductId;
+    return { ok: false, displayName };
   }
+  return { ok: true };
 }
 
 // ─── API publique ─────────────────────────────────────────────────────────────
@@ -195,6 +218,7 @@ export async function executeClinicalAct(
   clinicId: string,
   customConsumablesOverride?: StockConsumptionLine[] | null,
   customPriceOverrideCents?: number | null,
+  clientProtocol?: ClientProtocolBackfill | null,
 ): Promise<ExecuteClinicalActResult> {
   return executeClinicalActWithInput(pool, {
     patientId,
@@ -202,6 +226,7 @@ export async function executeClinicalAct(
     clinicId,
     customConsumablesOverride,
     customPriceOverrideCents,
+    clientProtocol: clientProtocol ?? undefined,
   });
 }
 
@@ -218,23 +243,31 @@ export async function executeClinicalActWithInput(
 ): Promise<ExecuteClinicalActResult> {
   const {
     patientId,
-    protocolId,
+    protocolId: uiProtocolId,
     clinicId,
     customConsumablesOverride,
     customPriceOverrideCents,
+    clientProtocol,
   } = input;
+
+  const cid = clinicId.trim();
+  const dbProtocolId = resolveProtocolDbUuid(uiProtocolId, cid);
 
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    const protocol = await fetchProtocol(client, protocolId, clinicId);
+    let protocol = await fetchProtocol(client, dbProtocolId, cid);
+    if (!protocol && clientProtocol) {
+      await upsertProtocolFromClient(client, dbProtocolId, cid, clientProtocol);
+      protocol = await fetchProtocol(client, dbProtocolId, cid);
+    }
     if (!protocol) {
-      throw new ClinicalProtocolNotFoundError(protocolId, clinicId);
+      throw new ClinicalProtocolNotFoundError(uiProtocolId, cid);
     }
 
-    const defaultRows = await fetchDefaultConsumables(client, protocolId);
+    const defaultRows = await fetchDefaultConsumables(client, dbProtocolId);
     const defaultsMapped = mapProtocolConsumableRows(defaultRows);
 
     const appliedConsumables = resolveEffectiveConsumables(
@@ -246,7 +279,7 @@ export async function executeClinicalActWithInput(
       customConsumablesOverride === undefined || customConsumablesOverride === null;
 
     if (usesProtocolDefaults && defaultsMapped.length === 0) {
-      throw new ProtocolConsumablesMissingError(protocolId);
+      throw new ProtocolConsumablesMissingError(dbProtocolId);
     }
 
     if (appliedConsumables.length === 0 && usesProtocolDefaults) {
@@ -255,9 +288,16 @@ export async function executeClinicalActWithInput(
 
     const mergedForStock = mergeConsumptionLines(appliedConsumables);
 
-    // 1) Stock : déductions (skip si liste effective vide, ex. override = [])
+    // 1) Stock : déductions au mieux (rupture → avertissement, acte poursuivi)
+    const stockWarnings: string[] = [];
+    const deductedLines: StockConsumptionLine[] = [];
     for (const line of mergedForStock) {
-      await decrementStockLine(client, clinicId, line);
+      const attempt = await tryDecrementStockLine(client, cid, line);
+      if (attempt.ok) {
+        deductedLines.push(line);
+      } else {
+        stockWarnings.push(`Stock insuffisant pour ${attempt.displayName}`);
+      }
     }
 
     const amountCents =
@@ -271,7 +311,11 @@ export async function executeClinicalActWithInput(
           ? "override"
           : "protocol_defaults",
       lines: mergedForStock,
-      protocolId,
+      deductedStockLines: deductedLines,
+      stockDeductionShortfalls:
+        stockWarnings.length > 0 ? [...stockWarnings] : undefined,
+      protocolId: dbProtocolId,
+      uiProtocolId: uiProtocolId.trim() !== dbProtocolId ? uiProtocolId.trim() : undefined,
       protocolName: protocol.name,
     };
 
@@ -290,8 +334,8 @@ export async function executeClinicalActWithInput(
       `,
       [
         patientId,
-        clinicId,
-        protocolId,
+        cid,
+        dbProtocolId,
         JSON.stringify(consumablesSnapshot),
         amountCents,
       ],
@@ -325,7 +369,7 @@ export async function executeClinicalActWithInput(
       )
       RETURNING id::text
       `,
-      [patientId, clinicId, clinicalHistoryId, invoiceLabel, amountCents],
+      [patientId, cid, clinicalHistoryId, invoiceLabel, amountCents],
     );
 
     const invoiceLineId = invoiceInsert.rows[0]?.id;
@@ -338,8 +382,9 @@ export async function executeClinicalActWithInput(
     return {
       clinicalHistoryId,
       invoiceLineId,
-      appliedConsumables: mergedForStock,
+      appliedConsumables: deductedLines,
       amountCents,
+      ...(stockWarnings.length > 0 ? { stockWarnings } : {}),
     };
   } catch (err) {
     await client.query("ROLLBACK");

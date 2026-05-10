@@ -3,6 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { resolveCabinetActorSnapshot } from "@/lib/server/cabinet-actor";
+import { logCabinetAuditSafe } from "@/lib/server/cabinet-audit";
 import { logServerError } from "@/lib/server/logger";
 
 const SELECT_LABO_JOIN = `
@@ -241,6 +243,10 @@ export async function createCommandeLaboAction(
   const auth = await requireBetterAuthSession();
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const pool = getPostgresPool();
     const id = randomUUID();
     const hist = data.historique ?? [];
@@ -280,7 +286,21 @@ export async function createCommandeLaboAction(
     );
     const r = rows[0];
     if (!r) return { ok: false, error: "Insertion sans retour" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "commande_labo_creee",
+      entityType: "commande_labo",
+      entityId: mapped.id,
+      patientId: mapped.patientId ?? null,
+      summary: mapped.patientNom
+        ? `Commande labo · ${mapped.patientNom} — ${mapped.travail}`
+        : `Commande labo · ${mapped.travail}`,
+      metadata: { travail: mapped.travail },
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("createCommandeLaboAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -296,6 +316,10 @@ export async function updateCommandeLaboAction(
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const pool = getPostgresPool();
     const patches: string[] = [];
     const vals: unknown[] = [];
@@ -346,7 +370,19 @@ export async function updateCommandeLaboAction(
     const up = await pool.query(q, vals);
     const r = up.rows[0];
     if (!r) return { ok: false, error: "Commande introuvable" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "commande_labo_modifiee",
+      entityType: "commande_labo",
+      entityId: mapped.id,
+      patientId: mapped.patientId ?? null,
+      summary: `Commande labo mise à jour · ${mapped.travail}`,
+      metadata: {},
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("updateCommandeLaboAction", e);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

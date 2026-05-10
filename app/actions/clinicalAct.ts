@@ -9,7 +9,10 @@
 import { executeClinicalAct } from "@/lib/server/clinical-act/executeClinicalAct";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
-import type { ExecuteClinicalActResult } from "@/lib/server/clinical-act/types";
+import type {
+  ClientProtocolBackfill,
+  ExecuteClinicalActResult,
+} from "@/lib/server/clinical-act/types";
 
 export type SubmitClinicalActInput = {
   patientId: string;
@@ -17,6 +20,8 @@ export type SubmitClinicalActInput = {
   clinicId: string;
   consumables: { stockProductId: string; quantity: number }[];
   customPriceOverrideCents?: number | null;
+  /** Métadonnées pour créer le protocole en base s’il manque (catalogue local / cockpit). */
+  clientProtocol?: ClientProtocolBackfill | null;
 };
 
 export type SubmitClinicalActResult =
@@ -48,6 +53,7 @@ export async function submitClinicalActAction(
       clinicId.trim(),
       input.consumables,
       input.customPriceOverrideCents ?? null,
+      input.clientProtocol ?? null,
     );
     return { ok: true, data };
   } catch (e) {

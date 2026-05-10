@@ -3,6 +3,8 @@
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireStocksAccessSession } from "@/lib/server/auth/require-session";
+import { resolveCabinetActorSnapshot } from "@/lib/server/cabinet-actor";
+import { logCabinetAuditSafe } from "@/lib/server/cabinet-audit";
 import { logServerError } from "@/lib/server/logger";
 import type { StockInput, StockRow } from "@/lib/types/stocks-db";
 
@@ -62,6 +64,10 @@ export async function createStockAction(
   const auth = await requireStocksAccessSession();
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const id = data.id?.trim() || randomUUID();
     const pool = getPostgresPool();
     await pool.query(
@@ -86,7 +92,19 @@ export async function createStockAction(
     const one = await pool.query(`${SELECT} WHERE id = $1`, [id]);
     const row = one.rows[0];
     if (!row) return { ok: false, error: "Insertion stock sans retour" };
-    return { ok: true, data: mapRow(row as Record<string, unknown>) };
+    const mapped = mapRow(row as Record<string, unknown>);
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "stock_cree",
+      entityType: "stock",
+      entityId: mapped.id,
+      patientId: null,
+      summary: `Stock ajouté · ${mapped.nom}`,
+      metadata: { nom: mapped.nom },
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[createStockAction]", e);
     return {
@@ -105,6 +123,10 @@ export async function updateStockAction(
   const rid = id.trim();
   if (!rid) return { ok: false, error: "id requis" };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const pool = getPostgresPool();
     const patches: string[] = [];
     const vals: unknown[] = [];
@@ -147,7 +169,19 @@ export async function updateStockAction(
     const { rows } = await pool.query(`${SELECT} WHERE id = $1`, [rid]);
     const r = rows[0];
     if (!r) return { ok: false, error: "Produit introuvable après mise à jour" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "stock_modifie",
+      entityType: "stock",
+      entityId: mapped.id,
+      patientId: null,
+      summary: `Stock modifié · ${mapped.nom}`,
+      metadata: {},
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[updateStockAction]", e);
     return {

@@ -3,6 +3,8 @@
 import { randomUUID } from "crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { resolveCabinetActorSnapshot } from "@/lib/server/cabinet-actor";
+import { logCabinetAuditSafe } from "@/lib/server/cabinet-audit";
 import { logServerError } from "@/lib/server/logger";
 import type {
   AppointmentInput,
@@ -22,6 +24,12 @@ const SELECT_JOIN = `
     a.notes,
     a.praticien,
     a.salle,
+    a.created_by_user_id,
+    a.created_by_display_name,
+    a.created_by_role,
+    a.updated_by_user_id,
+    a.updated_by_display_name,
+    a.updated_by_role,
     a.created_at::text AS created_at,
     a.updated_at::text AS updated_at,
     p.nom AS nom,
@@ -54,6 +62,22 @@ function mapRow(row: Record<string, unknown>): AppointmentRowJoined {
     notes: row.notes != null ? String(row.notes) : null,
     praticien: row.praticien != null ? String(row.praticien) : null,
     salle: row.salle != null ? String(row.salle) : null,
+    created_by_user_id:
+      row.created_by_user_id != null ? String(row.created_by_user_id) : null,
+    created_by_display_name:
+      row.created_by_display_name != null
+        ? String(row.created_by_display_name)
+        : null,
+    created_by_role:
+      row.created_by_role != null ? String(row.created_by_role) : null,
+    updated_by_user_id:
+      row.updated_by_user_id != null ? String(row.updated_by_user_id) : null,
+    updated_by_display_name:
+      row.updated_by_display_name != null
+        ? String(row.updated_by_display_name)
+        : null,
+    updated_by_role:
+      row.updated_by_role != null ? String(row.updated_by_role) : null,
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
     nom: row.nom != null ? String(row.nom) : null,
@@ -210,16 +234,23 @@ export async function createAppointmentAction(
   const auth = await requireBetterAuthSession();
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const id = data.id?.trim() || randomUUID();
     const pool = getPostgresPool();
     const { rows } = await pool.query(
       `INSERT INTO appointments (
           id, patient_id, date, heure, duree,
-          type_acte, statut, notes, praticien, salle
+          type_acte, statut, notes, praticien, salle,
+          created_by_user_id, created_by_display_name, created_by_role,
+          updated_by_user_id, updated_by_display_name, updated_by_role
         )
        VALUES (
           $1, $2, $3::date, $4, $5,
-          $6, COALESCE($7, 'confirme'), $8, $9, $10
+          $6, COALESCE($7, 'confirme'), $8, $9, $10,
+          $11, $12, $13, $11, $12, $13
         )
        RETURNING id`,
       [
@@ -233,6 +264,9 @@ export async function createAppointmentAction(
         data.notes ?? null,
         data.praticien ?? null,
         data.salle ?? null,
+        actor.userId,
+        actor.displayName,
+        actor.role,
       ],
     );
     const insertedId = String((rows[0] as { id: string }).id);
@@ -241,7 +275,20 @@ export async function createAppointmentAction(
     ]);
     const r = one.rows[0];
     if (!r) return { ok: false, error: "Insertion RDV sans retour JOIN" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    const pname = [mapped.prenom, mapped.nom].filter(Boolean).join(" ").trim();
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "rdv_cree",
+      entityType: "appointment",
+      entityId: mapped.id,
+      patientId: mapped.patient_id,
+      summary: pname ? `RDV · ${pname}` : "RDV créé",
+      metadata: { date: mapped.date, heure: mapped.heure },
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[createAppointmentAction]", e);
     return {
@@ -308,6 +355,16 @@ export async function updateAppointmentAction(
       return { ok: true, data: mapRow(r as Record<string, unknown>) };
     }
 
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
+    patches.push(`updated_by_user_id = $${i++}`);
+    vals.push(actor.userId);
+    patches.push(`updated_by_display_name = $${i++}`);
+    vals.push(actor.displayName);
+    patches.push(`updated_by_role = $${i++}`);
+    vals.push(actor.role);
     patches.push(`updated_at = NOW()`);
     vals.push(rid);
 
@@ -320,7 +377,20 @@ export async function updateAppointmentAction(
     ]);
     const r = rows[0];
     if (!r) return { ok: false, error: "RDV introuvable après mise à jour" };
-    return { ok: true, data: mapRow(r as Record<string, unknown>) };
+    const mapped = mapRow(r as Record<string, unknown>);
+    const pname = [mapped.prenom, mapped.nom].filter(Boolean).join(" ").trim();
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "rdv_modifie",
+      entityType: "appointment",
+      entityId: mapped.id,
+      patientId: mapped.patient_id,
+      summary: pname ? `RDV modifié · ${pname}` : "RDV modifié",
+      metadata: { date: mapped.date, heure: mapped.heure },
+    });
+    return { ok: true, data: mapped };
   } catch (e) {
     logServerError("[updateAppointmentAction]", e);
     return {

@@ -3,6 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { resolveCabinetActorSnapshot } from "@/lib/server/cabinet-actor";
+import { logCabinetAuditSafe } from "@/lib/server/cabinet-audit";
 import { logServerError } from "@/lib/server/logger";
 import type {
   CreatePatientInput,
@@ -157,6 +159,10 @@ export async function createPatientAction(
   const auth = await requireBetterAuthSession();
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const explicitId = data.id?.trim();
     const id = explicitId || randomUUID();
     const pool = getPostgresPool();
@@ -212,7 +218,22 @@ export async function createPatientAction(
            RETURNING *`,
           cols,
         );
-    return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
+    const row = mapRow(rows[0] as Record<string, unknown>);
+    const label = `${row.prenom} ${row.nom}`.trim();
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: explicitId ? "patient_mis_a_jour" : "patient_cree",
+      entityType: "patient",
+      entityId: row.id,
+      patientId: row.id,
+      summary: explicitId
+        ? `Fiche patient mise à jour · ${label}`
+        : `Patient ajouté · ${label}`,
+      metadata: { nom: row.nom, prenom: row.prenom },
+    });
+    return { ok: true, data: row };
   } catch (e) {
     logServerError("createPatientAction", e);
     const message =
@@ -230,6 +251,10 @@ export async function updatePatientAction(
   const auth = await requireBetterAuthSession();
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
     const pool = getPostgresPool();
     const keys = (Object.keys(data) as PatientInputKey[]).filter(
       (k) =>
@@ -268,7 +293,20 @@ export async function updatePatientAction(
     if (rows.length === 0) {
       return { ok: false, error: "Patient introuvable." };
     }
-    return { ok: true, data: mapRow(rows[0] as Record<string, unknown>) };
+    const row = mapRow(rows[0] as Record<string, unknown>);
+    const label = `${row.prenom} ${row.nom}`.trim();
+    logCabinetAuditSafe({
+      userId: actor.userId,
+      displayName: actor.displayName,
+      role: actor.role,
+      actionType: "patient_mis_a_jour",
+      entityType: "patient",
+      entityId: row.id,
+      patientId: row.id,
+      summary: `Fiche patient modifiée · ${label}`,
+      metadata: { champs: keys },
+    });
+    return { ok: true, data: row };
   } catch (e) {
     logServerError("updatePatientAction", e);
     const message =

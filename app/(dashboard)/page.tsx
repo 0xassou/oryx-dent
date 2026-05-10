@@ -69,6 +69,7 @@ import {
   QuickStats,
   RecentPatients,
 } from "@/components/dashboard/QuickStatsAndPatients";
+import { TeamActivityFeed } from "@/components/dashboard/TeamActivityFeed";
 import {
   getDashboardActesDistributionAction,
   getDashboardStatsAction,
@@ -1699,6 +1700,7 @@ export default function DashboardPage() {
               },
             ]}
           />
+          <TeamActivityFeed />
           <RecentPatients
             onViewAll={() => {
               router.push("/patients");

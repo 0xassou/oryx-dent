@@ -59,6 +59,22 @@ function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
+function formatAppointmentTrace(rdv: Rdv): string | null {
+  const a = rdv.createdByDisplayName?.trim();
+  const b = rdv.updatedByDisplayName?.trim();
+  if (!a && !b) return null;
+  const sameUser =
+    rdv.createdByUserId &&
+    rdv.updatedByUserId &&
+    rdv.createdByUserId === rdv.updatedByUserId;
+  if (a && b && b !== a && !sameUser) {
+    return `Créé par ${a} · Modifié par ${b}`;
+  }
+  if (a) return `Créé par ${a}`;
+  if (b) return `Modifié par ${b}`;
+  return null;
+}
+
 // ─── Helpers date ─────────────────────────────────────────────────────────────
 
 function formatDateKey(d: Date): string {
@@ -354,6 +370,7 @@ function ListView({
         ) : (
           <div className="flex flex-col gap-2.5">
             {dayRdvs.map((rdv) => {
+              const trace = formatAppointmentTrace(rdv);
               const care = careAccentFromSoin(rdv.soin);
               const stBadge = appointmentStatusBadge(rdv);
               return (
@@ -440,6 +457,11 @@ function ListView({
                     <span className="mt-3 inline-flex rounded-[12px] border border-[var(--ds-border)] bg-[var(--ds-bg)] px-2.5 py-1 font-mono text-[11px] font-medium tabular-nums text-[var(--ds-text-muted)]">
                       {rdv.durationMinutes} min
                     </span>
+                    {trace ? (
+                      <p className="mt-2 text-[10.5px] leading-snug text-[var(--ds-text-subtle)]">
+                        {trace}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="flex shrink-0 items-start gap-1 pt-0.5 opacity-85 transition-opacity group-hover:opacity-100">
@@ -657,9 +679,11 @@ function CalendarView({
                 })}
                 {dayRdvs.map((rdv) => {
                   const calStyle = calendarRdvSurfaceStyle(rdv);
+                  const trace = formatAppointmentTrace(rdv);
                   return (
                     <div
                       key={rdv.id}
+                      title={trace ?? undefined}
                       draggable
                       onDragStart={() => setDragId(rdv.id)}
                       onDragEnd={() => { setDragId(null); setDropKey(null); }}

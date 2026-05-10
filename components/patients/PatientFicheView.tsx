@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { OdontogrammeFiche } from "@/components/patients/OdontogrammeFiche";
 import type { ToothId, ToothStatus } from "@/components/dentition/DentalChart";
+import { MemberAvatar } from "@/components/team/MemberAvatar";
 import { formatPhoneNumber, toTitleCase } from "@/utils/formatters";
 import { RoleGate } from "@/components/auth/RoleGate";
 
@@ -52,6 +53,12 @@ export interface PatientFicheTimelineItem {
   montant?: number;
   statut?: "paye" | "attente" | "partiel";
   toothNumber?: number;
+  /** Membre ayant enregistré ou modifié l’acte (traçabilité). */
+  actor?: {
+    userId: string;
+    displayName: string;
+    role: string;
+  };
 }
 
 export interface PatientFicheProchainRdv {
@@ -714,6 +721,16 @@ export function PatientSoinsTimeline({
               />
               <article className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-3.5 shadow-[0_1px_2px_0_var(--ds-border)] transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                    {it.actor ? (
+                      <MemberAvatar
+                        userId={it.actor.userId}
+                        displayName={it.actor.displayName}
+                        role={it.actor.role}
+                        sizePx={32}
+                        className="mt-0.5"
+                      />
+                    ) : null}
                   <div className="min-w-0">
                     <p className="text-[13.5px] font-semibold text-[var(--ds-text)]">
                       {it.acteLabel}
@@ -726,6 +743,7 @@ export function PatientSoinsTimeline({
                     <p className="mt-1 font-mono text-[10.5px] tracking-wider text-[var(--ds-text-muted)]">
                       {dateLabel}
                     </p>
+                  </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                     <span

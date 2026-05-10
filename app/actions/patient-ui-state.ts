@@ -2,6 +2,9 @@
 
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { resolveCabinetActorSnapshot } from "@/lib/server/cabinet-actor";
+import { logCabinetAuditSafe } from "@/lib/server/cabinet-audit";
+import { mergeActsWithAuditTrail } from "@/lib/server/patient-ui-acts-audit";
 import { logServerError } from "@/lib/server/logger";
 
 export type PatientUiStateOk<T> =
@@ -50,6 +53,32 @@ export async function mergePatientUiStateAction(
   if (!pid) return { ok: false, error: "patientId requis." };
   try {
     const pool = getPostgresPool();
+    const actor = await resolveCabinetActorSnapshot({
+      userId: auth.userId,
+      email: auth.email,
+    });
+
+    const { rows: prevRows } = await pool.query<{ state: unknown }>(
+      `SELECT state FROM patient_ui_state WHERE patient_id = $1`,
+      [pid],
+    );
+    const prevState =
+      prevRows[0]?.state &&
+      typeof prevRows[0].state === "object" &&
+      !Array.isArray(prevRows[0].state)
+        ? (prevRows[0].state as Record<string, unknown>)
+        : {};
+
+    const merged: Record<string, unknown> = { ...partial };
+    if (Object.prototype.hasOwnProperty.call(partial, "acts")) {
+      merged.acts = mergeActsWithAuditTrail(
+        pid,
+        partial.acts,
+        prevState.acts,
+        actor,
+      );
+    }
+
     await pool.query(
       `
       INSERT INTO patient_ui_state (patient_id, state, updated_at)
@@ -58,8 +87,23 @@ export async function mergePatientUiStateAction(
         state = patient_ui_state.state || EXCLUDED.state,
         updated_at = NOW()
       `,
-      [pid, JSON.stringify(partial)],
+      [pid, JSON.stringify(merged)],
     );
+
+    if (Object.prototype.hasOwnProperty.call(partial, "profile")) {
+      logCabinetAuditSafe({
+        userId: actor.userId,
+        displayName: actor.displayName,
+        role: actor.role,
+        actionType: "patient_profil_etendu_mis_a_jour",
+        entityType: "patient",
+        entityId: null,
+        patientId: pid,
+        summary: "Profil étendu / fiche cockpit mis à jour",
+        metadata: {},
+      });
+    }
+
     return { ok: true, data: undefined };
   } catch (e) {
     logServerError("mergePatientUiStateAction", e);

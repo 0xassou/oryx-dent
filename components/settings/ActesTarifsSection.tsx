@@ -40,17 +40,12 @@ export function ActesTarifsSection() {
     refresh();
   }, [refresh]);
 
-  function persist(next: DentalCatalogAct[]) {
-    writeCatalogToStorage(next);
-    setActs(next);
-  }
-
   function updateRow(
     id: string,
     patch: Partial<Pick<DentalCatalogAct, "nom" | "categorie" | "prix_par_defaut">>,
   ) {
-    persist(
-      acts.map((a) => {
+    setActs((prev) => {
+      const next = prev.map((a) => {
         if (a.id !== id) return a;
         const nom =
           patch.nom !== undefined ? patch.nom.trim() || a.nom : a.nom;
@@ -58,8 +53,10 @@ export function ActesTarifsSection() {
         let prix = patch.prix_par_defaut ?? a.prix_par_defaut;
         if (!Number.isFinite(prix) || prix < 0) prix = 0;
         return { ...a, nom, categorie, prix_par_defaut: Math.round(prix) };
-      }),
-    );
+      });
+      writeCatalogToStorage(next);
+      return next;
+    });
   }
 
   function addAct() {
@@ -69,12 +66,20 @@ export function ActesTarifsSection() {
       categorie: "Soins",
       prix_par_defaut: 0,
     };
-    persist([row, ...acts]);
+    setActs((prev) => {
+      const next = [row, ...prev];
+      writeCatalogToStorage(next);
+      return next;
+    });
   }
 
   function removeAct(id: string) {
     if (!window.confirm("Retirer cet acte du catalogue ?")) return;
-    persist(acts.filter((a) => a.id !== id));
+    setActs((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      writeCatalogToStorage(next);
+      return next;
+    });
   }
 
   const grouped = CATEGORIES.map((cat) => ({

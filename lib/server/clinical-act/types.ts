@@ -10,9 +10,16 @@ export type StockConsumptionLine = {
   quantity: number;
 };
 
+/** Métadonnées pour créer / mettre à jour un protocole si absent en base (catalogue UI, cabinet non seedé). */
+export type ClientProtocolBackfill = {
+  name: string;
+  category: string;
+  basePriceCents: number;
+};
+
 export type ExecuteClinicalActInput = {
   patientId: string;
-  /** UUID du protocole (`clinical_protocols.id`). */
+  /** Id protocole côté UI (UUID seed ou clé stable) — résolu en UUID DB via `resolveProtocolDbUuid`. */
   protocolId: string;
   /** UUID du cabinet (`clinics.id`). */
   clinicId: string;
@@ -27,15 +34,26 @@ export type ExecuteClinicalActInput = {
    * Si absent : `clinical_protocols.base_price_cents`.
    */
   customPriceOverrideCents?: number | null;
+  /**
+   * Si le protocole n’existe pas encore pour ce cabinet en base, insertion / mise à jour
+   * (`clinical_protocols`) avant exécution (alignement catalogue local / cockpit).
+   */
+  clientProtocol?: ClientProtocolBackfill | null;
 };
 
 export type ExecuteClinicalActResult = {
   clinicalHistoryId: string;
   invoiceLineId: string;
-  /** Consommables réellement appliqués (audit + cohérence avec le snapshot). */
+  /**
+   * Lignes effectivement déstockées en base (peut être un sous-ensemble si stock insuffisant).
+   */
   appliedConsumables: StockConsumptionLine[];
   /** Montant facturé effectif (centimes). */
   amountCents: number;
+  /**
+   * Avertissements métier (ex. stock insuffisant) : l’acte est quand même enregistré.
+   */
+  stockWarnings?: string[];
 };
 
 export type ProtocolConsumableRow = {

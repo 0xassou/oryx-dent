@@ -21,6 +21,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { submitClinicalActAction } from "@/app/actions/clinicalAct";
+import type { ClientProtocolBackfill } from "@/lib/server/clinical-act/types";
 import { CatalogActCombobox } from "@/components/catalog/CatalogActCombobox";
 import {
   buildProtocolesFromSeed,
@@ -529,6 +530,13 @@ function formatAmountDA(value: number) {
   return `${new Intl.NumberFormat("fr-FR").format(value)} DA`;
 }
 
+type PatientActAuditStamp = {
+  userId: string;
+  displayName: string;
+  role: string;
+  at: string;
+};
+
 type PatientTreatmentRow = {
   tooth: number;
   kind?: "act" | "state";
@@ -541,6 +549,7 @@ type PatientTreatmentRow = {
   faces?: ToothFace[];
   montant?: number;
   praticien?: string;
+  _audit?: PatientActAuditStamp;
   // ---- état clinique (sauvegardé dans `patient_acts_${id}` via kind:"state") ----
   mobilite?: MobiliteGrade;
   sensibilite?: SensibiliteKind[];
@@ -888,6 +897,28 @@ function protocolOptionsForTab(
   if (tab === "Prothèse")
     return protocols.filter((p) => p.categorie === "Prothèse");
   return protocols;
+}
+
+/** Acte sans entrée catalogue : id stable côté UI, résolu en UUID DB sur le serveur. */
+function cockpitTabToVirtualProtocol(tab: CockpitTab): ProtocolForSettings {
+  const categorie: string =
+    tab === "Saine"
+      ? "Saine"
+      : tab === "Soins"
+        ? "Soins"
+        : tab === "Endodontie"
+          ? "Endodontie"
+          : tab === "Prothèse"
+            ? "Prothèse"
+            : tab === "Chirurgie"
+              ? "Chirurgie"
+              : "Soins";
+  return {
+    id: `cockpit:virtual:${tab}`,
+    nom: `Soin — ${tab}`,
+    categorie,
+    consommables: [],
+  };
 }
 
 const MOCK_ALL_TREATMENTS: PatientTreatmentRow[] = [
@@ -1468,9 +1499,15 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     // IMPORTANT: ne pas reseter l’onglet cockpit lors des changements d’état clinique.
-    // On recalcule le statut dentaire UNIQUEMENT quand les actes changent.
+    // On recalcule le statut dentaire UNIQUEMENT quand la liste des **actes** change
+    // (`treatmentsActsKey`), pas à chaque mutation de `allTreatments` (ex. mobilité /
+    // sensibilité en `kind:"state"`), sinon les onglets cockpit qui appellent
+    // `setDentsStatus` sont immédiatement écrasés et l’odontogramme ne « réagit » pas.
     setDentsStatus(buildDentsStatusFromTreatments(allTreatments));
-  }, [treatmentsActsKey, allTreatments]);
+    // `allTreatments` volontairement omis : le recalcul ne doit pas suivre les seules
+    // lignes d’état clinique (`kind:"state"`), sinon l’effet écrase `setDentsStatus` du cockpit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treatmentsActsKey]);
 
   // Slide-over Cockpit — protocoles (20) + ajustement consommables
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
@@ -1506,7 +1543,7 @@ export default function PatientDetailPage() {
   const [confirmAbsent, setConfirmAbsent] = useState<number | null>(null);
   const [validateSoinLoading, setValidateSoinLoading] = useState(false);
   const [toast, setToast] = useState<{
-    type: "success" | "error";
+    type: "success" | "error" | "warning";
     message: string;
   } | null>(null);
 
@@ -1779,23 +1816,12 @@ export default function PatientDetailPage() {
 
   async function handleValidateClinicalAct() {
     if (selectedTooth === null) return;
-    if (!drawerProtocolId.trim()) {
-      setToast({ type: "error", message: "Veuillez sélectionner un protocole" });
-      return;
-    }
-    if (!selectedDrawerProtocol) {
-      setToast({ type: "error", message: "Protocole introuvable" });
-      return;
-    }
-    const clinicId = process.env.NEXT_PUBLIC_CLINIC_ID;
-    if (!clinicId) {
-      setToast({
-        type: "error",
-        message: "Erreur de configuration : ID du cabinet manquant",
-      });
-      return;
-    }
-    const protocol = selectedDrawerProtocol;
+    // Protocole catalogue optionnel : sans sélection, on enregistre un acte lié à l’onglet cockpit.
+    const protocol =
+      selectedDrawerProtocol ?? cockpitTabToVirtualProtocol(cockpitTab);
+    const manualMoney = parseMoney(drawerMontant);
+    const manualCents =
+      manualMoney > 0 ? Math.max(0, Math.round(manualMoney * 100)) : null;
     const consumables: { stockProductId: string; quantity: number }[] = [];
     for (const c of protocol.consommables) {
       const qty = qtyByConsumableId[c.id] ?? c.quantite;
@@ -1803,47 +1829,75 @@ export default function PatientDetailPage() {
       const sid = consumableLabelToStockProductId(c.nom);
       consumables.push({ stockProductId: sid, quantity: qty });
     }
+    const devHint = ACTES_PRIX_DEVIS[protocol.nom];
+    const basePriceCentsForBackfill = Math.round(
+      (typeof devHint === "number" ? devHint : 0) * 100,
+    );
+    const clientProtocol: ClientProtocolBackfill = {
+      name: protocol.nom,
+      category: protocol.categorie,
+      basePriceCents:
+        manualCents != null && manualCents > 0
+          ? manualCents
+          : basePriceCentsForBackfill,
+    };
     const toothNum = selectedTooth;
     setValidateSoinLoading(true);
     try {
       const res = await submitClinicalActAction({
         patientId: id,
         protocolId: protocol.id,
-        clinicId,
+        clinicId: process.env.NEXT_PUBLIC_CLINIC_ID?.trim() ?? "",
         consumables,
+        customPriceOverrideCents: manualCents,
+        clientProtocol,
       });
       if (res.ok) {
-        const protocolsMap = loadProtocols();
-        const currentStock = clinicalStockLines;
-        const nextStock = consumeStockForAct(
-          protocol.nom,
-          currentStock,
-          protocolsMap,
-        );
-        for (const row of nextStock) {
-          const prev = currentStock.find((p) => p.id === row.id);
-          if (!prev || prev.quantite === row.quantite) continue;
-          const up = await updateStockAction(row.id, {
-            quantite: row.quantite,
-          });
-          if (!up.ok) console.error(up.error);
+        const stockPgWarnings = res.data.stockWarnings ?? [];
+        // Sync stock local uniquement si le serveur a tout déstocké (sinon décalage avec déductions partielles / 0).
+        if (stockPgWarnings.length === 0) {
+          const protocolsMap = loadProtocols();
+          const currentStock = clinicalStockLines;
+          const nextStock = consumeStockForAct(
+            protocol.nom,
+            currentStock,
+            protocolsMap,
+          );
+          for (const row of nextStock) {
+            const prev = currentStock.find((p) => p.id === row.id);
+            if (!prev || prev.quantite === row.quantite) continue;
+            const up = await updateStockAction(row.id, {
+              quantite: row.quantite,
+            });
+            if (!up.ok) console.error(up.error);
+          }
+          setClinicalStockLines(nextStock);
+          notifyStockUpdated();
         }
-        setClinicalStockLines(nextStock);
-        notifyStockUpdated();
 
         const kitDeduction = await tryMarkSterilizationKitSale(
           protocol.categorie,
         );
-        const toastMessage = kitDeduction.used
+        let toastType: "success" | "error" | "warning" = kitDeduction.used
+          ? "success"
+          : "error";
+        let toastMessage = kitDeduction.used
           ? `Acte enregistré avec succès. Kit ${kitDeduction.typeLabel} #${kitDeduction.numero} marqué comme sale.`
           : `Acte enregistré avec succès. Attention : Aucun kit ${kitDeduction.typeLabel} stérile disponible !`;
+        if (stockPgWarnings.length > 0) {
+          toastType = "warning";
+          toastMessage = [toastMessage, ...stockPgWarnings].join(" ");
+        }
         setToast({
-          type: kitDeduction.used ? "success" : "error",
+          type: toastType,
           message: toastMessage,
         });
         setDentsStatus((prev) => ({
           ...prev,
-          [toothNum as ToothId]: protocolCategoryToToothStatus(protocol.categorie),
+          [toothNum as ToothId]:
+            cockpitTab === "Saine"
+              ? "healthy"
+              : protocolCategoryToToothStatus(protocol.categorie),
         }));
         setAllTreatments((prev) => {
           const manualMontant = parseMoney(drawerMontant);
@@ -1922,6 +1976,12 @@ export default function PatientDetailPage() {
       } else {
         setToast({ type: "error", message: res.error });
       }
+    } catch (e) {
+      setToast({
+        type: "error",
+        message:
+          e instanceof Error ? e.message : "Erreur inattendue lors de l’enregistrement du soin.",
+      });
     } finally {
       setValidateSoinLoading(false);
     }
@@ -2143,6 +2203,13 @@ export default function PatientDetailPage() {
         montant: fin?.montantTotal ?? cout,
         statut,
         toothNumber: row.tooth,
+        actor: row._audit
+          ? {
+              userId: row._audit.userId,
+              displayName: row._audit.displayName,
+              role: row._audit.role,
+            }
+          : undefined,
       };
     });
     normalized.sort((a, b) => (a.date > b.date ? -1 : 1));
@@ -3667,11 +3734,15 @@ export default function PatientDetailPage() {
       {/* ── Tiroir Cockpit — protocole + consommables (un seul panneau) ── */}
       <>
         <div
+          aria-hidden
           className={[
             "fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm transition-opacity duration-300",
-            selectedTooth !== null ? "opacity-100" : "pointer-events-none opacity-0",
+            // Ne pas intercepter les clics : l’odontogramme reste à gauche sous ce voile ;
+            // sans `pointer-events-none`, aucun clic dent n’atteint la fiche tant que le cockpit est ouvert.
+            selectedTooth !== null
+              ? "pointer-events-none opacity-100"
+              : "pointer-events-none opacity-0",
           ].join(" ")}
-          onClick={() => setSelectedTooth(null)}
         />
 
         <aside
@@ -4605,7 +4676,7 @@ export default function PatientDetailPage() {
             >
               <button
                 type="button"
-                disabled={!selectedDrawerProtocol || validateSoinLoading}
+                disabled={validateSoinLoading}
                 onClick={() => void handleValidateClinicalAct()}
                 className="h-11 w-full rounded-xl bg-[var(--ds-primary)] text-sm font-semibold text-white shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)] transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
               >
@@ -4630,7 +4701,9 @@ export default function PatientDetailPage() {
             "fixed bottom-6 right-6 z-[100] max-w-sm rounded-2xl px-4 py-3 text-sm font-medium shadow-lg",
             toast.type === "success"
               ? "bg-emerald-600 text-white"
-              : "bg-red-600 text-white",
+              : toast.type === "warning"
+                ? "bg-amber-600 text-white"
+                : "bg-red-600 text-white",
           ].join(" ")}
         >
           {toast.message}
