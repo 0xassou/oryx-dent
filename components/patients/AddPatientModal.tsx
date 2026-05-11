@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 export type Sexe = "F" | "M" | "autre";
 
@@ -488,12 +488,9 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
             >
               Annuler
             </button>
-            <button
-              type="submit"
-              className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-[var(--ds-bg)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
-            >
+            <PrimaryButton type="submit" className="font-medium shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
               Enregistrer
-            </button>
+            </PrimaryButton>
           </div>
         </form>
       </div>

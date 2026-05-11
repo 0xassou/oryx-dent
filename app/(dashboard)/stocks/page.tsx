@@ -16,7 +16,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import AnimatedButton from "@/components/ui/AnimatedButton";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
   createStockAction,
@@ -493,13 +493,13 @@ function ProductModal({
           >
             Annuler
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={handleSubmit}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
+            className="font-medium shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
           >
             Enregistrer
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>
@@ -854,10 +854,10 @@ export default function StocksPage() {
             Vue d&apos;ensemble du matériel et des consommables
           </p>
         </div>
-        <AnimatedButton onClick={openCreateModal}>
+        <PrimaryButton type="button" onClick={openCreateModal}>
           <Plus className="h-4 w-4" strokeWidth={2} />
           Ajouter un produit
-        </AnimatedButton>
+        </PrimaryButton>
       </div>
 
       {!hasHydrated ? (
@@ -1309,7 +1309,7 @@ export default function StocksPage() {
               >
                 Annuler
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 disabled={!canSubmitStockAdjust}
                 onClick={() => {
@@ -1349,10 +1349,10 @@ export default function StocksPage() {
                   ]);
                   setEditingStock(null);
                 }}
-                className="rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl font-medium shadow-[0_8px_30px_rgba(0,0,0,0.08)] disabled:cursor-not-allowed"
               >
                 {stockActionType === "add" ? "Ajouter" : "Retirer"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

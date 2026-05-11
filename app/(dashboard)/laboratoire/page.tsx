@@ -21,7 +21,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import AnimatedButton from "@/components/ui/AnimatedButton";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { LabWhatsAppButton } from "@/components/laboratoire/LabWhatsAppButton";
 import { PatientCombobox } from "@/components/laboratoire/PatientCombobox";
@@ -568,13 +568,14 @@ function LaboratoirePageContent() {
             Suivi des commandes prothétiques et des délais laboratoire
           </p>
         </div>
-        <AnimatedButton
+        <PrimaryButton
+          type="button"
           onClick={() => setIsModalOpen(true)}
-          className="rounded-[12px] bg-[color:var(--ds-primary)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_16px_rgba(124,58,237,0.25)] transition-colors hover:bg-[color:var(--ds-primary-hover)]"
+          className="rounded-[12px] font-semibold shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           Nouvelle commande labo
-        </AnimatedButton>
+        </PrimaryButton>
       </header>
 
       {!hydrated ? (
@@ -1255,13 +1256,13 @@ function LaboratoirePageContent() {
                 >
                   Annuler
                 </button>
-                <button
+                <PrimaryButton
                   type="submit"
                   disabled={!modalPatientId || !modalLabId || !retourIso}
-                  className="rounded-2xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(8,145,178,0.2)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="rounded-2xl font-semibold shadow-[0_4px_16px_rgba(8,145,178,0.2)] disabled:cursor-not-allowed"
                 >
                   Créer la commande
-                </button>
+                </PrimaryButton>
               </div>
             </form>
           </div>
@@ -1897,27 +1898,27 @@ function CommandeDrawer({
         {/* Footer actions */}
         <div className="sticky bottom-0 flex items-center gap-2 border-t border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-6 py-4">
           {cmd.statut === "RECU_CABINET" ? (
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => onChangeStatut("POSE")}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+              className="inline-flex flex-1 min-w-0 font-semibold shadow-sm"
             >
               <CheckCircle2 className="h-4 w-4" />
               Marquer posé
-            </button>
+            </PrimaryButton>
           ) : cmd.statut === "POSE" ? (
             <span className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-[13px] font-semibold text-emerald-700">
               <CheckCircle2 className="h-4 w-4" /> Travail posé
             </span>
           ) : (
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => onChangeStatut("RECU_CABINET")}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+              className="inline-flex flex-1 min-w-0 font-semibold shadow-sm"
             >
               <Package className="h-4 w-4" />
               Marquer reçu
-            </button>
+            </PrimaryButton>
           )}
           <button
             type="button"

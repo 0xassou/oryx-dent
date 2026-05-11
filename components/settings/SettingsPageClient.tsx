@@ -29,6 +29,7 @@ import {
   replaceCabinetSettingsAction,
 } from "@/app/actions/cabinet-settings";
 import { replaceCabinetBlobFromServer } from "@/lib/client/cabinetBlob";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 /** Champ : label au-dessus (liste verticale). */
 const fieldRow =
@@ -368,13 +369,13 @@ export default function SettingsPageClient({
                 </div>
 
                 <div className="mt-10 flex justify-end">
-                  <button
+                  <PrimaryButton
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="font-medium"
                   >
                     Sauvegarder
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
             )}
@@ -636,13 +637,13 @@ export default function SettingsPageClient({
               </div>
 
               <div className="mt-10 flex justify-end">
-                <button
+                <PrimaryButton
                   type="button"
                   onClick={handleSaveSettings}
-                  className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                  className="font-medium"
                 >
                   Sauvegarder
-                </button>
+                </PrimaryButton>
               </div>
               </>
             )}
@@ -811,13 +812,13 @@ export default function SettingsPageClient({
                 </div>
 
                 <div className="mt-10 flex justify-end">
-                  <button
+                  <PrimaryButton
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="font-medium"
                   >
                     Sauvegarder
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
             )}
@@ -1076,13 +1077,13 @@ export default function SettingsPageClient({
                 </div>
 
                 <div className="mt-10 flex justify-end">
-                  <button
+                  <PrimaryButton
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="font-medium"
                   >
                     Sauvegarder
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
             )}

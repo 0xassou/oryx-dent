@@ -11,6 +11,7 @@ import {
   type DepenseRow,
 } from "@/app/actions/depenses";
 import { showAppToast } from "@/utils/appToast";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const CATEGORIES: DepenseCategorie[] = [
   "Loyer",
@@ -217,14 +218,14 @@ export function DepensesManager({ showPageHeading = true }: DepensesManagerProps
           </div>
         ) : null}
 
-        <button
+        <PrimaryButton
           type="button"
           onClick={openModal}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 sm:shrink-0"
+          className="inline-flex font-semibold shadow-sm sm:shrink-0"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
           Nouvelle dépense
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="rounded-[20px] border border-[var(--border)] bg-[var(--ds-surface)] p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -506,13 +507,14 @@ export function DepensesManager({ showPageHeading = true }: DepensesManagerProps
                 >
                   Annuler
                 </button>
-                <button
+                <PrimaryButton
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+                  isLoading={saving}
+                  className="font-semibold shadow-sm"
                 >
-                  {saving ? "Enregistrement…" : "Enregistrer"}
-                </button>
+                  Enregistrer
+                </PrimaryButton>
               </div>
             </form>
           </div>

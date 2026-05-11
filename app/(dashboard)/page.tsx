@@ -70,6 +70,7 @@ import {
   RecentPatients,
 } from "@/components/dashboard/QuickStatsAndPatients";
 import { TeamActivityFeed } from "@/components/dashboard/TeamActivityFeed";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import {
   getDashboardActesDistributionAction,
   getDashboardStatsAction,
@@ -803,13 +804,13 @@ function DirectEntryModal({
             >
               Annuler
             </button>
-            <button
+            <PrimaryButton
               type="submit"
               disabled={!canSubmit}
-              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="font-semibold shadow-sm"
             >
               Ajouter au flux
-            </button>
+            </PrimaryButton>
           </div>
         </form>
       </div>
@@ -1356,17 +1357,17 @@ export default function DashboardPage() {
                 <h2 className="text-sm font-semibold text-[color:var(--ds-text)]">
                   Flux de la journée
                 </h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void loadPatientsFromServer();
-                    setDirectEntryOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary)] hover:text-white"
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                  + Entrée Directe
-                </button>
+            <PrimaryButton
+              type="button"
+              onClick={() => {
+                void loadPatientsFromServer();
+                setDirectEntryOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+              + Entrée Directe
+            </PrimaryButton>
               </div>
               <Link
                 href="/planning"
@@ -1487,13 +1488,13 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-4 py-3">
                             {row.status === "En attente" ? (
-                              <button
+                              <PrimaryButton
                                 type="button"
                                 onClick={() => passAuFauteuil(row.id)}
-                                className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-primary-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--ds-primary-hover)] shadow-sm transition-colors hover:bg-[var(--ds-primary-border)]"
+                                className="px-3 py-1.5 text-xs font-semibold shadow-sm"
                               >
                                 Passer au fauteuil
-                              </button>
+                              </PrimaryButton>
                             ) : row.status === "Au fauteuil" ? (
                               <span className="text-xs text-[var(--ds-text-muted)]">—</span>
                             ) : (

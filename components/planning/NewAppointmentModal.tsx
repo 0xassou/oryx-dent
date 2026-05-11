@@ -7,6 +7,7 @@ import {
   roundStartTimeToNextTenMinutes,
   todayDateInputValue,
 } from "@/utils/appointmentData";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const DUREES = [15, 30, 45, 60, 90] as const;
 
@@ -293,13 +294,13 @@ export function NewAppointmentModal({
           >
             Annuler
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={handleConfirm}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
+            className="font-medium shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
           >
             Confirmer le RDV
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

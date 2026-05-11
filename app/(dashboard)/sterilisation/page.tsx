@@ -19,7 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { getAppointmentsByDateAction } from "@/app/actions/appointments";
-import AnimatedButton from "@/components/ui/AnimatedButton";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { formatDateShort } from "@/utils/formatters";
 import {
   APPOINTMENTS_UPDATED_EVENT,
@@ -923,10 +923,10 @@ export default function SterilisationPage() {
             </button>
           </div>
         </div>
-        <AnimatedButton onClick={() => setShowCycleModal(true)}>
+        <PrimaryButton type="button" onClick={() => setShowCycleModal(true)}>
           <Plus className="h-4 w-4" strokeWidth={2} />
           Nouveau Cycle
-        </AnimatedButton>
+        </PrimaryButton>
       </div>
 
       {/* Mode Journée */}
@@ -1585,19 +1585,14 @@ export default function SterilisationPage() {
               >
                 Annuler
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={handleCreateCycle}
                 disabled={totalNewKits === 0 || !stockSufficient}
-                className={[
-                  "rounded-2xl px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors",
-                  totalNewKits === 0 || !stockSufficient
-                    ? "cursor-not-allowed bg-[var(--ds-primary-border)]"
-                    : "bg-[color:var(--ds-primary)] hover:opacity-90",
-                ].join(" ")}
+                className="rounded-2xl font-medium shadow-sm"
               >
                 Confirmer le cycle
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
