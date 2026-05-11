@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
@@ -148,6 +149,7 @@ export default function SettingsPageClient({
 }: {
   isAdmin: boolean;
 }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsNavId>("clinique");
   const [twoFA, setTwoFA] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<Theme>("violet");
@@ -358,6 +360,7 @@ export default function SettingsPageClient({
                   <div className="mt-8">
                     <button
                       type="button"
+                      onClick={() => router.push("/change-password")}
                       className="rounded-xl border border-[var(--ds-primary-border)] px-4 py-2 text-sm font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-bg)]"
                     >
                       Changer le mot de passe

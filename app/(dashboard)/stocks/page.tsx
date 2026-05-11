@@ -88,116 +88,8 @@ interface StockHistoryItem {
 
 const STOCK_HISTORY_LS_KEY = "dental_stock_history";
 
-const INITIAL_PRODUITS: Produit[] = [
-  {
-    id: "1",
-    nom: "Résine Composite A2 - Filtek",
-    categorie: "Composites & Ciments",
-    gestion: "multidose",
-    quantite: 34,
-    quantiteMax: 50,
-    peremption: "2026-10-12T00:00:00.000Z",
-  },
-  {
-    id: "2",
-    nom: "Résine Composite B1 - Filtek",
-    categorie: "Composites & Ciments",
-    gestion: "multidose",
-    quantite: 8,
-    quantiteMax: 50,
-    peremption: "2026-08-05T00:00:00.000Z",
-  },
-  {
-    id: "3",
-    nom: "Articaïne 4% - Septanest",
-    categorie: "Anesthésiques",
-    gestion: "unitaire",
-    quantite: 120,
-    quantiteMax: 200,
-    peremption: "2027-01-22T00:00:00.000Z",
-  },
-  {
-    id: "4",
-    nom: "Lidocaïne 2% - Xylocaïne",
-    categorie: "Anesthésiques",
-    gestion: "unitaire",
-    quantite: 0,
-    quantiteMax: 100,
-    peremption: "—",
-  },
-  {
-    id: "5",
-    nom: "Gants nitrile (M) - Medicom",
-    categorie: "Consommables jetables",
-    gestion: "unitaire",
-    quantite: 450,
-    quantiteMax: 500,
-    peremption: "2027-06-30T00:00:00.000Z",
-  },
-  {
-    id: "6",
-    nom: "Masques chirurgicaux - Kolmi",
-    categorie: "Consommables jetables",
-    gestion: "unitaire",
-    quantite: 15,
-    quantiteMax: 200,
-    peremption: "2026-04-15T00:00:00.000Z",
-  },
-  {
-    id: "7",
-    nom: "Implant Straumann BLT Ø4.1",
-    categorie: "Chirurgie & Implants",
-    gestion: "unitaire",
-    quantite: 6,
-    quantiteMax: 20,
-    peremption: "2027-12-18T00:00:00.000Z",
-  },
-  {
-    id: "8",
-    nom: "Implant Nobel Active Ø3.5",
-    categorie: "Chirurgie & Implants",
-    gestion: "unitaire",
-    quantite: 0,
-    quantiteMax: 15,
-    peremption: "—",
-  },
-  {
-    id: "9",
-    nom: "Ciment verre-ionomère - GC Fuji",
-    categorie: "Composites & Ciments",
-    gestion: "multidose",
-    quantite: 22,
-    quantiteMax: 40,
-    peremption: "2026-09-09T00:00:00.000Z",
-  },
-  {
-    id: "10",
-    nom: "Rouleaux de coton salivaire",
-    categorie: "Consommables jetables",
-    gestion: "unitaire",
-    quantite: 3,
-    quantiteMax: 300,
-    peremption: "2026-05-01T00:00:00.000Z",
-  },
-  {
-    id: "11",
-    nom: "Anesthésique topique - Hurricaine",
-    categorie: "Anesthésiques",
-    gestion: "multidose",
-    quantite: 18,
-    quantiteMax: 30,
-    peremption: "2026-11-20T00:00:00.000Z",
-  },
-  {
-    id: "12",
-    nom: "Pilier implantaire Ø4.1",
-    categorie: "Chirurgie & Implants",
-    gestion: "unitaire",
-    quantite: 0,
-    quantiteMax: 10,
-    peremption: "—",
-  },
-];
+const STOCKS_LOAD_ERROR_MSG =
+  "Impossible de charger les stocks. Veuillez réessayer.";
 
 function uid() {
   return Math.random().toString(16).slice(2);
@@ -615,7 +507,8 @@ function ProductModal({
 }
 
 export default function StocksPage() {
-  const [produits, setProduits] = useState<Produit[]>(INITIAL_PRODUITS);
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [stocksLoadError, setStocksLoadError] = useState<string | null>(null);
   const [stockHistory, setStockHistory] = useState<StockHistoryItem[]>([]);
   const [search, setSearch] = useState("");
   const [filtre, setFiltre] = useState<Categorie | "">("");
@@ -674,12 +567,18 @@ export default function StocksPage() {
               stockLineToProduit(stockRowToStockLine(row)),
             ),
           );
+          setStocksLoadError(null);
         } else if (res.ok) {
-          setProduits(INITIAL_PRODUITS);
+          setProduits([]);
+          setStocksLoadError(null);
+        } else {
+          setProduits([]);
+          setStocksLoadError(STOCKS_LOAD_ERROR_MSG);
         }
       } catch {
         if (!cancelled) {
-          setProduits(INITIAL_PRODUITS);
+          setProduits([]);
+          setStocksLoadError(STOCKS_LOAD_ERROR_MSG);
           setStockHistory([]);
         }
       } finally {
@@ -868,6 +767,7 @@ export default function StocksPage() {
         console.error(res.error);
         return;
       }
+      setStocksLoadError(null);
       setProduits((prev) => prev.filter((x) => x.id !== p.id));
       notifyStockUpdated();
     })();
@@ -889,6 +789,7 @@ export default function StocksPage() {
           console.error(res.error);
           return;
         }
+        setStocksLoadError(null);
         setProduits((prev) =>
           prev.map((p) =>
             p.id === id
@@ -907,6 +808,7 @@ export default function StocksPage() {
           console.error(res.error);
           return;
         }
+        setStocksLoadError(null);
         const produit = stockLineToProduit(stockRowToStockLine(res.data));
         setProduits((prev) => [produit, ...prev]);
       }
@@ -927,6 +829,7 @@ export default function StocksPage() {
         console.error(res.error);
         return;
       }
+      setStocksLoadError(null);
       setProduits((prev) =>
         prev.map((prod) =>
           prod.id === productId
@@ -961,6 +864,14 @@ export default function StocksPage() {
         <StocksListSkeleton />
       ) : (
         <>
+      {stocksLoadError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-200"
+        >
+          {stocksLoadError}
+        </div>
+      ) : null}
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 lg:grid-cols-3">
         <div className="kpi-card flex items-center gap-4 rounded-2xl border border-violet-200 bg-violet-50 px-6 py-3 shadow-sm">
