@@ -47,7 +47,7 @@ const inputBase =
 /** Grille section Clinique & légal (infos + fiscal). */
 const clinicGrid = "grid w-full min-w-0 grid-cols-1 gap-6 md:grid-cols-2";
 
-/** Interrupteur animé (Notifications, 2FA). */
+/** Interrupteur animé (Notifications). */
 function Toggle({
   checked,
   onChange,
@@ -151,7 +151,6 @@ export default function SettingsPageClient({
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SettingsNavId>("clinique");
-  const [twoFA, setTwoFA] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<Theme>("violet");
   const [settings, setSettings] = useState({
     nomCabinet: "",
@@ -365,28 +364,6 @@ export default function SettingsPageClient({
                     >
                       Changer le mot de passe
                     </button>
-                  </div>
-                </div>
-
-                <div className="mt-12 border-t border-[var(--ds-primary-border)] pt-10">
-                  <h2 className="mb-6 text-lg font-semibold tracking-tight text-[var(--ds-text)]">
-                    Sécurité
-                  </h2>
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-[var(--ds-text)]">
-                          Authentification à double facteur (2FA)
-                        </p>
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                          Recommandé
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-[var(--ds-text-muted)]">
-                        Protégez votre compte avec un code à usage unique.
-                      </p>
-                    </div>
-                    <Toggle checked={twoFA} onChange={setTwoFA} />
                   </div>
                 </div>
 

@@ -17,6 +17,8 @@ export type DashboardStats = {
   totalPatients: number;
   rdvAujourdHui: number;
   rdvCeMois: number;
+  /** RDV du mois en cours dont le statut est annulé (aligné sur `finances-stats`). */
+  rdvAnnules: number;
   recettesCeMois: number;
   facturesEnAttente: number;
   stocksEnRupture: number;
@@ -73,6 +75,14 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     WHERE date_trunc('month', date) = date_trunc('month', CURRENT_DATE)
     `,
   );
+  const qRdvAnnulesMonth = pool.query(
+    `
+    SELECT COUNT(*)::int AS count
+    FROM appointments
+    WHERE date_trunc('month', date) = date_trunc('month', CURRENT_DATE)
+      AND lower(coalesce(statut, '')) IN ('annule', 'annulé', 'cancelled', 'canceled')
+    `,
+  );
   const qRecettesMonth = pool.query(
     `
     SELECT COALESCE(SUM(montant_paye), 0)::float8 AS sum
@@ -109,6 +119,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     totalPatientsRes,
     rdvTodayRes,
     rdvMonthRes,
+    rdvAnnulesMonthRes,
     recettesMonthRes,
     facturesPendingRes,
     stocksRuptureRes,
@@ -118,6 +129,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     qTotalPatients,
     qRdvToday,
     qRdvMonth,
+    qRdvAnnulesMonth,
     qRecettesMonth,
     qFacturesPending,
     qStocksRupture,
@@ -128,6 +140,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
   const totalPatients = toCount(totalPatientsRes.rows[0]?.count);
   const rdvAujourdHui = toCount(rdvTodayRes.rows[0]?.count);
   const rdvCeMois = toCount(rdvMonthRes.rows[0]?.count);
+  const rdvAnnules = toCount(rdvAnnulesMonthRes.rows[0]?.count);
   const recettesCeMois = toCount(recettesMonthRes.rows[0]?.sum);
   const facturesEnAttente = toCount(facturesPendingRes.rows[0]?.count);
   const stocksEnRupture = toCount(stocksRuptureRes.rows[0]?.count);
@@ -140,6 +153,7 @@ export async function getDashboardStatsAction(): Promise<DashboardStats> {
     totalPatients,
     rdvAujourdHui,
     rdvCeMois,
+    rdvAnnules,
     recettesCeMois,
     facturesEnAttente,
     stocksEnRupture,

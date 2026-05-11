@@ -843,7 +843,6 @@ function getDoctorName() {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const annulationsCount = 0;
   const [mounted, setMounted] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
   const [dashboardStats, setDashboardStats] = useState<Awaited<
@@ -876,6 +875,8 @@ export default function DashboardPage() {
     () => listLogisticsAlerts(labCommandes),
     [labCommandes],
   );
+
+  const annulationsCount = dashboardStats?.rdvAnnules ?? 0;
 
   const refreshActesChart = useCallback(async () => {
     try {
@@ -1694,7 +1695,10 @@ export default function DashboardPage() {
               { value: "98%", label: "Satisfaction", colorVar: "var(--ds-primary)" },
               { value: "24 min", label: "Durée moy.", colorVar: "var(--ds-primary-hover)" },
               {
-                value: annulationsCount.toString(),
+                value:
+                  statsLoading || dashboardStats === null
+                    ? "—"
+                    : annulationsCount.toString(),
                 label: "Annulations",
                 colorVar: "var(--ds-text-muted)",
               },
