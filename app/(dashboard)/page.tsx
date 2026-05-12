@@ -138,6 +138,7 @@ type FluxRow = {
   id: string;
   time: string;
   patient: string;
+  patientId?: string;
   act: string;
   status: FluxStatus;
   attenteMin?: number;
@@ -1230,7 +1231,7 @@ export default function DashboardPage() {
     );
   }
 
-  async function marquerArrivee(id: string, appointmentId?: string) {
+  async function marquerArrivee(id: string, appointmentId?: string, patientId?: string) {
     // Mettre à jour le statut localement
     setFluxRows((prev) =>
       prev.map((r) =>
@@ -1242,7 +1243,7 @@ export default function DashboardPage() {
       try {
         await createConsultationAction({
           appointment_id: appointmentId,
-          patient_id: null,
+          patient_id: patientId || null,
           type_acte: "Consultation",
         });
       } catch (e) {
@@ -1557,7 +1558,7 @@ export default function DashboardPage() {
                             {row.status === "À venir" ? (
                               <PrimaryButton
                                 type="button"
-                                onClick={() => marquerArrivee(row.id, row.appointmentId)}
+                                onClick={() => marquerArrivee(row.id, row.appointmentId, row.patientId)}
                                 className="inline-flex items-center gap-1 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
                               >
                                 <Check className="h-3 w-3" strokeWidth={2.5} />
