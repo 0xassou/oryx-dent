@@ -17,6 +17,8 @@ services:
         - CLINIC_ID
     container_name: oryx
     restart: always
+    ports:
+      - "3000:3000"
     env_file:
       - .env.production
     networks:
