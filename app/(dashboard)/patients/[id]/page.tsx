@@ -2297,7 +2297,7 @@ export default function PatientDetailPage() {
     },
     onNewAppointment: () =>
       router.push(
-        `/planning?patientId=${id}&patientName=${encodeURIComponent(displayFullName)}`,
+        `/planning?patientId=${id}&patientName=${encodeURIComponent(displayFullName)}&t=${Date.now()}`,
       ),
     onDeletePatient: () => setDeleteConfirmOpen(true),
     onToothClick: (tooth: ToothId) => {

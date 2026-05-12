@@ -867,6 +867,9 @@ function PlanningPageContent() {
   );
   const [planningReady, setPlanningReady] = useState(false);
 
+  // Paramètre 't' pour forcer le rechargement quand on arrive depuis une fiche patient
+  const refreshTimestamp = searchParams.get("t") ?? "";
+
   useEffect(() => {
     setMounted(true);
     setPlanningReady(false);
@@ -874,7 +877,7 @@ function PlanningPageContent() {
       await Promise.all([reloadAppointments(), reloadConsultations()]);
       setPlanningReady(true);
     })();
-  }, [reloadAppointments, reloadConsultations, pathname]);
+  }, [reloadAppointments, reloadConsultations, pathname, refreshTimestamp]);
 
   // Recharger les RDV quand l'utilisateur revient sur la page (navigation ou retour d'onglet)
   useEffect(() => {

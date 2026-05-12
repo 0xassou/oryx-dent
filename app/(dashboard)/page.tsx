@@ -1556,14 +1556,14 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-4 py-3">
                             {row.status === "À venir" ? (
-                              <PrimaryButton
+                              <button
                                 type="button"
                                 onClick={() => marquerArrivee(row.id, row.appointmentId, row.patientId)}
-                                className="inline-flex items-center gap-1 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
                               >
-                                <Check className="h-3 w-3" strokeWidth={2.5} />
+                                <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
                                 Arrivé
-                              </PrimaryButton>
+                              </button>
                             ) : row.status === "En attente" ? (
                               <PrimaryButton
                                 type="button"
