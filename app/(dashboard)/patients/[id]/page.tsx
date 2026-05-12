@@ -123,8 +123,18 @@ import {
   appointmentJoinedRowToRdv,
   type AppointmentRdv,
 } from "@/utils/appointmentData";
-import { clearPatientRadios } from "@/utils/patientRadios";
+import {
+  clearPatientRadios,
+  listRadiosForPatient,
+  addRadioForPatient,
+  type PatientRadio,
+  RADIO_MAX_BYTES,
+  isAcceptedRadioMime,
+} from "@/utils/patientRadios";
+import { getRadiosAction, createRadioAction } from "@/app/actions/radios";
 import { RadiologiesSection } from "@/components/patients/RadiologiesSection";
+import { replaceCabinetBlobFromServer } from "@/lib/client/cabinetBlob";
+import { getCabinetSettingsAction } from "@/app/actions/cabinet-settings";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
@@ -1611,6 +1621,87 @@ export default function PatientDetailPage() {
   const [newSeanceActe, setNewSeanceActe] = useState("");
   const [newSeanceCout, setNewSeanceCout] = useState("");
 
+  // ── Cockpit : radios pour la dent sélectionnée ──
+  const [patientRadios, setPatientRadios] = useState<PatientRadio[]>([]);
+  const [cockpitRadiosLoading, setCockpitRadiosLoading] = useState(false);
+  const [cockpitRadiosLightbox, setCockpitRadiosLightbox] = useState<PatientRadio | null>(null);
+  const cockpitFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Charger les radios du patient (pour le cockpit et synchro avec RadiologiesSection)
+  const loadPatientRadios = useCallback(async () => {
+    if (!id) return;
+    setCockpitRadiosLoading(true);
+    // 1. Chargement rapide depuis le blob local
+    setPatientRadios(listRadiosForPatient(id));
+    // 2. Synchronisation serveur
+    const res = await getRadiosAction(id);
+    if (res.ok) {
+      setPatientRadios(res.data);
+      // Mettre à jour le blob local pour cohérence
+      const cab = await getCabinetSettingsAction();
+      if (cab.ok) replaceCabinetBlobFromServer(cab.data);
+    }
+    setCockpitRadiosLoading(false);
+  }, [id]);
+
+  // Upload rapide depuis le cockpit (tagué avec la dent sélectionnée)
+  const handleCockpitRadioUpload = useCallback(async (file: File) => {
+    if (!id || selectedTooth === null) return;
+    if (!isAcceptedRadioMime(file.type)) {
+      setToast({ type: "error", message: "Format non supporté (JPG, PNG, PDF uniquement)." });
+      return;
+    }
+    if (file.size > RADIO_MAX_BYTES) {
+      setToast({ type: "error", message: "Fichier trop volumineux (max 10 Mo)." });
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        const today = new Date().toISOString().slice(0, 10);
+
+        // Ajout optimiste local
+        const localRadio = addRadioForPatient(id, {
+          url: dataUrl,
+          mimeType: file.type,
+          fileName: file.name,
+          date: today,
+          tooth: String(selectedTooth),
+          note: null,
+        });
+        setPatientRadios((prev) => [localRadio, ...prev]);
+
+        // Sync serveur
+        const res = await createRadioAction(id, {
+          url: dataUrl,
+          mimeType: file.type,
+          fileName: file.name,
+          date: today,
+          tooth: String(selectedTooth),
+          note: null,
+        });
+
+        if (!res.ok) {
+          setToast({ type: "error", message: `Erreur upload : ${res.error}` });
+          // Recharge pour rétablir l'état correct
+          void loadPatientRadios();
+        } else {
+          setToast({ type: "success", message: "Radio ajoutée." });
+          // Recharge pour avoir l'ID serveur et cohérence
+          void loadPatientRadios();
+        }
+      };
+      reader.onerror = () => {
+        setToast({ type: "error", message: "Erreur de lecture du fichier." });
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setToast({ type: "error", message: "Erreur lors de l'upload." });
+    }
+  }, [id, selectedTooth, loadPatientRadios]);
+
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const handleConfirmDeletePatient = useCallback(() => {
@@ -1638,6 +1729,18 @@ export default function PatientDetailPage() {
     setPatientDocuments(ensurePatientDocumentsForPatient(id));
   }, [isMounted, id]);
 
+  // Chargement initial des radios du patient (pour cockpit et synchro)
+  useEffect(() => {
+    if (!isMounted || !id) return;
+    void loadPatientRadios();
+  }, [isMounted, id, loadPatientRadios]);
+
+  // Recharger les radios quand on ouvre le cockpit pour avoir les dernières données
+  useEffect(() => {
+    if (!isMounted || !id || selectedTooth === null) return;
+    void loadPatientRadios();
+  }, [isMounted, id, selectedTooth, loadPatientRadios]);
+
   useEffect(() => {
     if (!lightboxDocument) return;
     function onKey(e: KeyboardEvent) {
@@ -1646,6 +1749,15 @@ export default function PatientDetailPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [lightboxDocument]);
+
+  useEffect(() => {
+    if (!cockpitRadiosLightbox) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setCockpitRadiosLightbox(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cockpitRadiosLightbox]);
 
   useEffect(() => {
     if (!isEditPatientModalOpen) return;
@@ -2751,7 +2863,10 @@ export default function PatientDetailPage() {
 
                 {/* ---- Section Radiologies ---- */}
                 <div className="mt-8 border-t border-[var(--ds-primary-border)] pt-6">
-                  <RadiologiesSection patientId={id} />
+                  <RadiologiesSection
+                    patientId={id}
+                    onChanged={() => void loadPatientRadios()}
+                  />
                 </div>
               </section>
             )}
@@ -4756,6 +4871,95 @@ export default function PatientDetailPage() {
                     </button>
                   </div>
                 )}
+
+                {/* SECTION — RADIOS (filtrées par la dent sélectionnée) */}
+                <hr className="border-[var(--ds-primary-border)]" />
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                      Radios · Dent {selectedTooth}
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => cockpitFileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Ajouter une radio
+                    </button>
+                    <input
+                      ref={cockpitFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleCockpitRadioUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+
+                  {cockpitRadiosLoading ? (
+                    <p className="text-center text-[11px] text-[var(--ds-text-muted)]">
+                      Chargement…
+                    </p>
+                  ) : (
+                    (() => {
+                      const filtered = patientRadios.filter(
+                        (r) => r.tooth === String(selectedTooth)
+                      );
+                      if (filtered.length === 0) {
+                        return (
+                          <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-3 text-center text-[11px] text-[var(--ds-text-muted)]">
+                            Aucune radio pour cette dent.
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="grid grid-cols-3 gap-2">
+                          {filtered.map((radio) => {
+                            const isPdf =
+                              radio.mimeType === "application/pdf" ||
+                              radio.url.startsWith("data:application/pdf");
+                            return (
+                              <button
+                                key={radio.id}
+                                type="button"
+                                onClick={() => setCockpitRadiosLightbox(radio)}
+                                className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] transition-all hover:ring-2 hover:ring-[var(--ds-primary)]/40"
+                              >
+                                {isPdf ? (
+                                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--ds-primary-soft)]">
+                                    <FileText className="h-6 w-6 text-[var(--ds-primary)]" />
+                                    <span className="max-w-full truncate px-1 text-[9px] font-medium text-[var(--ds-text-muted)]">
+                                      PDF
+                                    </span>
+                                  </div>
+                                ) : radio.url ? (
+                                  <img
+                                    src={radio.url}
+                                    alt={radio.fileName}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center bg-[var(--ds-primary-soft)]">
+                                    <ImageIcon className="h-6 w-6 text-[var(--ds-primary-border)]" />
+                                  </div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1 opacity-0 transition-opacity group-hover:opacity-100">
+                                  <span className="block truncate text-[9px] text-white">
+                                    {radio.fileName}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()
+                  )}
+                </section>
               </>
             )}
           </div>
@@ -4788,6 +4992,60 @@ export default function PatientDetailPage() {
               Annuler
             </button>
           </footer>
+
+          {/* Lightbox — visualisation plein écran des radios cockpit */}
+          {cockpitRadiosLightbox && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+              onClick={() => setCockpitRadiosLightbox(null)}
+            >
+              <div
+                className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl bg-black shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setCockpitRadiosLightbox(null)}
+                  className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                {cockpitRadiosLightbox.mimeType === "application/pdf" ||
+                cockpitRadiosLightbox.url.startsWith("data:application/pdf") ? (
+                  <div className="flex h-[70vh] w-[70vw] flex-col items-center justify-center gap-4 bg-[var(--ds-surface)] p-8">
+                    <FileText className="h-16 w-16 text-[var(--ds-primary)]" />
+                    <p className="text-center text-sm text-[var(--ds-text)]">
+                      {cockpitRadiosLightbox.fileName}
+                    </p>
+                    <a
+                      href={cockpitRadiosLightbox.url}
+                      download={cockpitRadiosLightbox.fileName}
+                      className="inline-flex items-center gap-2 rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--ds-primary)]/90"
+                    >
+                      <Download className="h-4 w-4" />
+                      Télécharger PDF
+                    </a>
+                  </div>
+                ) : (
+                  <img
+                    src={cockpitRadiosLightbox.url}
+                    alt={cockpitRadiosLightbox.fileName}
+                    className="max-h-[85vh] max-w-[85vw] object-contain"
+                  />
+                )}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
+                  <p className="truncate text-sm text-white">
+                    {cockpitRadiosLightbox.fileName}
+                  </p>
+                  <p className="text-xs text-white/70">
+                    {cockpitRadiosLightbox.date &&
+                      new Date(cockpitRadiosLightbox.date).toLocaleDateString("fr-FR")}
+                    {cockpitRadiosLightbox.tooth && ` · Dent ${cockpitRadiosLightbox.tooth}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </aside>
       </>
 
