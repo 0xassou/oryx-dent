@@ -1,8 +1,20 @@
 services:
   oryx:
+    # Build : les `args` en liste transmettent chaque variable depuis l’environnement de Compose.
+    # Chargez .env.production avant le build, p.ex. :
+    #   docker compose --env-file .env.production build
+    #   docker compose --env-file .env.production up -d --build
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - BETTER_AUTH_SECRET
+        - DATABASE_URL
+        - BETTER_AUTH_URL
+        - NEXT_PUBLIC_APP_URL
+        - NEXT_PUBLIC_CLINIC_ID
+        - NEXT_PUBLIC_ORYX_CABINET_ID
+        - CLINIC_ID
     container_name: oryx
     restart: always
     env_file:
