@@ -118,6 +118,8 @@ import {
   appointmentJoinedRowToRdv,
   type AppointmentRdv,
 } from "@/utils/appointmentData";
+import { clearPatientRadios } from "@/utils/patientRadios";
+import { RadiologiesSection } from "@/components/patients/RadiologiesSection";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
@@ -1574,6 +1576,7 @@ export default function PatientDetailPage() {
       try {
         await deletePatientUiStateAction(id);
         clearPatientDocuments(id);
+        clearPatientRadios(id);
       } catch {
         /* ignore */
       }
@@ -2674,6 +2677,11 @@ export default function PatientDetailPage() {
                     </div>
                   </div>
                 ) : null}
+
+                {/* ---- Section Radiologies ---- */}
+                <div className="mt-8 border-t border-[var(--ds-primary-border)] pt-6">
+                  <RadiologiesSection patientId={id} />
+                </div>
               </section>
             )}
 
