@@ -29,7 +29,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.35em;
-  padding: 0.55em 1em;
+  padding: 0.45em 0.9em;
+  font-size: 14px;
   width: 100%;
   transition: color 0.4s ease;
 }
