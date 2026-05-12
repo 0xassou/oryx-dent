@@ -26,7 +26,7 @@ import { showAppToast } from "@/utils/appToast";
 import { WorkflowKanbanSkeleton } from "@/components/ui/page-skeletons";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 15_000;
 
 type Column = {
   statut: ConsultationStatut;
@@ -232,6 +232,15 @@ export default function WorkflowPage() {
       if (timerRef.current) clearInterval(timerRef.current);
       if (tickRef.current) clearInterval(tickRef.current);
     };
+  }, [refresh]);
+
+  // Recharger immédiatement quand l'utilisateur revient sur l'onglet
+  useEffect(() => {
+    const handleFocus = () => {
+      void refresh();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [refresh]);
 
   async function transition(id: string, to: ConsultationStatut) {

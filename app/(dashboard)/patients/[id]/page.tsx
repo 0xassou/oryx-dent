@@ -114,6 +114,10 @@ import {
   getAppointmentsByPatientAction,
 } from "@/app/actions/appointments";
 import {
+  getConsultationsByPatientIdAction,
+  type ConsultationRow,
+} from "@/app/actions/consultations";
+import {
   APPOINTMENTS_UPDATED_EVENT,
   appointmentJoinedRowToRdv,
   type AppointmentRdv,
@@ -1111,6 +1115,9 @@ export default function PatientDetailPage() {
   const [patientAppointments, setPatientAppointments] = useState<
     AppointmentRdv[]
   >([]);
+  const [patientConsultations, setPatientConsultations] = useState<
+    ConsultationRow[]
+  >([]);
   const [editPatientName, setEditPatientName] = useState("");
   const [editPatientGender, setEditPatientGender] = useState("");
   const [editPatientProfession, setEditPatientProfession] = useState("");
@@ -1226,6 +1233,11 @@ export default function PatientDetailPage() {
       const res = await getAppointmentsByPatientAction(id);
       if (cancelled || !res.ok) return;
       setPatientAppointments(res.data.map(appointmentJoinedRowToRdv));
+    })();
+    void (async () => {
+      const resConsult = await getConsultationsByPatientIdAction(id);
+      if (cancelled || !resConsult.ok) return;
+      setPatientConsultations(resConsult.data);
     })();
     return () => {
       cancelled = true;
@@ -2249,9 +2261,33 @@ export default function PatientDetailPage() {
           : undefined,
       };
     });
-    normalized.sort((a, b) => (a.date > b.date ? -1 : 1));
-    return normalized;
-  }, [allTreatments, finances]);
+
+    // Ajouter les consultations à la timeline
+    const consultationItems: PatientFicheTimelineItem[] = patientConsultations.map(
+      (c) => {
+        const dateStr = c.heure_arrivee?.slice(0, 10) ?? "";
+        const heureStr = c.heure_arrivee?.slice(11, 16) ?? "";
+        return {
+          id: `consultation-${c.id}`,
+          date: dateStr,
+          acteLabel: c.type_acte
+            ? `Consultation — ${c.type_acte}${heureStr ? ` (${heureStr})` : ""}`
+            : `Consultation${heureStr ? ` (${heureStr})` : ""}`,
+          note: c.notes_accueil ?? undefined,
+          categorie: "Autres",
+          praticien: undefined,
+          montant: undefined,
+          statut: c.statut === "termine" ? "paye" : "attente",
+          toothNumber: undefined,
+        };
+      },
+    );
+
+    // Fusionner les soins et consultations, trier par date décroissante
+    const merged = [...normalized, ...consultationItems];
+    merged.sort((a, b) => (a.date > b.date ? -1 : 1));
+    return merged;
+  }, [allTreatments, finances, patientConsultations]);
 
   const ficheData: PatientFicheData = {
     patient: {

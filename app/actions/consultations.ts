@@ -278,3 +278,27 @@ export async function getConsultationByAppointmentAction(
     return { ok: false, error: "Une erreur est survenue." };
   }
 }
+
+export async function getConsultationsByPatientIdAction(
+  patientId: string,
+): Promise<ActionResult<ConsultationRow[]>> {
+  const auth = await requireBetterAuthSession();
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const pid = patientId?.trim();
+  if (!pid) return { ok: false, error: "patient_id requis." };
+  try {
+    const pool = getPostgresPool();
+    const { rows } = await pool.query(
+      `${SELECT_JOIN} WHERE c.patient_id = $1 ORDER BY c.heure_arrivee DESC`,
+      [pid],
+    );
+    return {
+      ok: true,
+      data: rows.map((r) => mapRow(r as Record<string, unknown>)),
+    };
+  } catch (e) {
+    logServerError("[getConsultationsByPatientIdAction]", e);
+    console.error(e);
+    return { ok: false, error: "Une erreur est survenue." };
+  }
+}

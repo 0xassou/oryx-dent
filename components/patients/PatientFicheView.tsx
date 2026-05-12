@@ -748,11 +748,18 @@ export function PatientSoinsTimeline({
                   </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                    <span
-                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${cfg.tagClasses}`}
-                    >
-                      {cfg.label}
-                    </span>
+                    {/* Badge Consultation pour les items provenant de la salle d'attente */}
+                    {it.id.startsWith("consultation-") ? (
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        Consultation
+                      </span>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${cfg.tagClasses}`}
+                      >
+                        {cfg.label}
+                      </span>
+                    )}
                     {pay ? (
                       <span
                         className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${pay.classes}`}
