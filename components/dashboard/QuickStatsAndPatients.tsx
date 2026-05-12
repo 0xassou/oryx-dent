@@ -65,20 +65,17 @@ interface Patient {
   avatarBgVar?: string;
 }
 
+/** Ligne affichée dans « Nouveaux patients » (données réelles depuis le tableau de bord). */
+export type RecentPatientListItem = Patient;
+
 interface RecentPatientsProps {
   patients?: Patient[];
   title?: string;
   onViewAll?: () => void;
 }
 
-const defaultPatients: Patient[] = [
-  { initials: "AB", name: "Assia Brahimi", date: "16 avr", avatarBgVar: "var(--ds-primary)" },
-  { initials: "MZ", name: "Mourad Zidane", date: "15 avr", avatarBgVar: "var(--ds-primary-hover)" },
-  { initials: "LD", name: "Lyna Djaballah", date: "14 avr", avatarBgVar: "var(--ds-text-muted)" },
-];
-
 export function RecentPatients({
-  patients = defaultPatients,
+  patients = [],
   title = "Nouveaux patients",
   onViewAll,
 }: RecentPatientsProps) {
@@ -98,37 +95,43 @@ export function RecentPatients({
       </div>
 
       {/* Liste */}
-      <div className="flex flex-col">
-        {patients.map((p, i) => (
-          <div
-            key={p.name}
-            className={[
-              "flex items-center gap-2.5 py-1.5",
-              i < patients.length - 1
-                ? "border-b border-[var(--ds-primary-border)]"
-                : "",
-            ].join(" ")}
-          >
-            {/* Avatar */}
+      {patients.length === 0 ? (
+        <p className="py-2 text-center text-[12px] text-[var(--ds-text-muted)]">
+          Aucun patient enregistré pour le moment.
+        </p>
+      ) : (
+        <div className="flex flex-col">
+          {patients.map((p, i) => (
             <div
-              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-[var(--ds-bg)]"
-              style={{ backgroundColor: p.avatarBgVar ?? "var(--ds-primary)" }}
+              key={`${p.name}-${p.date}-${i}`}
+              className={[
+                "flex items-center gap-2.5 py-1.5",
+                i < patients.length - 1
+                  ? "border-b border-[var(--ds-primary-border)]"
+                  : "",
+              ].join(" ")}
             >
-              {p.initials}
+              {/* Avatar */}
+              <div
+                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-[var(--ds-bg)]"
+                style={{ backgroundColor: p.avatarBgVar ?? "var(--ds-primary)" }}
+              >
+                {p.initials}
+              </div>
+
+              {/* Nom */}
+              <p className="flex-1 text-[12.5px] font-semibold text-[var(--ds-text)]">
+                {p.name}
+              </p>
+
+              {/* Date */}
+              <p className="font-['DM_Mono',monospace] text-[11px] text-[var(--ds-text-subtle)]">
+                {p.date}
+              </p>
             </div>
-
-            {/* Nom */}
-            <p className="flex-1 text-[12.5px] font-semibold text-[var(--ds-text)]">
-              {p.name}
-            </p>
-
-            {/* Date */}
-            <p className="font-['DM_Mono',monospace] text-[11px] text-[var(--ds-text-subtle)]">
-              {p.date}
-            </p>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

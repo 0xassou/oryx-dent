@@ -68,6 +68,7 @@ import { WeeklyRevenueChart } from "@/components/dashboard/WeeklyRevenueChart";
 import {
   QuickStats,
   RecentPatients,
+  type RecentPatientListItem,
 } from "@/components/dashboard/QuickStatsAndPatients";
 import { TeamActivityFeed } from "@/components/dashboard/TeamActivityFeed";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -254,14 +255,6 @@ type ActeChartDatum = {
   color: string;
 };
 
-const ACTES_CHART_FALLBACK: ActeChartDatum[] = [
-  { name: "Consultation / Bilan", value: 54, pct: 45, color: "#0ea5e9" },
-  { name: "Détartrage", value: 30, pct: 25, color: "#14b8a6" },
-  { name: "Composite", value: 18, pct: 15, color: "#8b5cf6" },
-  { name: "Endodontie", value: 12, pct: 10, color: "#f59e0b" },
-  { name: "Chirurgie", value: 6, pct: 5, color: "#f43f5e" },
-];
-
 const ACTES_COLORS = [
   "#7c3aed",
   "#06b6d4",
@@ -273,7 +266,7 @@ const ACTES_COLORS = [
 function mapActesDistributionToChart(
   rows: { name: string; value: number }[],
 ): ActeChartDatum[] {
-  if (!rows.length) return ACTES_CHART_FALLBACK;
+  if (!rows.length) return [];
   const total = rows.reduce((s, r) => s + r.value, 0);
   return rows.slice(0, 5).map((r, i) => ({
     name: r.name,
@@ -290,24 +283,6 @@ type DashboardTask = {
   text: string;
   isDone: boolean;
 };
-
-const DEFAULT_DASHBOARD_TASKS: DashboardTask[] = [
-  {
-    id: 1,
-    text: "Rappeler Mme Dupont pour son devis d'implant",
-    isDone: false,
-  },
-  {
-    id: 2,
-    text: "Valider la commande de composite (Stock faible)",
-    isDone: false,
-  },
-  {
-    id: 3,
-    text: "Confirmer les RDV de demain",
-    isDone: false,
-  },
-];
 
 function parseDashboardTasks(raw: string | null): DashboardTask[] | null {
   if (raw == null || raw === "") return null;
@@ -333,12 +308,12 @@ function parseDashboardTasks(raw: string | null): DashboardTask[] | null {
 }
 
 function loadDashboardTasks(): DashboardTask[] {
-  if (typeof window === "undefined") return DEFAULT_DASHBOARD_TASKS;
+  if (typeof window === "undefined") return [];
   const v = getCabinetValue<unknown>(TASKS_STORAGE_KEY);
-  if (v == null) return DEFAULT_DASHBOARD_TASKS;
+  if (v == null) return [];
   const raw = typeof v === "string" ? v : JSON.stringify(v);
   const parsed = parseDashboardTasks(raw);
-  if (parsed == null) return DEFAULT_DASHBOARD_TASKS;
+  if (parsed == null) return [];
   return parsed;
 }
 
@@ -362,6 +337,47 @@ const RELANCE_PATIENTS = [
     actionLabel: "Relancer" as const,
   },
 ] as const;
+
+const RECENT_PATIENT_AVATAR_BGS = [
+  "var(--ds-primary)",
+  "var(--ds-primary-hover)",
+  "var(--ds-text-muted)",
+] as const;
+
+function buildRecentPatientWidgetRows(
+  list: DentalPatientRecord[],
+): RecentPatientListItem[] {
+  if (list.length === 0) return [];
+  const sorted = [...list].sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    if (tb !== ta) return tb - ta;
+    return String(b.id ?? "").localeCompare(String(a.id ?? ""));
+  });
+  return sorted.slice(0, 5).map((p, i) => {
+    const name = displayPatientName(p);
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    let initials: string;
+    if (parts.length >= 2) {
+      initials = `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase();
+    } else if (parts.length === 1 && parts[0]!.length >= 2) {
+      initials = parts[0]!.slice(0, 2).toUpperCase();
+    } else {
+      initials = name.trim().slice(0, 2).toUpperCase() || "?";
+    }
+    const d = p.createdAt ? new Date(p.createdAt) : null;
+    const date =
+      d && !Number.isNaN(d.getTime())
+        ? d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+        : "—";
+    return {
+      initials,
+      name,
+      date,
+      avatarBgVar: RECENT_PATIENT_AVATAR_BGS[i % RECENT_PATIENT_AVATAR_BGS.length],
+    };
+  });
+}
 
 function PremiumBadge({ className = "" }: { className?: string }) {
   return (
@@ -406,7 +422,9 @@ function ActesDoughnutChart({ data }: { data: ActeChartDatum[] }) {
         <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--ds-bg)]">
           <span className="text-2xl text-[var(--ds-text-muted)]/40">◔</span>
         </div>
-        <p className="text-sm text-[var(--ds-text-muted)]">Aucun acte sur 30 j.</p>
+        <p className="text-sm text-[var(--ds-text-muted)]">
+          Aucun acte enregistré
+        </p>
       </div>
     );
   }
@@ -862,15 +880,16 @@ export default function DashboardPage() {
   const [fluxPatientCandidates, setFluxPatientCandidates] = useState<
     { id: string; nom: string }[]
   >([]);
+  const [recentPatientsWidget, setRecentPatientsWidget] = useState<
+    RecentPatientListItem[]
+  >([]);
   const [labCommandes, setLabCommandes] = useState<LaboratoireCommande[]>([]);
   const [rdvCount, setRdvCount] = useState(0);
   const [rdvToConfirmCount, setRdvToConfirmCount] = useState(0);
   const [totalEncaisseToday, setTotalEncaisseToday] = useState(0);
   const [patientCount, setPatientCount] = useState(0);
   const [patientsThisMonthCount, setPatientsThisMonthCount] = useState(0);
-  const [actesChartData, setActesChartData] = useState<ActeChartDatum[]>(
-    ACTES_CHART_FALLBACK,
-  );
+  const [actesChartData, setActesChartData] = useState<ActeChartDatum[]>([]);
 
   const logisticsAlerts = useMemo(
     () => listLogisticsAlerts(labCommandes),
@@ -884,7 +903,7 @@ export default function DashboardPage() {
       const rows = await getDashboardActesDistributionAction();
       setActesChartData(mapActesDistributionToChart(rows));
     } catch {
-      setActesChartData(ACTES_CHART_FALLBACK);
+      setActesChartData([]);
     }
   }, []);
 
@@ -892,9 +911,11 @@ export default function DashboardPage() {
     const res = await getPatientsAction();
     if (!res.ok) {
       console.warn("[dashboard] loadPatientsFromServer —", res.error);
+      setRecentPatientsWidget([]);
       return;
     }
     const list = res.data.map(patientRowToDentalPatientRecord);
+    setRecentPatientsWidget(buildRecentPatientWidgetRows(list));
     setFluxPatientCandidates(
       list.map((p) => ({
         id: p.id,
@@ -1554,43 +1575,51 @@ export default function DashboardPage() {
                     </button>
                   </div>
                   <div className="mt-4 border-t border-[var(--ds-primary-border)] pt-4">
-                    <ul className="space-y-2">
-                      {tasks.map((t) => (
-                        <li key={t.id}>
-                          <button
-                            type="button"
-                            aria-pressed={t.isDone}
-                            onClick={() => toggleTask(t.id)}
-                            className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-[var(--ds-primary-soft)]"
-                          >
-                            <span
-                              className={[
-                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                                t.isDone
-                                  ? "border-[var(--ds-primary)] bg-[var(--ds-primary)]"
-                                  : "border-[var(--ds-primary-border)] bg-transparent",
-                              ].join(" ")}
-                              aria-hidden
+                    {tasks.length === 0 ? (
+                      <p className="py-2 text-center text-xs text-[var(--ds-text-muted)]">
+                        Aucune tâche pour le moment.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {tasks.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              aria-pressed={t.isDone}
+                              onClick={() => toggleTask(t.id)}
+                              className="flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-[var(--ds-primary-soft)]"
                             >
-                              {t.isDone ? (
-                                <Check
-                                  className="h-3 w-3 text-[var(--ds-bg)]"
-                                  strokeWidth={3}
-                                />
-                              ) : null}
-                            </span>
-                            <span
-                              className={[
-                                "text-sm leading-snug text-[var(--ds-text)]",
-                                t.isDone ? "text-[var(--ds-text-muted)] line-through" : "",
-                              ].join(" ")}
-                            >
-                              {t.text}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                              <span
+                                className={[
+                                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                                  t.isDone
+                                    ? "border-[var(--ds-primary)] bg-[var(--ds-primary)]"
+                                    : "border-[var(--ds-primary-border)] bg-transparent",
+                                ].join(" ")}
+                                aria-hidden
+                              >
+                                {t.isDone ? (
+                                  <Check
+                                    className="h-3 w-3 text-[var(--ds-bg)]"
+                                    strokeWidth={3}
+                                  />
+                                ) : null}
+                              </span>
+                              <span
+                                className={[
+                                  "text-sm leading-snug text-[var(--ds-text)]",
+                                  t.isDone
+                                    ? "text-[var(--ds-text-muted)] line-through"
+                                    : "",
+                                ].join(" ")}
+                              >
+                                {t.text}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
 
@@ -1707,6 +1736,7 @@ export default function DashboardPage() {
           />
           <TeamActivityFeed />
           <RecentPatients
+            patients={recentPatientsWidget}
             onViewAll={() => {
               router.push("/patients");
             }}
