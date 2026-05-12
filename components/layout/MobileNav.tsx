@@ -13,7 +13,6 @@ import {
   MoreHorizontal,
   ClipboardList,
   Banknote,
-  Wallet,
   Package,
   ShieldCheck,
   Truck,
@@ -47,12 +46,6 @@ const MORE_DRAWER_ITEMS: {
     label: "Salle d'attente",
   },
   { key: "finances", href: "/finances", icon: Banknote, label: "Finances" },
-  {
-    key: "financesDepenses",
-    href: "/finances/depenses",
-    icon: Wallet,
-    label: "Dépenses",
-  },
   { key: "stocks", href: "/stocks", icon: Package, label: "Stocks" },
   {
     key: "sterilisation",

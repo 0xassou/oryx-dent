@@ -14,7 +14,6 @@ import {
   Truck,
   Settings,
   Lock,
-  Wallet,
 } from "lucide-react";
 import { useRole } from "@/hooks/useRole";
 import { canAccessNav, type NavKey } from "@/utils/roles";
@@ -39,7 +38,6 @@ const NAV_PRINCIPAL: readonly NavItem[] = [
 ];
 
 const NAV_GESTION: readonly NavItem[] = [
-  { key: "financesDepenses", href: "/finances/depenses", label: "Dépenses", icon: Wallet, locked: false },
   { key: "stocks", href: "/stocks", label: "Stocks", icon: Package, locked: false },
   { key: "sterilisation", href: "/sterilisation", label: "Stérilisation", icon: ShieldCheck, locked: false },
   { key: "laboratoire", href: "/laboratoire", label: "Laboratoire", icon: Truck, locked: false },
