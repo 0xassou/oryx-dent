@@ -36,6 +36,7 @@ import { formatPhoneNumber } from "@/utils/formatters";
 import { generateFacturePDF } from "@/utils/generateFacturePDF";
 import { getCabinetBlob } from "@/lib/client/cabinetBlob";
 import { FinancesFacturesTableSkeleton } from "@/components/ui/page-skeletons";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 function getSettings(): Record<string, unknown> {
   if (typeof window === "undefined") return {};
@@ -403,16 +404,16 @@ export function FinancesRecettesTab() {
           </p>
         </div>
 
-        <button
+        <PrimaryButton
           type="button"
           onClick={() => {
             refreshPatientDirectory();
             setIsModalOpen(true);
           }}
-          className="rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[var(--ds-primary-hover)]"
+          className="rounded-lg text-sm font-semibold shadow-md"
         >
           + Nouvelle facture
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-sm">
@@ -794,14 +795,14 @@ export function FinancesRecettesTab() {
               >
                 Annuler
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={handleGenerateFacture}
                 disabled={!canCreateFacture}
-                className="rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg text-sm font-semibold"
               >
                 Créer la facture
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -859,13 +860,13 @@ export function FinancesRecettesTab() {
               >
                 Annuler
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={handleSaveEditDoc}
-                className="rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--ds-primary-hover)]"
+                className="rounded-lg text-sm font-semibold"
               >
                 Enregistrer
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>

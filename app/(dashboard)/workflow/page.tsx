@@ -24,6 +24,7 @@ import {
 import type { PatientRow } from "@/lib/types/patients-db";
 import { showAppToast } from "@/utils/appToast";
 import { WorkflowKanbanSkeleton } from "@/components/ui/page-skeletons";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const REFRESH_MS = 30_000;
 
@@ -247,14 +248,14 @@ export default function WorkflowPage() {
             <RefreshCw className="h-3.5 w-3.5" />
             Actualiser
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
           >
             <UserPlus className="h-4 w-4" strokeWidth={2} />
             Patient sans RDV
-          </button>
+          </PrimaryButton>
         </div>
       </div>
 
@@ -337,14 +338,14 @@ export default function WorkflowPage() {
               <p className="mt-2 text-center text-sm text-[var(--ds-text-muted)]">
                 Les patients apparaîtront ici dès leur arrivée
               </p>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={() => setModalOpen(true)}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(124,58,237,0.25)] hover:opacity-90"
+                className="mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
               >
                 <UserPlus className="h-4 w-4" strokeWidth={2} />
                 Patient sans RDV
-              </button>
+              </PrimaryButton>
             </div>
           )}
         </>
@@ -1035,14 +1036,15 @@ function WalkInPatientModal({
             >
               Annuler
             </button>
-            <button
+            <PrimaryButton
               type="button"
               disabled={busy}
+              isLoading={busy}
               onClick={() => void submit()}
-              className="rounded-[0.75rem] bg-[color:var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-[0.75rem] px-4 py-2 text-sm font-semibold"
             >
               Enregistrer
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       </div>

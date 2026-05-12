@@ -13,6 +13,7 @@ import { useRole } from "@/hooks/useRole";
 import type { TeamMemberRow, TeamMemberRole } from "@/lib/types/team-db";
 import { getInitials, ROLE_LABEL } from "@/utils/roles";
 import { showAppToast } from "@/utils/appToast";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const inputCls =
   "w-full min-w-0 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus-visible:ring-2 focus-visible:ring-[color:var(--ds-primary)]/20";
@@ -133,14 +134,14 @@ export function TeamSection() {
             Membres du cabinet, rôles et comptes de connexion (Better Auth).
           </p>
         </div>
-        <button
+        <PrimaryButton
           type="button"
           onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
         >
           <UserPlus className="h-4 w-4" strokeWidth={2} />
           Ajouter un membre
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--ds-primary-border)]">
@@ -455,13 +456,9 @@ function AccountCreatedModal({
         <p className="mt-4 text-center text-xs text-[var(--ds-text-muted)]">
           Envoyez ces identifiants au membre par WhatsApp ou SMS
         </p>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="mt-6 h-11 w-full rounded-xl bg-[color:var(--ds-primary)] text-sm font-bold text-white hover:opacity-95"
-        >
+        <PrimaryButton type="button" onClick={onDismiss} className="mt-6 h-11 w-full rounded-xl text-sm font-bold">
           J&apos;ai copié le mot de passe
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   );
@@ -642,14 +639,15 @@ function CreateMemberModal({
           >
             Annuler
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={() => void submit()}
             disabled={busy}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            isLoading={busy}
+            className="rounded-xl px-4 py-2 text-sm font-semibold"
           >
-            {busy ? "Création…" : "Créer le membre"}
-          </button>
+            Créer le membre
+          </PrimaryButton>
         </div>
       </div>
     </div>
@@ -792,14 +790,15 @@ function EditMemberModal({
           >
             Annuler
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={() => void submit()}
             disabled={busy}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            isLoading={busy}
+            className="rounded-xl px-4 py-2 text-sm font-semibold"
           >
-            {busy ? "Enregistrement…" : "Enregistrer"}
-          </button>
+            Enregistrer
+          </PrimaryButton>
         </div>
       </div>
     </div>

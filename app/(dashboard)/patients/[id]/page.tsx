@@ -23,6 +23,7 @@ import {
 import { submitClinicalActAction } from "@/app/actions/clinicalAct";
 import type { ClientProtocolBackfill } from "@/lib/server/clinical-act/types";
 import { CatalogActCombobox } from "@/components/catalog/CatalogActCombobox";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import {
   buildProtocolesFromSeed,
   loadProtocolsFromStorage,
@@ -2406,14 +2407,14 @@ export default function PatientDetailPage() {
                     Imagerie &amp; Documents
                   </h2>
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <PrimaryButton
                       type="button"
                       onClick={() => radiosFileInputRef.current?.click()}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:opacity-90"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium shadow-sm"
                     >
                       <Plus className="h-4 w-4" />
                       Ajouter un document
-                    </button>
+                    </PrimaryButton>
                   </div>
                 </div>
 
@@ -3719,12 +3720,9 @@ export default function PatientDetailPage() {
               >
                 Annuler
               </button>
-              <button
-                type="submit"
-                className="rounded-2xl bg-[var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--ds-primary-hover)]"
-              >
+              <PrimaryButton type="submit" className="rounded-2xl px-4 py-2.5 text-sm font-medium shadow-sm">
                 Enregistrer
-              </button>
+              </PrimaryButton>
             </footer>
           </form>
         </div>
@@ -4341,7 +4339,7 @@ export default function PatientDetailPage() {
                           className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
                         />
                       </div>
-                      <button
+                      <PrimaryButton
                         type="button"
                         disabled={!controlePrevu.trim()}
                         onClick={() => {
@@ -4376,10 +4374,10 @@ export default function PatientDetailPage() {
                             });
                           })();
                         }}
-                        className="h-9 rounded-xl bg-[var(--ds-primary)] px-4 text-xs font-semibold text-white transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="h-9 rounded-xl px-4 text-xs font-semibold"
                       >
                         Planifier
-                      </button>
+                      </PrimaryButton>
                     </div>
                   </div>
                 </section>
@@ -4673,14 +4671,15 @@ export default function PatientDetailPage() {
                 </div>
               }
             >
-              <button
+              <PrimaryButton
                 type="button"
                 disabled={validateSoinLoading}
+                isLoading={validateSoinLoading}
                 onClick={() => void handleValidateClinicalAct()}
-                className="h-11 w-full rounded-xl bg-[var(--ds-primary)] text-sm font-semibold text-white shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)] transition-colors hover:bg-[var(--ds-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                className="h-11 w-full rounded-xl text-sm font-semibold shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)] disabled:shadow-none"
               >
-                {validateSoinLoading ? "Enregistrement…" : "✓ Valider le soin"}
-              </button>
+                ✓ Valider le soin
+              </PrimaryButton>
             </RoleGate>
             <button
               type="button"

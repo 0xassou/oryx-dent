@@ -28,6 +28,7 @@ import {
 import { resolveAppRoleForSessionAction } from "@/app/actions/team";
 import { setCurrentRole, setCurrentUser } from "@/utils/roles";
 import { authClient } from "@/lib/auth-client";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 type TabKey = "connexion" | "inscription";
 const STORAGE_KEY = "oryx_login_theme";
@@ -415,8 +416,13 @@ function ConnexionPanel() {
         </p>
       </Field>
       {error ? <FormError>{error}</FormError> : null}
-      <PrimaryButton type="submit" disabled={loading}>
-        {loading ? "Connexion…" : "Se connecter"}
+      <PrimaryButton
+        type="submit"
+        disabled={loading}
+        isLoading={loading}
+        className="mt-1 h-11 w-full text-sm font-bold tracking-[0.01em] shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)] active:translate-y-0"
+      >
+        Se connecter
       </PrimaryButton>
       <p className="mt-4 text-center">
         <button
@@ -614,8 +620,13 @@ function InscriptionPanel() {
         </p>
       ) : null}
       <div className="mt-2">
-        <PrimaryButton type="submit" disabled={loading}>
-          {loading ? "Création…" : "Créer mon compte Oryx →"}
+        <PrimaryButton
+          type="submit"
+          disabled={loading}
+          isLoading={loading}
+          className="h-11 w-full text-sm font-bold tracking-[0.01em] shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)] active:translate-y-0"
+        >
+          Créer mon compte Oryx →
         </PrimaryButton>
       </div>
     </form>
@@ -694,29 +705,6 @@ function PasswordToggle({ show, onToggle }: { show: boolean; onToggle: () => voi
       ) : (
         <Eye className="h-[15px] w-[15px]" strokeWidth={2} />
       )}
-    </button>
-  );
-}
-
-function PrimaryButton({
-  children,
-  disabled,
-  type = "button",
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  type?: "button" | "submit";
-}) {
-  return (
-    <button
-      type={type}
-      disabled={disabled}
-      className="relative mt-1 h-[46px] w-full overflow-hidden rounded-[12px] text-[14px] font-bold tracking-[0.01em] text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(124,58,237,0.45)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
-      style={{
-        background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
-      }}
-    >
-      {children}
     </button>
   );
 }

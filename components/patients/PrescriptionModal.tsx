@@ -6,6 +6,7 @@ import {
   MEDICAMENTS_DENTAIRES,
   type MedicamentPreset,
 } from "@/data/medicaments-dentaires";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 export interface PrescriptionItem {
   id: string;
@@ -277,12 +278,9 @@ export function PrescriptionModal({
                   className={inputBase}
                 />
               </div>
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-              >
+              <PrimaryButton type="submit" className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm">
                 Ajouter
-              </button>
+              </PrimaryButton>
             </form>
             {items.length > 0 && (
               <div className="space-y-2">
@@ -415,13 +413,13 @@ export function PrescriptionModal({
           >
             Annuler
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={handleGenerate}
-            className="rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-[var(--ds-bg)] shadow-[0_8px_30px_rgba(0,0,0,0.08)] transition-colors hover:opacity-90"
+            className="rounded-xl px-4 py-2.5 text-sm font-medium shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
           >
             Générer le PDF
-          </button>
+          </PrimaryButton>
         </div>
       </div>
     </div>

@@ -891,7 +891,7 @@ export default function DashboardPage() {
   const loadPatientsFromServer = useCallback(async () => {
     const res = await getPatientsAction();
     if (!res.ok) {
-      console.error(res.error);
+      console.warn("[dashboard] loadPatientsFromServer —", res.error);
       return;
     }
     const list = res.data.map(patientRowToDentalPatientRecord);
@@ -1363,10 +1363,10 @@ export default function DashboardPage() {
                 void loadPatientsFromServer();
                 setDirectEntryOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold [&_span]:!px-[0.8em] [&_span]:!py-[0.4em]"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-              + Entrée Directe
+              Entrée Directe
             </PrimaryButton>
               </div>
               <Link

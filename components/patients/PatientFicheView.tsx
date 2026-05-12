@@ -21,6 +21,7 @@ import type { ToothId, ToothStatus } from "@/components/dentition/DentalChart";
 import { MemberAvatar } from "@/components/team/MemberAvatar";
 import { formatPhoneNumber, toTitleCase } from "@/utils/formatters";
 import { RoleGate } from "@/components/auth/RoleGate";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 /**
  * Fiche patient — vue principale (layout 2 colonnes).
@@ -262,9 +263,6 @@ function SubTopbar({
     "inline-flex items-center gap-1.5 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3.5 py-2 text-[13px] font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]";
   const danger =
     "inline-flex items-center justify-center rounded-xl border border-red-200 bg-[var(--ds-surface)] px-3 py-2 text-[13px] font-medium text-red-600 transition-colors hover:bg-red-50";
-  const primary =
-    "inline-flex items-center gap-1.5 rounded-xl bg-[var(--ds-primary)] px-3.5 py-2 text-[13px] font-medium text-[var(--ds-bg)] transition-colors hover:bg-[var(--ds-primary-hover)] shadow-sm";
-
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <nav
@@ -297,10 +295,14 @@ function SubTopbar({
             📄 Ordonnance
           </button>
         </RoleGate>
-        <button type="button" onClick={onNewAppointment} className={primary}>
+        <PrimaryButton
+          type="button"
+          onClick={onNewAppointment}
+          className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-medium shadow-sm"
+        >
           <Plus className="h-3.5 w-3.5" aria-hidden />
           Nouveau RDV
-        </button>
+        </PrimaryButton>
         <button type="button" onClick={onDelete} aria-label="Supprimer" className={danger}>
           <Trash2 className="h-4 w-4" aria-hidden />
         </button>

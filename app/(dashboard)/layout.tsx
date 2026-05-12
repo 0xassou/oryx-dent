@@ -9,7 +9,6 @@ import { DashboardSessionSkeleton } from "@/components/layout/DashboardSessionSk
 import MobileNav from "@/components/layout/MobileNav";
 import Sidebar from "@/components/layout/Sidebar";
 import { UniversalCommandPalette } from "@/components/layout/UniversalCommandPalette";
-import VoiceAssistant from "@/components/ui/VoiceAssistant";
 import { NotificationsPopover } from "@/components/notifications/NotificationsPopover";
 import { RouteGuard } from "@/components/auth/RouteGuard";
 import { useRole } from "@/hooks/useRole";
@@ -157,7 +156,6 @@ export default function DashboardLayout({
 
               {/* Actions droite */}
               <div className="flex flex-shrink-0 items-center gap-2">
-                <VoiceAssistant />
                 <NotificationsPopover />
 
                 <div className="h-5 w-px bg-[var(--ds-primary-border)]" />

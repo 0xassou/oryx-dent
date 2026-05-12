@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Lock } from "lucide-react";
 import { completeFirstPasswordChangeAction } from "@/app/actions/team";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const INPUT_CLS =
   "h-11 w-full rounded-xl border-[1.5px] border-[var(--ds-primary-border)] bg-[var(--ds-surface)] pl-10 pr-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)]";
@@ -137,13 +138,14 @@ export default function ChangePasswordPage() {
             </p>
           ) : null}
 
-          <button
+          <PrimaryButton
             type="submit"
             disabled={busy}
-            className="h-12 w-full rounded-xl bg-[color:var(--ds-primary)] text-sm font-bold text-white shadow-md transition-opacity hover:opacity-95 disabled:opacity-50"
+            isLoading={busy}
+            className="h-12 w-full rounded-xl text-sm font-bold shadow-md"
           >
-            {busy ? "Enregistrement…" : "Confirmer"}
-          </button>
+            Confirmer
+          </PrimaryButton>
         </form>
       </div>
     </div>

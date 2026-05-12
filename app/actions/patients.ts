@@ -119,17 +119,38 @@ export async function getPatientsAction(): Promise<
   if (!auth.ok) return { ok: false, error: auth.error };
   try {
     const pool = getPostgresPool();
-    const { rows } = await pool.query(
-      `SELECT p.*, COALESCE((
-          SELECT COUNT(*)::int FROM appointments a WHERE a.patient_id = p.id
-        ), 0) AS rdv_count
-       FROM patients p
-       ORDER BY p.nom ASC, p.prenom ASC`,
-    );
-    return {
-      ok: true,
-      data: rows.map((row) => mapRow(row as Record<string, unknown>)),
-    };
+    try {
+      const { rows } = await pool.query(
+        `SELECT p.*, COALESCE((
+            SELECT COUNT(*)::int FROM appointments a WHERE a.patient_id = p.id
+          ), 0) AS rdv_count
+         FROM patients p
+         ORDER BY p.nom ASC, p.prenom ASC`,
+      );
+      return {
+        ok: true,
+        data: rows.map((row) => mapRow(row as Record<string, unknown>)),
+      };
+    } catch (inner) {
+      const msg = inner instanceof Error ? inner.message : String(inner);
+      const isMissingAppointments =
+        /relation ["']?appointments["']? does not exist/i.test(msg) ||
+        /la relation.*appointments.*n'existe pas/i.test(msg) ||
+        /relation.*appointments.*existe pas/i.test(msg);
+      if (!isMissingAppointments) throw inner;
+      logServerError(
+        "getPatientsAction",
+        inner,
+        { fallback: "liste patients sans comptage RDV (table appointments absente)" },
+      );
+      const { rows } = await pool.query(
+        `SELECT * FROM patients p ORDER BY p.nom ASC, p.prenom ASC`,
+      );
+      return {
+        ok: true,
+        data: rows.map((row) => mapRow(row as Record<string, unknown>)),
+      };
+    }
   } catch (e) {
     logServerError("getPatientsAction", e);
     console.error(e);

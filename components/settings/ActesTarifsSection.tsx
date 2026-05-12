@@ -10,6 +10,7 @@ import {
   type DentalCatalogAct,
   type DentalCatalogCategory,
 } from "@/utils/dentalCatalogActs";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const CATEGORIES: DentalCatalogCategory[] = ["Chirurgie", "Soins", "Prothèse"];
 
@@ -107,14 +108,14 @@ export function ActesTarifsSection() {
             les montants de facturation. Stockage local du navigateur.
           </p>
         </div>
-        <button
+        <PrimaryButton
           type="button"
           onClick={addAct}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-3 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-sm"
         >
           <Plus className="h-4 w-4" strokeWidth={2.25} />
           Ajouter un acte
-        </button>
+        </PrimaryButton>
       </div>
 
       <div className="mt-10 space-y-12">

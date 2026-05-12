@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, ChevronRight, MoreVertical, Search, FileText, UserPlus } from "lucide-react";
-import AnimatedButton from "@/components/ui/AnimatedButton";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { createPatientAction, getPatientsAction } from "@/app/actions/patients";
 import { getInactivePatientsAction } from "@/app/actions/appointments";
 import {
@@ -280,10 +280,14 @@ function PatientsPageContent() {
             enregistré{patients.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <AnimatedButton onClick={() => setIsModalOpen(true)}>
+        <PrimaryButton
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center gap-2"
+        >
           <UserPlus className="h-4 w-4" strokeWidth={2} />
           Ajouter un patient
-        </AnimatedButton>
+        </PrimaryButton>
       </div>
 
       <div className="relative w-full">

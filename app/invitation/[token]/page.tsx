@@ -10,6 +10,7 @@ import {
 import type { InvitationTokenPayload } from "@/lib/types/invitation-token";
 import { ROLE_LABEL, setCurrentRole, setCurrentUser, type Role } from "@/utils/roles";
 import { authClient } from "@/lib/auth-client";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 type Stage = "loading" | "invalid" | "form" | "done";
 
@@ -163,13 +164,13 @@ export default function InvitationPage({
               Sur la page de connexion, utilisez le même identifiant — vous
               n&apos;avez plus besoin de ce lien d&apos;invitation.
             </p>
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => router.push("/")}
-              className="h-11 w-full rounded-xl bg-[var(--ds-primary)] text-sm font-bold text-white shadow-md transition-opacity hover:opacity-95"
+              className="h-11 w-full text-sm font-bold shadow-md"
             >
               Accéder à Oryx
-            </button>
+            </PrimaryButton>
           </div>
         )}
 
@@ -240,16 +241,14 @@ export default function InvitationPage({
               </p>
             )}
 
-            <button
+            <PrimaryButton
               type="submit"
               disabled={submitting}
-              className="relative mt-2 h-[46px] w-full overflow-hidden rounded-xl text-sm font-bold text-white shadow-[0_4px_14px_rgba(124,58,237,0.35)] transition-all disabled:opacity-60"
-              style={{
-                background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
-              }}
+              isLoading={submitting}
+              className="mt-2 h-11 w-full text-sm font-bold shadow-[0_4px_14px_rgba(124,58,237,0.35)]"
             >
-              {submitting ? "Création…" : "Accéder à Oryx"}
-            </button>
+              Accéder à Oryx
+            </PrimaryButton>
           </form>
         )}
       </div>

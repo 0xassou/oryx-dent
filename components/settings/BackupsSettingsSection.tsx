@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { HardDrive, Loader2, RefreshCw } from "lucide-react";
+import { HardDrive, RefreshCw } from "lucide-react";
 import {
   createBackupAction,
   getBackupsAction,
   type BackupListEntry,
 } from "@/app/actions/backups";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} o`;
@@ -103,19 +104,16 @@ export function BackupsSettingsSection() {
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Actualiser
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={handleCreate}
             disabled={creating}
-            className="inline-flex items-center gap-2 rounded-xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            isLoading={creating}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
           >
-            {creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <span aria-hidden>💾</span>
-            )}
+            <span aria-hidden>💾</span>
             Créer une sauvegarde maintenant
-          </button>
+          </PrimaryButton>
         </div>
       </div>
 

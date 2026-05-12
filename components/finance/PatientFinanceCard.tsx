@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { formatDZD, formatDate } from "@/utils/formatters";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 type PaymentMethod = "CB" | "Espèces" | "Virement" | "Chèque";
 
@@ -96,14 +97,14 @@ export function PatientFinanceCard() {
             <Plus className="h-4 w-4" />
             Ajouter un acte
           </button>
-          <button
+          <PrimaryButton
             type="button"
             onClick={() => setIsOpen(true)}
-            className="flex w-full md:w-auto flex-shrink-0 items-center justify-center gap-2 rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2.5 text-xs font-medium text-[var(--ds-bg)] shadow-sm transition-colors hover:opacity-90 whitespace-nowrap"
+            className="flex w-full md:w-auto flex-shrink-0 items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium whitespace-nowrap shadow-sm"
           >
             <Plus className="h-4 w-4" />
             Enregistrer un paiement
-          </button>
+          </PrimaryButton>
         </div>
       </div>
 
@@ -263,13 +264,13 @@ export function PatientFinanceCard() {
               >
                 Annuler
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={handleSave}
-                className="rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2 text-xs font-medium text-[var(--ds-bg)] hover:opacity-90"
+                className="rounded-2xl px-4 py-2 text-xs font-medium"
               >
                 Enregistrer
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -371,13 +372,13 @@ export function PatientFinanceCard() {
               >
                 Annuler
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={handleAddActe}
-                className="rounded-2xl bg-[color:var(--ds-primary)] px-4 py-2 text-xs font-medium text-[var(--ds-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-colors hover:opacity-90"
+                className="rounded-2xl px-4 py-2 text-xs font-medium shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
               >
                 Ajouter au total
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
