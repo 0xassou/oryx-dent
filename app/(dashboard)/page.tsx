@@ -1243,7 +1243,7 @@ export default function DashboardPage() {
       try {
         await createConsultationAction({
           appointment_id: appointmentId,
-          patient_id: patientId || null,
+          patient_id: patientId || "",
           type_acte: "Consultation",
         });
       } catch (e) {
