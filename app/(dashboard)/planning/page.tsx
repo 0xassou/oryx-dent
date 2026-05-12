@@ -1082,7 +1082,7 @@ function PlanningPageContent() {
           <PrimaryButton
             type="button"
             onClick={() => setIsNewRdvModalOpen(true)}
-            className="h-11 min-h-11 rounded-xl px-6 font-semibold shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             Nouveau RDV

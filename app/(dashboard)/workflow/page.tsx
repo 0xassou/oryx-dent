@@ -488,10 +488,10 @@ function ConsultationCard({
             type="button"
             disabled={busy}
             onClick={() => void go("arrive")}
-            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: "#16a34a" }}
           >
-            Marquer arrivé
+            Arrivé
           </button>
         )}
         {c.statut === "arrive" && (
@@ -499,11 +499,11 @@ function ConsultationCard({
             type="button"
             disabled={busy}
             onClick={() => void go("en_consultation")}
-            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: "#0891b2" }}
           >
             <Play className="h-3 w-3" />
-            Commencer
+            En consultation
           </button>
         )}
         {c.statut === "en_consultation" && (
@@ -511,11 +511,11 @@ function ConsultationCard({
             type="button"
             disabled={busy}
             onClick={() => void go("termine")}
-            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
             style={{ backgroundColor: "#475569" }}
           >
             <CheckCircle2 className="h-3 w-3" />
-            Terminer
+            Terminé
           </button>
         )}
         {c.statut !== "absent" && c.statut !== "termine" && (
@@ -523,7 +523,7 @@ function ConsultationCard({
             type="button"
             disabled={busy}
             onClick={() => void go("absent")}
-            className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-[10px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
           >
             <UserX className="h-3 w-3" />
             Absent

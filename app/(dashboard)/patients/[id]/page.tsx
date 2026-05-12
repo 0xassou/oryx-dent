@@ -42,6 +42,7 @@ import {
   PrescriptionModal,
   type PrescriptionItem,
 } from "@/components/patients/PrescriptionModal";
+import { NewAppointmentModal } from "@/components/planning/NewAppointmentModal";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { formatDZD, formatDate } from "@/utils/formatters";
 import { generateOrdonnancePDF } from "@/utils/generateOrdonnancePDF";
@@ -1143,6 +1144,7 @@ export default function PatientDetailPage() {
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [isNewAppointmentModalOpen, setIsNewAppointmentModalOpen] = useState(false);
 
   const [patientDocuments, setPatientDocuments] = useState<PatientDocument[]>(
     [],
@@ -2332,8 +2334,7 @@ export default function PatientDetailPage() {
       setIsPrescriptionModalOpen(true);
     },
     onNewAppointment: () => {
-      // Utiliser window.location pour forcer un rechargement complet de la page
-      window.location.href = `/planning?patientId=${id}&patientName=${encodeURIComponent(displayFullName)}`;
+      setIsNewAppointmentModalOpen(true);
     },
     onDeletePatient: () => setDeleteConfirmOpen(true),
     onToothClick: (tooth: ToothId) => {
@@ -3298,6 +3299,19 @@ export default function PatientDetailPage() {
             logoBase64: settings.logoBase64 as string | undefined,
           });
         }}
+      />
+
+      {/* Modal Nouveau RDV - ouvert depuis la fiche patient */}
+      <NewAppointmentModal
+        open={isNewAppointmentModalOpen}
+        onClose={() => setIsNewAppointmentModalOpen(false)}
+        onConfirm={() => {
+          setIsNewAppointmentModalOpen(false);
+          // Rafraîchir les rendez-vous du patient après création
+          setAppointmentsTick((t) => t + 1);
+        }}
+        defaultPatientName={displayFullName}
+        defaultPatientId={id}
       />
       </RoleGate>
 
