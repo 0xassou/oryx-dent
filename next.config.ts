@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /** Build Docker : bundle minimal `next start` (voir Dockerfile). */
+  output: "standalone",
+
   /** Ne pas bundler `pg` pour le runtime Node — évite des doublons / warnings. */
   serverExternalPackages: ["pg", "pg-native"],
 

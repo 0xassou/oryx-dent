@@ -1,0 +1,35 @@
+services:
+  oryx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oryx
+    restart: always
+    env_file:
+      - .env.production
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+
+      # HTTPS (Let's Encrypt — nom du certresolver = celui défini dans traefik.yml du serveur, souvent letsencrypt)
+      - traefik.http.routers.oryx-secure.rule=Host(`oryx.srv1441391.hstgr.cloud`)
+      - traefik.http.routers.oryx-secure.entrypoints=websecure
+      - traefik.http.routers.oryx-secure.tls=true
+      - traefik.http.routers.oryx-secure.tls.certresolver=letsencrypt
+      - traefik.http.routers.oryx-secure.service=oryx
+
+      # HTTP → HTTPS
+      - traefik.http.routers.oryx-http.rule=Host(`oryx.srv1441391.hstgr.cloud`)
+      - traefik.http.routers.oryx-http.entrypoints=web
+      - traefik.http.routers.oryx-http.service=oryx
+      - traefik.http.routers.oryx-http.middlewares=oryx-redirect-https
+      - traefik.http.middlewares.oryx-redirect-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.oryx-redirect-https.redirectscheme.permanent=true
+
+      - traefik.http.services.oryx.loadbalancer.server.port=3000
+
+networks:
+  traefik:
+    external: true
