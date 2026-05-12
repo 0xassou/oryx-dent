@@ -12,7 +12,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   CalendarDays,
   ChevronLeft,
@@ -736,6 +736,7 @@ function CalendarView({
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 function PlanningPageContent() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
 
@@ -873,7 +874,17 @@ function PlanningPageContent() {
       await Promise.all([reloadAppointments(), reloadConsultations()]);
       setPlanningReady(true);
     })();
-  }, [reloadAppointments, reloadConsultations]);
+  }, [reloadAppointments, reloadConsultations, pathname]);
+
+  // Recharger les RDV quand l'utilisateur revient sur la page (navigation ou retour d'onglet)
+  useEffect(() => {
+    if (!mounted) return;
+    const handleFocus = () => {
+      void reloadAppointments();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [mounted, reloadAppointments]);
 
   useEffect(() => {
     const patientId =

@@ -53,6 +53,7 @@ import {
   createAppointmentAction,
   getAppointmentsByDateAction,
 } from "@/app/actions/appointments";
+import { createConsultationAction } from "@/app/actions/consultations";
 import {
   APPOINTMENTS_UPDATED_EVENT,
   appointmentJoinedRowToRdv,
@@ -129,7 +130,7 @@ function countSterileKitsReady(ster: SterData): number {
   return kits.filter((k) => k.status === "sterile").length;
 }
 
-type FluxStatus = "Terminé" | "En attente" | "Au fauteuil" | "À venir";
+type FluxStatus = "Terminé" | "En attente" | "Au fauteuil" | "À venir" | "En consultation";
 
 type VisitKind = "consultation" | "urgence";
 
@@ -1229,6 +1230,35 @@ export default function DashboardPage() {
     );
   }
 
+  async function marquerArrivee(id: string, appointmentId?: string) {
+    // Mettre à jour le statut localement
+    setFluxRows((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, status: "En attente" as FluxStatus, attenteMin: 0 } : r,
+      ),
+    );
+    // Créer une consultation si on a un appointmentId
+    if (appointmentId) {
+      try {
+        await createConsultationAction({
+          appointment_id: appointmentId,
+          patient_id: null,
+          type_acte: "Consultation",
+        });
+      } catch (e) {
+        console.error("Erreur création consultation:", e);
+      }
+    }
+  }
+
+  function isEnRetard(row: FluxRow): boolean {
+    if (row.status !== "À venir") return false;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const rdvMinutes = minutesFromHHmm(row.time);
+    return nowMinutes - rdvMinutes > 15;
+  }
+
   if (!mounted) {
     return <DashboardKpiSkeleton />;
   }
@@ -1454,20 +1484,31 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {fluxRows.map((row) => {
+                      const enRetard = isEnRetard(row);
                       const badgeClass =
                         row.status === "Terminé"
-                          ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-                          : row.status === "En attente"
-                            ? "bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)] ring-[var(--ds-primary-border)]"
-                            : row.status === "Au fauteuil"
-                              ? "bg-amber-50 text-amber-900 ring-amber-100"
-                              : "bg-[var(--ds-bg)] text-[var(--ds-text-muted)] ring-[var(--ds-primary-border)]";
+                          ? "bg-gray-100 text-gray-600 ring-gray-200"
+                          : row.status === "En consultation"
+                            ? "bg-cyan-50 text-cyan-700 ring-cyan-100"
+                            : row.status === "En attente"
+                              ? "bg-[var(--ds-primary-soft)] text-[var(--ds-primary-hover)] ring-[var(--ds-primary-border)]"
+                              : row.status === "Au fauteuil"
+                                ? "bg-amber-50 text-amber-900 ring-amber-100"
+                                : enRetard
+                                  ? "bg-orange-50 text-orange-700 ring-orange-100"
+                                  : "bg-[var(--ds-bg)] text-[var(--ds-text-muted)] ring-[var(--ds-primary-border)]";
                       const badgeText =
                         row.status === "En attente"
                           ? `En attente${row.attenteMin != null && row.attenteMin > 0 ? ` — ${row.attenteMin} min` : ""}`
-                          : row.status === "À venir"
-                            ? "À venir"
-                            : row.status;
+                          : row.status === "À venir" && enRetard
+                            ? "En retard"
+                            : row.status === "À venir"
+                              ? "À venir"
+                              : row.status === "En consultation"
+                                ? "En consultation"
+                                : row.status === "Terminé"
+                                  ? "Terminé"
+                                  : row.status;
                       return (
                         <tr
                           key={row.id}
@@ -1479,7 +1520,7 @@ export default function DashboardPage() {
                           <td className="px-4 py-3 font-medium text-[var(--ds-text)]">
                             <span className="inline-flex flex-wrap items-center gap-2">
                               <span>{row.patient}</span>
-                              {row.status === "En attente" &&
+                              {(row.status === "En attente" || row.status === "En consultation") &&
                                 row.visitKind != null && (
                                   <span
                                     className={[
@@ -1494,6 +1535,11 @@ export default function DashboardPage() {
                                       : "Consultation"}
                                   </span>
                                 )}
+                              {enRetard && row.status === "À venir" && (
+                                <span className="shrink-0 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-800 ring-1 ring-orange-200/80">
+                                  En retard
+                                </span>
+                              )}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-[var(--ds-text-muted)]">{row.act}</td>
@@ -1508,7 +1554,16 @@ export default function DashboardPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            {row.status === "En attente" ? (
+                            {row.status === "À venir" ? (
+                              <PrimaryButton
+                                type="button"
+                                onClick={() => marquerArrivee(row.id, row.appointmentId)}
+                                className="inline-flex items-center gap-1 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+                              >
+                                <Check className="h-3 w-3" strokeWidth={2.5} />
+                                Arrivé
+                              </PrimaryButton>
+                            ) : row.status === "En attente" ? (
                               <PrimaryButton
                                 type="button"
                                 onClick={() => passAuFauteuil(row.id)}
@@ -1516,11 +1571,14 @@ export default function DashboardPage() {
                               >
                                 Passer au fauteuil
                               </PrimaryButton>
-                            ) : row.status === "Au fauteuil" ? (
-                              <span className="text-xs text-[var(--ds-text-muted)]">—</span>
-                            ) : (
-                              <span className="text-xs text-[var(--ds-text-muted)]">—</span>
-                            )}
+                            ) : row.status === "En consultation" || row.status === "Au fauteuil" ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-[var(--ds-text-muted)]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                En cours
+                              </span>
+                            ) : row.status === "Terminé" ? (
+                              <span className="text-xs text-gray-500">—</span>
+                            ) : null}
                           </td>
                         </tr>
                       );
