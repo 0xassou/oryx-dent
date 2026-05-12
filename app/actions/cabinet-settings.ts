@@ -6,9 +6,6 @@ import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
 import { logServerError } from "@/lib/server/logger";
 import { DEFAULT_ACTES_TARIFS } from "@/utils/defaultActesTarifs";
 
-// Réexport pour compatibilité avec les imports existants
-export { DEFAULT_ACTES_TARIFS };
-
 const CABINET_ROW_ID = "default";
 const CABINET_SETTINGS_CACHE_TAG = "cabinet-settings";
 
