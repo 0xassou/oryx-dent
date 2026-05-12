@@ -2295,10 +2295,10 @@ export default function PatientDetailPage() {
     onOpenOrdonnance: () => {
       setIsPrescriptionModalOpen(true);
     },
-    onNewAppointment: () =>
-      router.push(
-        `/planning?patientId=${id}&patientName=${encodeURIComponent(displayFullName)}&t=${Date.now()}`,
-      ),
+    onNewAppointment: () => {
+      // Utiliser window.location pour forcer un rechargement complet de la page
+      window.location.href = `/planning?patientId=${id}&patientName=${encodeURIComponent(displayFullName)}`;
+    },
     onDeletePatient: () => setDeleteConfirmOpen(true),
     onToothClick: (tooth: ToothId) => {
       const existingTreatment = allTreatments.find(

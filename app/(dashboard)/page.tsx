@@ -53,7 +53,10 @@ import {
   createAppointmentAction,
   getAppointmentsByDateAction,
 } from "@/app/actions/appointments";
-import { createConsultationAction } from "@/app/actions/consultations";
+import {
+  createConsultationAction,
+  updateStatutConsultationAction,
+} from "@/app/actions/consultations";
 import {
   APPOINTMENTS_UPDATED_EVENT,
   appointmentJoinedRowToRdv,
@@ -1252,6 +1255,21 @@ export default function DashboardPage() {
     }
   }
 
+  async function terminerConsultation(id: string) {
+    // Mettre à jour le statut localement
+    setFluxRows((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, status: "Terminé" as FluxStatus } : r,
+      ),
+    );
+    // Appeler l'API pour marquer comme terminé
+    try {
+      await updateStatutConsultationAction(id, "termine");
+    } catch (e) {
+      console.error("Erreur terminer consultation:", e);
+    }
+  }
+
   function isEnRetard(row: FluxRow): boolean {
     if (row.status !== "À venir") return false;
     const now = new Date();
@@ -1559,24 +1577,28 @@ export default function DashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => marquerArrivee(row.id, row.appointmentId, row.patientId)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
                               >
-                                <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                                <Check className="h-3 w-3" strokeWidth={2.5} />
                                 Arrivé
                               </button>
                             ) : row.status === "En attente" ? (
-                              <PrimaryButton
+                              <button
                                 type="button"
                                 onClick={() => passAuFauteuil(row.id)}
-                                className="px-3 py-1.5 text-xs font-semibold shadow-sm"
+                                className="inline-flex items-center gap-1 rounded-lg bg-[var(--ds-primary)] px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[var(--ds-primary-hover)]"
                               >
                                 Passer au fauteuil
-                              </PrimaryButton>
+                              </button>
                             ) : row.status === "En consultation" || row.status === "Au fauteuil" ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-[var(--ds-text-muted)]">
-                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                                En cours
-                              </span>
+                              <button
+                                type="button"
+                                onClick={() => terminerConsultation(row.id)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-gray-500 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-gray-600"
+                              >
+                                <Check className="h-3 w-3" strokeWidth={2.5} />
+                                Terminé
+                              </button>
                             ) : row.status === "Terminé" ? (
                               <span className="text-xs text-gray-500">—</span>
                             ) : null}
