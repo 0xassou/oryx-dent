@@ -54,6 +54,16 @@ function toDateStringOrNull(v: unknown): string | null {
   return s.length >= 10 ? s.slice(0, 10) : s || null;
 }
 
+/** Convertit une date JJ/MM/AAAA en YYYY-MM-DD (format PostgreSQL) */
+function parseDateToISO(date: string): string {
+  if (!date) return date;
+  if (date.includes("/")) {
+    const [day, month, year] = date.split("/");
+    return `${year}-${month}-${day}`;
+  }
+  return date;
+}
+
 function mapRow(r: Record<string, unknown>): PatientRow {
   return {
     id: String(r.id),
@@ -200,7 +210,9 @@ export async function createPatientAction(
       data.telephone ?? null,
       data.telephone2 ?? null,
       data.email ?? null,
-      data.date_naissance?.trim() || null,
+      data.date_naissance?.trim()
+        ? parseDateToISO(data.date_naissance.trim())
+        : null,
       data.groupe_sanguin ?? null,
       data.sexe ?? null,
       data.adresse ?? null,
@@ -305,7 +317,8 @@ export async function updatePatientAction(
       fragments.push(`${key} = $${i}`);
       let v: unknown = data[key];
       if (key === "date_naissance" && typeof v === "string") {
-        v = v.trim() || null;
+        const trimmed = v.trim();
+        v = trimmed ? parseDateToISO(trimmed) : null;
       }
       values.push(v ?? null);
       i += 1;
