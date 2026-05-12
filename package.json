@@ -10,7 +10,8 @@
     "seed:test-clinic": "node scripts/seed-test-clinic.cjs",
     "create-admin": "tsx scripts/create-admin.ts",
     "backup": "npx tsx scripts/backup.ts",
-    "restore": "npx tsx scripts/restore.ts"
+    "restore": "npx tsx scripts/restore.ts",
+    "icons:pwa": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
@@ -43,6 +44,7 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.2.2",
     "tsx": "^4.21.0",
     "typescript": "^5"
