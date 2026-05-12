@@ -93,6 +93,36 @@ function waitMinutes(isoDate: string | null): string {
   return `${h}h${rest > 0 ? String(rest).padStart(2, "0") : ""}`;
 }
 
+/** Formate la saisie en JJ/MM/AAAA (auto-insertion des /) */
+function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+/** Convertit une date ISO (YYYY-MM-DD) en JJ/MM/AAAA pour l'affichage */
+function isoToDisplayDate(isoDate: string): string {
+  if (!isoDate) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    const [y, m, d] = isoDate.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  // Si déjà au format JJ/MM/AAAA, retourner tel quel
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(isoDate)) return isoDate;
+  return "";
+}
+
+/** Convertit une date JJ/MM/AAAA en ISO (YYYY-MM-DD) */
+function parseDateToISO(dateValue: string): string {
+  if (!dateValue) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+  const match = dateValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return "";
+  const [, d, m, y] = match;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 function useNowClock(): string {
   const [time, setTime] = useState(() => {
     const n = new Date();
@@ -854,9 +884,15 @@ function WalkInPatientModal({
                         </label>
                         <input
                           className={WALKIN_INPUT}
-                          type="date"
-                          value={npDob}
-                          onChange={(e) => setNpDob(e.target.value)}
+                          type="text"
+                          value={isoToDisplayDate(npDob)}
+                          onChange={(e) => {
+                            const formatted = formatDateInput(e.target.value);
+                            const iso = parseDateToISO(formatted);
+                            setNpDob(iso || formatted);
+                          }}
+                          placeholder="ex: 15/03/1990"
+                          maxLength={10}
                         />
                       </div>
                       <div>

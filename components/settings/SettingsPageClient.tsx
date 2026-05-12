@@ -28,6 +28,7 @@ import {
   getCabinetSettingsAction,
   replaceCabinetSettingsAction,
 } from "@/app/actions/cabinet-settings";
+import { getSessionUserProfileAction } from "@/app/actions/session-user-profile";
 import { replaceCabinetBlobFromServer } from "@/lib/client/cabinetBlob";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
@@ -183,9 +184,12 @@ export default function SettingsPageClient({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await getCabinetSettingsAction();
-      if (!res.ok || cancelled) return;
-      const parsed = res.data as Record<string, unknown>;
+      const [cabRes, sessionRes] = await Promise.all([
+        getCabinetSettingsAction(),
+        getSessionUserProfileAction(),
+      ]);
+      if (!cabRes.ok || cancelled) return;
+      const parsed = cabRes.data as Record<string, unknown>;
       setSettings((prev) => {
         const merged = { ...prev, ...parsed };
         merged.assistantPermissions = normalizeAssistantPermissions(
@@ -195,6 +199,18 @@ export default function SettingsPageClient({
           typeof merged.whatsappBusinessNumber === "string"
             ? merged.whatsappBusinessNumber
             : "";
+
+        const prenomCab = String(merged.praticienPrenom ?? "").trim();
+        const nomCab = String(merged.praticienNom ?? "").trim();
+        const emailCab = String(merged.praticienEmail ?? "").trim();
+
+        if (sessionRes.ok) {
+          const { prenom, nom, email } = sessionRes.data;
+          if (!prenomCab) merged.praticienPrenom = prenom;
+          if (!nomCab) merged.praticienNom = nom;
+          if (!emailCab) merged.praticienEmail = email;
+        }
+
         return merged;
       });
     })();

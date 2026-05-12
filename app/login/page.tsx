@@ -26,6 +26,7 @@ import {
   Users,
 } from "lucide-react";
 import { resolveAppRoleForSessionAction } from "@/app/actions/team";
+import { mergeCabinetSettingsAction } from "@/app/actions/cabinet-settings";
 import { setCurrentRole, setCurrentUser } from "@/utils/roles";
 import { authClient } from "@/lib/auth-client";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -450,6 +451,7 @@ function ConnexionPanel() {
 }
 
 function InscriptionPanel() {
+  const router = useRouter();
   const [cabinet, setCabinet] = useState("");
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
@@ -479,6 +481,45 @@ function InscriptionPanel() {
     });
 
     if (!res.error) {
+      // Inscription réussie → sauvegarde des données cabinet
+      await mergeCabinetSettingsAction({
+        nomCabinet: cabinet.trim(),
+        praticienPrenom: prenom.trim(),
+        praticienNom: nom.trim(),
+        praticienEmail: email.trim().toLowerCase(),
+        telephone: phone.trim(),
+      });
+
+      // Tentative de connexion automatique
+      try {
+        const signInRes = await authClient.signIn.email({
+          email: email.trim().toLowerCase(),
+          password: pwd,
+        });
+        const signInData = signInRes as unknown as SignInEmailResponse;
+
+        if (!signInData.error) {
+          // Connexion auto réussie → résolution du rôle et redirection
+          const resolved = await resolveAppRoleForSessionAction();
+          if (!resolved.ok) {
+            await authClient.signOut();
+            setSuccess("Compte créé. Vous pouvez maintenant vous connecter.");
+            setLoading(false);
+            return;
+          }
+          setCurrentRole(resolved.role);
+          setCurrentUser({
+            email: resolved.email,
+            nom: resolved.nom,
+            role: resolved.role,
+          });
+          router.push(safePostLoginPath());
+          router.refresh();
+          return;
+        }
+      } catch {
+        // Connexion auto échouée → garder le message de succès original
+      }
       setSuccess("Compte créé. Vous pouvez maintenant vous connecter.");
     } else {
       setError(

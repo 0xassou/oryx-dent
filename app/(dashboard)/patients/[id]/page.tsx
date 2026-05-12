@@ -504,6 +504,40 @@ function parseDateToISO(dateValue: string) {
   )}`;
 }
 
+/** Formate la saisie en JJ/MM/AAAA (auto-insertion des /) */
+function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+/** Convertit une date ISO (YYYY-MM-DD) en JJ/MM/AAAA pour l'affichage */
+function isoToDisplayDate(isoDate: string): string {
+  if (!isoDate) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+    const [y, m, d] = isoDate.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  // Si déjà au format JJ/MM/AAAA, retourner tel quel
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(isoDate)) return isoDate;
+  return "";
+}
+
+/** Valide le format JJ/MM/AAAA */
+function isValidDateFormat(value: string): boolean {
+  if (!value) return true; // Optionnel
+  const regex = /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(19|20)\d{2}$/;
+  if (!regex.test(value)) return false;
+  const [day, month, year] = value.split("/").map(Number);
+  const date = new Date(year!, month! - 1, day);
+  return (
+    date.getDate() === day &&
+    date.getMonth() === month! - 1 &&
+    date.getFullYear() === year
+  );
+}
+
 function isoTimestampToFacturePgDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {
@@ -3606,10 +3640,17 @@ export default function PatientDetailPage() {
                   Date de naissance
                 </label>
                 <input
-                  type="date"
-                  value={editPatientDob}
-                  onChange={(e) => setEditPatientDob(e.target.value)}
+                  type="text"
+                  value={isoToDisplayDate(editPatientDob)}
+                  onChange={(e) => {
+                    const formatted = formatDateInput(e.target.value);
+                    // Convertir l'affichage JJ/MM/AAAA en ISO pour le stockage
+                    const iso = parseDateToISO(formatted);
+                    setEditPatientDob(iso || formatted);
+                  }}
                   className="mt-1.5 w-full rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2.5 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[color:var(--ds-primary)] focus:ring-2 focus:ring-[color:var(--ds-primary)]/20"
+                  placeholder="ex: 15/03/1990"
+                  maxLength={10}
                 />
               </div>
               <div>

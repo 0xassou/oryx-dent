@@ -52,7 +52,30 @@ type FormErrors = {
   nom?: string;
   prenom?: string;
   telephone?: string;
+  dateNaissance?: string;
 };
+
+/** Formate la saisie en JJ/MM/AAAA (auto-insertion des /) */
+function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+/** Valide le format JJ/MM/AAAA */
+function isValidDateFormat(value: string): boolean {
+  if (!value) return true; // Optionnel
+  const regex = /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(19|20)\d{2}$/;
+  if (!regex.test(value)) return false;
+  const [day, month, year] = value.split("/").map(Number);
+  const date = new Date(year!, month! - 1, day);
+  return (
+    date.getDate() === day &&
+    date.getMonth() === month! - 1 &&
+    date.getFullYear() === year
+  );
+}
 
 export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps) {
   const [nom, setNom] = useState("");
@@ -85,6 +108,9 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
     if (!prenom.trim()) e.prenom = "Le prénom est obligatoire.";
     if (!nom.trim()) e.nom = "Le nom est obligatoire.";
     if (!telephone.trim()) e.telephone = "Le numéro de téléphone est obligatoire.";
+    if (dateNaissance && !isValidDateFormat(dateNaissance)) {
+      e.dateNaissance = "Format invalide. Utilisez JJ/MM/AAAA (ex: 15/03/1990).";
+    }
     return e;
   }
 
@@ -243,13 +269,26 @@ export function AddPatientModal({ open, onClose, onSave }: AddPatientModalProps)
                     </label>
                     <input
                       id="add-patient-dob"
-                      type="date"
+                      type="text"
                       name="dateNaissance"
                       autoComplete="bday"
                       value={dateNaissance}
-                      onChange={(e) => setDateNaissance(e.target.value)}
-                      className={inputBase}
+                      onChange={(e) => {
+                        const formatted = formatDateInput(e.target.value);
+                        setDateNaissance(formatted);
+                        if (errors.dateNaissance) setErrors((prev) => ({ ...prev, dateNaissance: undefined }));
+                      }}
+                      className={errors.dateNaissance ? inputError : inputBase}
+                      placeholder="ex: 15/03/1990"
+                      maxLength={10}
+                      aria-describedby={errors.dateNaissance ? "error-dob" : undefined}
+                      aria-invalid={!!errors.dateNaissance}
                     />
+                    {errors.dateNaissance && (
+                      <p id="error-dob" className="mt-1 text-xs text-red-500">
+                        {errors.dateNaissance}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className={labelBase} htmlFor="add-patient-groupe-sanguin">
