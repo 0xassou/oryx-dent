@@ -26,7 +26,7 @@ import { showAppToast } from "@/utils/appToast";
 import { WorkflowKanbanSkeleton } from "@/components/ui/page-skeletons";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
-const REFRESH_MS = 15_000;
+const REFRESH_MS = 5_000;
 
 type Column = {
   statut: ConsultationStatut;
@@ -241,6 +241,15 @@ export default function WorkflowPage() {
     };
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
+  }, [refresh]);
+
+  // Recharger immédiatement quand une consultation est créée depuis le dashboard
+  useEffect(() => {
+    const handleConsultationsUpdated = () => {
+      void refresh();
+    };
+    window.addEventListener("CONSULTATIONS_UPDATED", handleConsultationsUpdated);
+    return () => window.removeEventListener("CONSULTATIONS_UPDATED", handleConsultationsUpdated);
   }, [refresh]);
 
   async function transition(id: string, to: ConsultationStatut) {

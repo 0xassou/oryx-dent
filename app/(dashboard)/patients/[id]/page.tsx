@@ -3865,7 +3865,7 @@ export default function PatientDetailPage() {
                     id="cockpit-title"
                     className="truncate text-[15px] font-bold text-[var(--ds-text)]"
                   >
-                    🦷 Dent {selectedTooth ?? "—"} · Cockpit clinique
+                    🦷 Dent {selectedTooth ?? "—"} · {displayFullName}
                   </h3>
                   {selectedTooth !== null && dentsStatus[selectedTooth as ToothId] && (
                     <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--ds-text-muted)]">

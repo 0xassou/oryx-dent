@@ -1249,6 +1249,8 @@ export default function DashboardPage() {
           patient_id: patientId || "",
           type_acte: "Consultation",
         });
+        // Notifier la salle d'attente de la nouvelle consultation
+        window.dispatchEvent(new CustomEvent("CONSULTATIONS_UPDATED"));
       } catch (e) {
         console.error("Erreur création consultation:", e);
       }
