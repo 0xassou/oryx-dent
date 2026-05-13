@@ -329,6 +329,11 @@ const ACTES_PRIX_DEVIS: Record<string, number> = {
   "Pose d'implant": 900,
   "Greffe osseuse": 1500,
   Frénectomie: 90,
+  "Soin — Soins": 2500,
+  "Soin — Endodontie": 5000,
+  "Soin — Prothèse": 15000,
+  "Soin — Chirurgie": 3000,
+  "Soin — Saine": 500,
 };
 
 // Mapping catégorie -> statut de la dent dans le schéma
@@ -1050,6 +1055,7 @@ function financeStatutFromReste(
   montantTotal: number,
   resteACharge: number,
 ): FinanceStatut {
+  if (montantTotal <= 0) return "En attente";
   if (resteACharge <= 0) return "Payé";
   if (resteACharge < montantTotal) return "Partiellement Payé";
   return "En attente";
