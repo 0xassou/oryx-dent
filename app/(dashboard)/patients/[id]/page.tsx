@@ -4193,9 +4193,9 @@ export default function PatientDetailPage() {
 
           {/* CORPS SCROLLABLE — 2 COLONNES */}
           <div className="relative min-h-0 flex-1 overflow-hidden px-4 py-3">
-            {/* POST-IT ONGLETS DROITS */}
+            {/* POST-IT ONGLETS GAUCHE */}
             {selectedTooth !== null && (
-              <div className="absolute right-0 top-[30%] z-10 flex translate-x-[calc(100%-2px)] flex-col gap-1">
+              <div className="absolute left-0 top-[30%] z-10 flex -translate-x-full flex-col gap-1">
                 {([
                   { id: "clinique", label: "Clinique", bg: "bg-[var(--ds-primary)]", text: "text-white" },
                   { id: "diagnostic", label: "Diagnostic", bg: "bg-amber-400", text: "text-amber-900" },
@@ -4209,7 +4209,7 @@ export default function PatientDetailPage() {
                       type="button"
                       onClick={() => setCockpitPage(tab.id)}
                       className={[
-                        "flex items-center justify-center rounded-r-lg shadow-md transition-all",
+                        "flex items-center justify-center rounded-l-lg shadow-md transition-all",
                         active ? "w-8 shadow-lg" : "w-7 opacity-80 hover:opacity-100",
                         tab.bg,
                         tab.text,
