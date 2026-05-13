@@ -4256,7 +4256,7 @@ export default function PatientDetailPage() {
                               Consommables ({selectedDrawerProtocol?.consommables?.length ?? 0})
                             </summary>
                             <ul className="space-y-1 border-t border-[var(--ds-primary-border)] px-2.5 py-1.5">
-                              {selectedDrawerProtocol.consommables.map((c) => {
+                              {(selectedDrawerProtocol?.consommables ?? []).map((c) => {
                                 const q = qtyByConsumableId[c.id] ?? c.quantite;
                                 return (
                                   <li key={c.id} className="flex items-center justify-between gap-2">
