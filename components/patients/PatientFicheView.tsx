@@ -49,7 +49,7 @@ export interface PatientFicheTimelineItem {
   date: string;
   acteLabel: string;
   note?: string;
-  categorie: "Soins" | "Chirurgie" | "Orthopédie" | "Endodontie" | "Autres" | "Absente";
+  categorie: "Soins" | "Chirurgie" | "Orthopédie" | "Endodontie" | "Prothèse" | "Implantologie" | "Parodontologie" | "Autres" | "Absente" | "Saine";
   praticien?: string;
   montant?: number;
   statut?: "paye" | "attente" | "partiel";
@@ -199,6 +199,30 @@ const CATEGORY_CONFIG: Record<
     tagClasses:
       "bg-slate-50 text-slate-500 border border-slate-200",
     label: "Absente",
+  },
+  Prothèse: {
+    dotStyle: "bg-cyan-500",
+    tagClasses:
+      "bg-cyan-50 text-cyan-700 border border-cyan-200",
+    label: "Prothèse",
+  },
+  Implantologie: {
+    dotStyle: "bg-indigo-500",
+    tagClasses:
+      "bg-indigo-50 text-indigo-700 border border-indigo-200",
+    label: "Implantologie",
+  },
+  Parodontologie: {
+    dotStyle: "bg-teal-500",
+    tagClasses:
+      "bg-teal-50 text-teal-700 border border-teal-200",
+    label: "Parodontologie",
+  },
+  Saine: {
+    dotStyle: "bg-emerald-500",
+    tagClasses:
+      "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    label: "Saine",
   },
 };
 

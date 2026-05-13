@@ -2442,8 +2442,12 @@ export default function PatientDetailPage() {
         "Chirurgie",
         "Orthopédie",
         "Endodontie",
+        "Prothèse",
+        "Implantologie",
+        "Parodontologie",
         "Autres",
         "Absente",
+        "Saine",
       ];
       const catFinal: PatientFicheTimelineItem["categorie"] = allowed.includes(cat)
         ? cat
