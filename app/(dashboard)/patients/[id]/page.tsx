@@ -948,23 +948,30 @@ function protocolOptionsForTab(
   protocols: ProtocolForSettings[],
   tab: CockpitTab,
 ): ProtocolForSettings[] {
-  const endoNames = new Set<string>([
-    "Traitement canalaire (monoradiculé)",
-    "Traitement canalaire (pluriradiculé)",
-    "Reprise de traitement canalaire",
-    "Pulpotomie",
-    "Pulpectomie",
-    "Coiffe pulpaire directe",
-    "Coiffe pulpaire indirecte",
-  ]);
-  if (tab === "Endodontie") {
-    return protocols.filter((p) => endoNames.has(p.nom));
+  if (tab === "Soins") {
+    return protocols.filter(
+      (p) => p.categorie === "Omnipratique" || p.categorie === "Soins",
+    );
   }
-  if (tab === "Soins") return protocols.filter((p) => p.categorie === "Soins");
-  if (tab === "Chirurgie")
-    return protocols.filter((p) => p.categorie === "Chirurgie");
-  if (tab === "Prothèse")
+  if (tab === "Endodontie") {
+    return protocols.filter(
+      (p) =>
+        p.categorie === "Endodontie" ||
+        /canalaire|pulp/i.test(p.nom),
+    );
+  }
+  if (tab === "Prothèse") {
     return protocols.filter((p) => p.categorie === "Prothèse");
+  }
+  if (tab === "Chirurgie") {
+    return protocols.filter(
+      (p) => p.categorie === "Chirurgie" || p.categorie === "Implantologie",
+    );
+  }
+  // Saine : consultation, bilan, détartrage — on expose tout le catalogue (actes préventifs / bilan)
+  if (tab === "Saine") {
+    return protocols;
+  }
   return protocols;
 }
 
@@ -2457,11 +2464,13 @@ export default function PatientDetailPage() {
         (f) => f.acteName.toLowerCase() === row.acte.toLowerCase(),
       );
       const statut: PatientFicheTimelineItem["statut"] = fin
-        ? fin.resteACharge <= 0
-          ? "paye"
-          : fin.resteACharge < fin.montantTotal
-            ? "partiel"
-            : "attente"
+        ? fin.montantTotal === 0
+          ? undefined
+          : fin.resteACharge <= 0
+            ? "paye"
+            : fin.resteACharge < fin.montantTotal
+              ? "partiel"
+              : "attente"
         : undefined;
       return {
         id: `acte-${row.tooth}-${idx}`,
