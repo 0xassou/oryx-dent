@@ -301,9 +301,11 @@ export async function executeClinicalActWithInput(
     }
 
     const amountCents =
-      customPriceOverrideCents != null && customPriceOverrideCents >= 0
+      customPriceOverrideCents != null && customPriceOverrideCents > 0
         ? Math.floor(customPriceOverrideCents)
-        : protocol.base_price_cents;
+        : protocol.base_price_cents > 0
+          ? protocol.base_price_cents
+          : (clientProtocol?.basePriceCents ?? 0);
 
     const consumablesSnapshot = {
       source:
