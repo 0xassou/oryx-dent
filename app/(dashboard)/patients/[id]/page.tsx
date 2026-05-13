@@ -4116,7 +4116,7 @@ export default function PatientDetailPage() {
                         <div className="flex items-center gap-2">
                           <span className="w-16 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]">Sensibilité</span>
                           <div className="flex flex-wrap gap-1">
-                            {(["aucune", "froid", "chaud", "sucre", "mastication"] as const).map((s) => (
+                            {(["aucune", "froid", "chaud", "percussion"] as const).map((s) => (
                               <button
                                 key={s}
                                 type="button"
@@ -4134,7 +4134,13 @@ export default function PatientDetailPage() {
                                     : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
                                 ].join(" ")}
                               >
-                                {s === "aucune" ? "Aucune" : s === "froid" ? "Froid" : s === "chaud" ? "Chaud" : s === "sucre" ? "Sucre" : "Mastication"}
+                                {s === "aucune"
+                                  ? "Aucune"
+                                  : s === "froid"
+                                    ? "Froid"
+                                    : s === "chaud"
+                                      ? "Chaud"
+                                      : "Percussion"}
                               </button>
                             ))}
                           </div>
@@ -4144,7 +4150,7 @@ export default function PatientDetailPage() {
                         <div className="flex items-center gap-2">
                           <span className="w-16 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]">Vitalité</span>
                           <div className="flex flex-wrap gap-1">
-                            {(["vivante", "devitalisee", "incertaine"] as const).map((v) => (
+                            {(["vivante", "depulpee", "incertaine"] as const).map((v) => (
                               <button
                                 key={v}
                                 type="button"
@@ -4156,12 +4162,12 @@ export default function PatientDetailPage() {
                                   "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
                                   vitalite === v
                                     ? v === "vivante" ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                      : v === "devitalisee" ? "bg-slate-100 text-slate-600 border border-slate-200"
+                                      : v === "depulpee" ? "bg-slate-100 text-slate-600 border border-slate-200"
                                       : "bg-amber-100 text-amber-700 border border-amber-200"
                                     : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
                                 ].join(" ")}
                               >
-                                {v === "vivante" ? "Vivante" : v === "devitalisee" ? "Dévitalisée" : "Incertaine"}
+                                {v === "vivante" ? "Vivante" : v === "depulpee" ? "Dépulpée" : "Incertaine"}
                               </button>
                             ))}
                           </div>
