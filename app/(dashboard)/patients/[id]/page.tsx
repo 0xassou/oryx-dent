@@ -4250,10 +4250,10 @@ export default function PatientDetailPage() {
                         />
 
                         {/* Consommables (details) */}
-                        {selectedDrawerProtocol?.consommables.length > 0 && (
+                        {(selectedDrawerProtocol?.consommables?.length ?? 0) > 0 && (
                           <details className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[11px]">
                             <summary className="cursor-pointer select-none px-2.5 py-1.5 font-medium text-[var(--ds-text)]">
-                              Consommables ({selectedDrawerProtocol.consommables.length})
+                              Consommables ({selectedDrawerProtocol?.consommables?.length ?? 0})
                             </summary>
                             <ul className="space-y-1 border-t border-[var(--ds-primary-border)] px-2.5 py-1.5">
                               {selectedDrawerProtocol.consommables.map((c) => {
