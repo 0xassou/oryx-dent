@@ -4193,35 +4193,41 @@ export default function PatientDetailPage() {
 
           {/* POST-IT ONGLETS GAUCHE */}
           {selectedTooth !== null && (
-            <div className="absolute left-0 top-[35%] z-[60] flex -translate-x-full flex-col gap-1">
-                {([
-                  { id: "clinique", label: "Clinique", bg: "bg-[var(--ds-primary)]", text: "text-white" },
-                  { id: "diagnostic", label: "Diagnostic", bg: "bg-amber-400", text: "text-amber-900" },
-                  { id: "photos", label: "Photos", bg: "bg-emerald-400", text: "text-emerald-900" },
-                  { id: "rapport", label: "Rapport", bg: "bg-sky-400", text: "text-sky-900" },
-                ] as const).map((tab) => {
-                  const active = cockpitPage === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setCockpitPage(tab.id)}
-                      className={[
-                        "flex items-center justify-center rounded-l-lg shadow-md transition-all",
-                        active ? "w-8 shadow-lg" : "w-7 opacity-80 hover:opacity-100",
-                        tab.bg,
-                        tab.text,
-                      ].join(" ")}
-                      style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
-                      title={tab.label}
-                    >
-                      <span className="py-2 text-[10px] font-bold uppercase tracking-wide">
-                        {tab.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="absolute left-0 top-[35%] z-[60] flex -translate-x-full flex-col gap-2">
+              {([
+                { id: "clinique", label: "Clinique", bg: "bg-[var(--ds-primary)]", text: "text-white" },
+                { id: "diagnostic", label: "Diagnostic", bg: "bg-amber-400", text: "text-amber-900" },
+                { id: "photos", label: "Photos", bg: "bg-emerald-400", text: "text-emerald-900" },
+                { id: "rapport", label: "Rapport", bg: "bg-sky-400", text: "text-sky-900" },
+              ] as const).map((tab) => {
+                const active = cockpitPage === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setCockpitPage(tab.id)}
+                    className={[
+                      "flex items-center justify-center transition-all duration-200",
+                      active ? "w-[34px] opacity-100 shadow-lg" : "w-[26px] opacity-50 hover:opacity-75",
+                      tab.bg,
+                      tab.text,
+                    ].join(" ")}
+                    style={{
+                      clipPath: "polygon(12px 0%, 100% 0%, 100% 100%, 12px 100%, 0% 50%)",
+                      height: "52px",
+                      writingMode: "vertical-rl",
+                      transform: "rotate(180deg)",
+                      textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+                    }}
+                    title={tab.label}
+                  >
+                    <span className="text-[9px] font-bold uppercase tracking-[0.08em]">
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
 
           {/* CORPS SCROLLABLE — 2 COLONNES */}
