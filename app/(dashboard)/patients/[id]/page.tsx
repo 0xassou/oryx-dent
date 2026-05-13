@@ -962,7 +962,7 @@ function protocolOptionsForTab(
     return protocols.filter(
       (p) =>
         p.categorie === "Endodontie" ||
-        /canalaire|pulp/i.test(p.nom),
+        (p.categorie !== "Soins Conservateurs" && /canalaire/i.test(p.nom)),
     );
   }
   if (tab === "Prothèse") {
@@ -2476,9 +2476,18 @@ export default function PatientDetailPage() {
         "Absente",
         "Saine",
       ];
-      const catFinal: PatientFicheTimelineItem["categorie"] = allowed.includes(cat)
-        ? cat
-        : "Autres";
+      const catMap: Record<string, PatientFicheTimelineItem["categorie"]> = {
+        "Soins Conservateurs": "Soins",
+        "Prévention & Bilan": "Soins",
+        Endodontie: "Endodontie",
+        Prothèse: "Prothèse",
+        "Chirurgie & Implantologie": "Chirurgie",
+        Orthodontie: "Orthopédie",
+        Implantologie: "Chirurgie",
+        Parodontologie: "Parodontologie",
+      };
+      const catFinal: PatientFicheTimelineItem["categorie"] =
+        catMap[row.category] ?? (allowed.includes(cat) ? cat : "Autres");
       const cout = ACTES_PRIX_DEVIS[row.acte];
       const fin = finances.find(
         (f) => f.acteName.toLowerCase() === row.acte.toLowerCase(),
@@ -2488,9 +2497,7 @@ export default function PatientDetailPage() {
           ? undefined
           : fin.resteACharge <= 0
             ? "paye"
-            : fin.resteACharge < fin.montantTotal
-              ? "partiel"
-              : "attente"
+            : "attente"
         : undefined;
       return {
         id: `acte-${row.tooth}-${idx}`,
