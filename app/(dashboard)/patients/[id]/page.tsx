@@ -3961,12 +3961,11 @@ export default function PatientDetailPage() {
           aria-modal="true"
           aria-labelledby="cockpit-title"
           className={[
-            "fixed right-4 top-[5vh] z-50 flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out",
+            "fixed right-0 top-0 z-50 flex h-full w-full max-w-[780px] flex-col overflow-hidden border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out md:w-[780px]",
             selectedTooth !== null
               ? "translate-x-0 opacity-100"
-              : "pointer-events-none translate-x-[110%] opacity-0",
+              : "pointer-events-none translate-x-full opacity-0",
           ].join(" ")}
-          style={{ maxHeight: "90vh" }}
         >
           {/* HEADER */}
           <header className="shrink-0 border-b border-[var(--ds-primary-border)] bg-gradient-to-r from-[var(--ds-primary-soft)] to-[var(--ds-surface)] px-5 py-3">
@@ -4077,7 +4076,7 @@ export default function PatientDetailPage() {
             {selectedTooth !== null && (
               <>
                 {/* GRILLE 2 COLONNES */}
-                <div className="grid grid-cols-[1.2fr_1fr] gap-3">
+                <div className="grid grid-cols-[1.1fr_0.9fr] gap-4">
                   
                   {/* COLONNE GAUCHE — Diagnostic & Acte */}
                   <div className="space-y-3">
