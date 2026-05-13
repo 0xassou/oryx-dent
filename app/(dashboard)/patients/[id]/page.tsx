@@ -615,6 +615,12 @@ type PatientTreatmentRow = {
   profondeur_sondage_mm?: number;
   saignement_sondage?: boolean;
   recession_gingivale_mm?: number;
+  /** Diagnostic (cockpit) */
+  diagnostic?: string;
+  eva_douleur?: number;
+  observations?: string;
+  antecedents_dent?: string;
+  plan_prevu?: string;
 };
 
 type ToothFace = "M" | "D" | "V" | "L" | "O";
@@ -1598,6 +1604,17 @@ export default function PatientDetailPage() {
   const [saignementSondage, setSaignementSondage] = useState(false);
   const [recessionGingivaleMm, setRecessionGingivaleMm] = useState("");
 
+  // Pages cockpit post-it
+  type CockpitPage = "clinique" | "diagnostic" | "photos" | "rapport";
+  const [cockpitPage, setCockpitPage] = useState<CockpitPage>("clinique");
+
+  // Champs diagnostic
+  const [diagnostic, setDiagnostic] = useState("");
+  const [evaDouleur, setEvaDouleur] = useState<number | null>(null);
+  const [observations, setObservations] = useState("");
+  const [antecedentsDent, setAntecedentsDent] = useState("");
+  const [planPrevu, setPlanPrevu] = useState("");
+
   const [actMaterial, setActMaterial] = useState<string>("");
   const [actFaces, setActFaces] = useState<ToothFace[]>([]);
   const [actPraticien, setActPraticien] = useState<string>("");
@@ -1635,6 +1652,7 @@ export default function PatientDetailPage() {
   const [cockpitRadiosLoading, setCockpitRadiosLoading] = useState(false);
   const [cockpitRadiosLightbox, setCockpitRadiosLightbox] = useState<PatientRadio | null>(null);
   const cockpitFileInputRef = useRef<HTMLInputElement>(null);
+  const cockpitPhotoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Charger les radios du patient (pour le cockpit et synchro avec RadiologiesSection)
   const loadPatientRadios = useCallback(async () => {
@@ -1699,6 +1717,60 @@ export default function PatientDetailPage() {
         } else {
           setToast({ type: "success", message: "Radio ajoutée." });
           // Recharge pour avoir l'ID serveur et cohérence
+          void loadPatientRadios();
+        }
+      };
+      reader.onerror = () => {
+        setToast({ type: "error", message: "Erreur de lecture du fichier." });
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setToast({ type: "error", message: "Erreur lors de l'upload." });
+    }
+  }, [id, selectedTooth, loadPatientRadios]);
+
+  // Upload photo clinique depuis le cockpit
+  const handleCockpitPhotoUpload = useCallback(async (file: File) => {
+    if (!id || selectedTooth === null) return;
+    if (!file.type.startsWith("image/")) {
+      setToast({ type: "error", message: "Format non supporté (images uniquement)." });
+      return;
+    }
+    if (file.size > RADIO_MAX_BYTES) {
+      setToast({ type: "error", message: "Fichier trop volumineux (max 10 Mo)." });
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        const today = new Date().toISOString().slice(0, 10);
+
+        const localPhoto = addRadioForPatient(id, {
+          url: dataUrl,
+          mimeType: file.type,
+          fileName: file.name,
+          date: today,
+          tooth: String(selectedTooth),
+          note: "photo-clinique",
+        });
+        setPatientRadios((prev) => [localPhoto, ...prev]);
+
+        const res = await createRadioAction(id, {
+          url: dataUrl,
+          mimeType: file.type,
+          fileName: file.name,
+          date: today,
+          tooth: String(selectedTooth),
+          note: "photo-clinique",
+        });
+
+        if (!res.ok) {
+          setToast({ type: "error", message: `Erreur upload : ${res.error}` });
+          void loadPatientRadios();
+        } else {
+          setToast({ type: "success", message: "Photo ajoutée." });
           void loadPatientRadios();
         }
       };
@@ -2126,6 +2198,11 @@ export default function PatientDetailPage() {
               recessionGingivaleMm.trim() === "" || Number.isNaN(rg)
                 ? undefined
                 : rg,
+            diagnostic: diagnostic.trim() || undefined,
+            eva_douleur: evaDouleur ?? undefined,
+            observations: observations.trim() || undefined,
+            antecedents_dent: antecedentsDent.trim() || undefined,
+            plan_prevu: planPrevu.trim() || undefined,
           });
 
           return [row, ...withState];
@@ -2503,6 +2580,16 @@ export default function PatientDetailPage() {
           ? String(state.recession_gingivale_mm)
           : "",
       );
+
+      // Champs diagnostic
+      setDiagnostic(state?.diagnostic ?? "");
+      setEvaDouleur(state?.eva_douleur ?? null);
+      setObservations(state?.observations ?? "");
+      setAntecedentsDent(state?.antecedents_dent ?? "");
+      setPlanPrevu(state?.plan_prevu ?? "");
+
+      // Reset page cockpit à l'ouverture
+      setCockpitPage("clinique");
 
       if (existingTreatment) {
         setToothNotes(existingTreatment.notes || "");
@@ -4105,11 +4192,47 @@ export default function PatientDetailPage() {
           </header>
 
           {/* CORPS SCROLLABLE — 2 COLONNES */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            {/* POST-IT ONGLETS DROITS */}
+            {selectedTooth !== null && (
+              <div className="absolute right-0 top-[20%] z-10 flex translate-x-full flex-col gap-1">
+                {([
+                  { id: "clinique", label: "Clinique", bg: "bg-[var(--ds-primary)]", text: "text-white" },
+                  { id: "diagnostic", label: "Diagnostic", bg: "bg-amber-400", text: "text-amber-900" },
+                  { id: "photos", label: "Photos", bg: "bg-emerald-400", text: "text-emerald-900" },
+                  { id: "rapport", label: "Rapport", bg: "bg-sky-400", text: "text-sky-900" },
+                ] as const).map((tab) => {
+                  const active = cockpitPage === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setCockpitPage(tab.id)}
+                      className={[
+                        "flex items-center justify-center rounded-r-lg shadow-md transition-all",
+                        active ? "w-8 shadow-lg" : "w-7 opacity-80 hover:opacity-100",
+                        tab.bg,
+                        tab.text,
+                      ].join(" ")}
+                      style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+                      title={tab.label}
+                    >
+                      <span className="py-2 text-[10px] font-bold uppercase tracking-wide">
+                        {tab.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {selectedTooth !== null && (
               <>
-                {/* GRILLE 2 COLONNES */}
-                <div className="grid grid-cols-[1.1fr_0.9fr] gap-4">
+                {/* PAGE CLINIQUE */}
+                {cockpitPage === "clinique" && (
+                  <>
+                    {/* GRILLE 2 COLONNES */}
+                    <div className="grid grid-cols-[1.1fr_0.9fr] gap-4">
                   
                   {/* COLONNE GAUCHE — Diagnostic & Acte */}
                   <div className="space-y-3">
@@ -4810,7 +4933,349 @@ export default function PatientDetailPage() {
                 </div>
               </>
             )}
-          </div>
+
+            {/* PAGE DIAGNOSTIC */}
+            {cockpitPage === "diagnostic" && (
+              <>
+                <div className="grid grid-cols-[1.1fr_0.9fr] gap-4">
+                  {/* COLONNE GAUCHE */}
+                  <div className="space-y-3">
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Diagnostic principal
+                      </h4>
+                      <textarea
+                        value={diagnostic}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setDiagnostic(v);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              diagnostic: v.trim() || undefined,
+                            }),
+                          );
+                        }}
+                        rows={3}
+                        placeholder="Ex: Pulpite irréversible, Carie profonde..."
+                        className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                      />
+                    </section>
+
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        EVA — Niveau de douleur
+                      </h4>
+                      <div className="flex flex-wrap gap-1">
+                        {Array.from({ length: 11 }, (_, i) => i).map((n) => {
+                          const active = evaDouleur === n;
+                          const bgColor =
+                            n <= 2
+                              ? "bg-emerald-100 text-emerald-700"
+                              : n <= 4
+                                ? "bg-yellow-100 text-yellow-700"
+                                : n <= 6
+                                  ? "bg-orange-100 text-orange-700"
+                                  : n <= 8
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-red-600 text-white";
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => {
+                                setEvaDouleur(n);
+                                setAllTreatments((prev) =>
+                                  upsertToothStateRow(prev, selectedTooth, {
+                                    eva_douleur: n,
+                                  }),
+                                );
+                              }}
+                              className={[
+                                "h-8 w-8 rounded-md text-[11px] font-medium transition-all",
+                                bgColor,
+                                active ? "ring-2 ring-offset-1 ring-current font-bold" : "",
+                              ].join(" ")}
+                            >
+                              {n}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Observations cliniques
+                      </h4>
+                      <textarea
+                        value={observations}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setObservations(v);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              observations: v.trim() || undefined,
+                            }),
+                          );
+                        }}
+                        rows={3}
+                        placeholder="Examens complémentaires, signes cliniques..."
+                        className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                      />
+                    </section>
+                  </div>
+
+                  {/* COLONNE DROITE */}
+                  <div className="space-y-3">
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Antécédents liés à cette dent
+                      </h4>
+                      <textarea
+                        value={antecedentsDent}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setAntecedentsDent(v);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              antecedents_dent: v.trim() || undefined,
+                            }),
+                          );
+                        }}
+                        rows={3}
+                        placeholder="Traitement précédent, allergie anesthésique..."
+                        className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                      />
+                    </section>
+
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Plan de traitement prévu
+                      </h4>
+                      <textarea
+                        value={planPrevu}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setPlanPrevu(v);
+                          setAllTreatments((prev) =>
+                            upsertToothStateRow(prev, selectedTooth, {
+                              plan_prevu: v.trim() || undefined,
+                            }),
+                          );
+                        }}
+                        rows={3}
+                        placeholder="Étapes prévues pour cette dent..."
+                        className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                      />
+                    </section>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setToast({ type: "success", message: "Diagnostic sauvegardé" })}
+                        className="h-8 rounded-lg bg-[var(--ds-primary)] px-3 text-[11px] font-medium text-white hover:bg-[var(--ds-primary)]/90"
+                      >
+                        Sauvegarder
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* PAGE PHOTOS */}
+            {cockpitPage === "photos" && (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[12px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                    Photos cliniques · Dent {selectedTooth}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => cockpitPhotoFileInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1 text-[10px] font-medium text-[var(--ds-primary)] hover:bg-[var(--ds-primary-soft)]"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Ajouter une photo
+                  </button>
+                  <input
+                    ref={cockpitPhotoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleCockpitPhotoUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+                {(() => {
+                  const photos = patientRadios.filter(
+                    (r) => r.tooth === String(selectedTooth) && r.note === "photo-clinique"
+                  );
+                  if (photos.length === 0) {
+                    return (
+                      <p className="rounded-lg border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-2 py-8 text-center text-[11px] text-[var(--ds-text-muted)]">
+                        Aucune photo pour cette dent
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="grid grid-cols-3 gap-2">
+                      {photos.map((photo) => (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          onClick={() => setCockpitRadiosLightbox(photo)}
+                          className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] hover:ring-2 hover:ring-[var(--ds-primary)]/40"
+                        >
+                          <img src={photo.url} alt={photo.fileName} className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </section>
+            )}
+
+            {/* PAGE RAPPORT */}
+            {cockpitPage === "rapport" && (
+              <section className="space-y-4">
+                <div id="rapport-impression" className="rounded-xl border border-[var(--ds-primary-border)] bg-white p-4 text-[var(--ds-text)]">
+                  {/* En-tête */}
+                  <div className="mb-4 border-b border-[var(--ds-primary-border)] pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h2 className="text-[14px] font-bold">{String(getSettings().nomCabinet || "Cabinet Dentaire")}</h2>
+                        <p className="text-[10px] text-[var(--ds-text-muted)]">Rapport clinique</p>
+                      </div>
+                      <div className="text-right text-[10px] text-[var(--ds-text-muted)]">
+                        <p>{new Date().toLocaleDateString("fr-FR")}</p>
+                        <p>Dent {selectedTooth}</p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[12px] font-semibold">{displayFullName}</p>
+                  </div>
+
+                  {/* Contenu */}
+                  <div className="space-y-2 text-[11px]">
+                    <div>
+                      <span className="font-semibold">Diagnostic :</span>
+                      <p className="mt-0.5 text-[var(--ds-text-muted)]">{diagnostic || "—"}</p>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">EVA douleur :</span>
+                      <div className="mt-1 flex items-center gap-2">
+                        {evaDouleur !== null ? (
+                          <>
+                            <div className="h-2 w-24 overflow-hidden rounded-full bg-gray-200">
+                              <div
+                                className={[
+                                  "h-full rounded-full",
+                                  evaDouleur <= 2
+                                    ? "bg-emerald-500"
+                                    : evaDouleur <= 4
+                                      ? "bg-yellow-500"
+                                      : evaDouleur <= 6
+                                        ? "bg-orange-500"
+                                        : evaDouleur <= 8
+                                          ? "bg-red-400"
+                                          : "bg-red-600",
+                                ].join(" ")}
+                                style={{ width: `${(evaDouleur / 10) * 100}%` }}
+                              />
+                            </div>
+                            <span className="font-mono font-bold">{evaDouleur}/10</span>
+                          </>
+                        ) : (
+                          <span className="text-[var(--ds-text-muted)]">—</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-semibold">État clinique :</span>
+                        <p className="text-[var(--ds-text-muted)]">
+                          Mobilité: {mobilite === "stable" ? "Stable" : mobilite === "mobile" ? "Mobile" : "Très mobile"}
+                          <br />
+                          Sensibilité: {sensibilite.join(", ") || "Aucune"}
+                          <br />
+                          Vitalité: {vitalite === "vivante" ? "Vivante" : vitalite === "depulpee" ? "Dépulpée" : "Incertaine"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="font-semibold">État parodontal :</span>
+                        <p className="text-[var(--ds-text-muted)]">
+                          Sondage: {profondeurSondageMm || "—"} mm
+                          <br />
+                          Saignement: {saignementSondage ? "Oui" : "Non"}
+                          <br />
+                          Récession: {recessionGingivaleMm || "—"} mm
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Actes réalisés :</span>
+                      {(() => {
+                        const acts = allTreatments.filter(
+                          (t) => t.tooth === selectedTooth && t.kind !== "state"
+                        );
+                        if (acts.length === 0) {
+                          return <p className="text-[var(--ds-text-muted)]">Aucun acte enregistré</p>;
+                        }
+                        return (
+                          <ul className="mt-0.5 list-disc pl-4 text-[var(--ds-text-muted)]">
+                            {acts.slice(0, 5).map((a, i) => (
+                              <li key={i}>{a.acte} ({formatClinicalDateFr(a.date)})</li>
+                            ))}
+                          </ul>
+                        );
+                      })()}
+                    </div>
+
+                    <div>
+                      <span className="font-semibold">Observations :</span>
+                      <p className="mt-0.5 text-[var(--ds-text-muted)]">{observations || "—"}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-semibold">Prochaine étape :</span>
+                        <p className="text-[var(--ds-text-muted)]">{prochaineEtape || "—"}</p>
+                        {controlePrevu && (
+                          <p className="text-[10px] text-[var(--ds-text-muted)]">Contrôle: {controlePrevu}</p>
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Praticien :</span>
+                        <p className="text-[var(--ds-text-muted)]">{actPraticien || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] py-2 text-[12px] font-medium text-[var(--ds-text)] hover:bg-[var(--ds-primary-soft)]"
+                >
+                  🖨️ Imprimer ce rapport
+                </button>
+
+                <style>{`@media print {
+                  body * { visibility: hidden !important; }
+                  #rapport-impression, #rapport-impression * { visibility: visible !important; }
+                  #rapport-impression { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
+                }`}</style>
+              </section>
+            )}
+          </>
+        )}
+        </div>
 
           {/* FOOTER FIXE */}
           <footer className="shrink-0 space-y-1.5 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-4 py-3 backdrop-blur-sm">
