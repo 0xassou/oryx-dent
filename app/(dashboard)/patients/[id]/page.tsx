@@ -4208,18 +4208,18 @@ export default function PatientDetailPage() {
                     onClick={() => setCockpitPage(tab.id)}
                     className={[
                       "flex items-center justify-center transition-all duration-200",
-                      active ? "w-[70px] opacity-100 shadow-lg" : "w-[60px] opacity-45 hover:opacity-75",
+                      active ? "w-[90px] opacity-100 shadow-lg" : "w-[80px] opacity-45 hover:opacity-75",
                       tab.bg,
                       tab.text,
                     ].join(" ")}
                     style={{
-                      clipPath: "polygon(0% 0%, calc(100% - 12px) 0%, 100% 50%, calc(100% - 12px) 100%, 0% 100%)",
+                      clipPath: "polygon(12px 0%, 100% 0%, 100% 100%, 12px 100%, 0% 50%)",
                       height: "36px",
                       textShadow: "0 1px 2px rgba(0,0,0,0.3)",
                     }}
                     title={tab.label}
                   >
-                    <span className="text-[9px] font-bold uppercase tracking-[0.08em]">
+                    <span className="text-[8px] font-bold uppercase tracking-[0.08em]">
                       {tab.label}
                     </span>
                   </button>
