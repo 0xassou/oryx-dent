@@ -948,9 +948,14 @@ function protocolOptionsForTab(
   protocols: ProtocolForSettings[],
   tab: CockpitTab,
 ): ProtocolForSettings[] {
+  if (tab === "Saine") {
+    return protocols.filter((p) => p.categorie === "Prévention & Bilan");
+  }
   if (tab === "Soins") {
     return protocols.filter(
-      (p) => p.categorie === "Omnipratique" || p.categorie === "Soins",
+      (p) =>
+        p.categorie === "Soins Conservateurs" ||
+        p.categorie === "Prévention & Bilan",
     );
   }
   if (tab === "Endodontie") {
@@ -964,15 +969,30 @@ function protocolOptionsForTab(
     return protocols.filter((p) => p.categorie === "Prothèse");
   }
   if (tab === "Chirurgie") {
-    return protocols.filter(
-      (p) => p.categorie === "Chirurgie" || p.categorie === "Implantologie",
-    );
-  }
-  // Saine : consultation, bilan, détartrage — on expose tout le catalogue (actes préventifs / bilan)
-  if (tab === "Saine") {
-    return protocols;
+    return protocols.filter((p) => p.categorie === "Chirurgie & Implantologie");
   }
   return protocols;
+}
+
+/** Bordure gauche cockpit — « Actes enregistrés » (aligné sur catégories seed + alias virtuels). */
+function getCategoryColor(category: string): string {
+  const c = category.trim();
+  if (c === "Soins Conservateurs" || c === "Soins") {
+    return "border-l-2 border-l-[#7c3aed]";
+  }
+  if (c === "Endodontie") {
+    return "border-l-2 border-l-[#7c3aed]";
+  }
+  if (c === "Prothèse") {
+    return "border-l-2 border-l-[#06b6d4]";
+  }
+  if (c === "Chirurgie & Implantologie" || c === "Chirurgie") {
+    return "border-l-2 border-l-[#f97316]";
+  }
+  if (c === "Prévention & Bilan") {
+    return "border-l-2 border-l-[#10b981]";
+  }
+  return "border-l-2 border-l-slate-300";
 }
 
 /** Acte sans entrée catalogue : id stable côté UI, résolu en UUID DB sur le serveur. */
@@ -4485,7 +4505,13 @@ export default function PatientDetailPage() {
                         return (
                           <ul className="space-y-1.5">
                             {toothHistory.slice(0, 5).map((t, i) => (
-                              <li key={i} className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5">
+                              <li
+                                key={i}
+                                className={[
+                                  "rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5",
+                                  getCategoryColor(t.category),
+                                ].join(" ")}
+                              >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
                                     <div className="truncate text-[11px] font-semibold text-[var(--ds-text)]">{t.acte}</div>
