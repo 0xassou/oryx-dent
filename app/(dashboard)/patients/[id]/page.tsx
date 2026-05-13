@@ -4081,7 +4081,7 @@ export default function PatientDetailPage() {
           aria-modal="true"
           aria-labelledby="cockpit-title"
           className={[
-            "fixed right-0 top-0 z-50 flex h-full w-full max-w-[780px] flex-col overflow-hidden border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out md:w-[780px]",
+            "fixed right-0 top-0 z-50 flex h-full w-full max-w-[780px] flex-col border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out md:w-[780px]",
             selectedTooth !== null
               ? "translate-x-0 opacity-100"
               : "pointer-events-none translate-x-full opacity-0",
@@ -4192,10 +4192,10 @@ export default function PatientDetailPage() {
           </header>
 
           {/* CORPS SCROLLABLE — 2 COLONNES */}
-          <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div className="relative min-h-0 flex-1 overflow-hidden px-4 py-3">
             {/* POST-IT ONGLETS DROITS */}
             {selectedTooth !== null && (
-              <div className="absolute right-0 top-[20%] z-10 flex translate-x-full flex-col gap-1">
+              <div className="absolute right-0 top-[30%] z-10 flex translate-x-[calc(100%-2px)] flex-col gap-1">
                 {([
                   { id: "clinique", label: "Clinique", bg: "bg-[var(--ds-primary)]", text: "text-white" },
                   { id: "diagnostic", label: "Diagnostic", bg: "bg-amber-400", text: "text-amber-900" },
