@@ -4191,11 +4191,9 @@ export default function PatientDetailPage() {
             )}
           </header>
 
-          {/* CORPS SCROLLABLE — 2 COLONNES */}
-          <div className="relative min-h-0 flex-1 overflow-hidden px-4 py-3">
-            {/* POST-IT ONGLETS GAUCHE */}
-            {selectedTooth !== null && (
-              <div className="absolute left-0 top-[30%] z-10 flex -translate-x-full flex-col gap-1">
+          {/* POST-IT ONGLETS GAUCHE */}
+          {selectedTooth !== null && (
+            <div className="absolute left-0 top-[35%] z-[60] flex -translate-x-full flex-col gap-1">
                 {([
                   { id: "clinique", label: "Clinique", bg: "bg-[var(--ds-primary)]", text: "text-white" },
                   { id: "diagnostic", label: "Diagnostic", bg: "bg-amber-400", text: "text-amber-900" },
@@ -4224,8 +4222,10 @@ export default function PatientDetailPage() {
                   );
                 })}
               </div>
-            )}
+          )}
 
+          {/* CORPS SCROLLABLE — 2 COLONNES */}
+          <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {selectedTooth !== null && (
               <>
                 {/* PAGE CLINIQUE */}
