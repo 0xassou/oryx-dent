@@ -4091,7 +4091,7 @@ export default function PatientDetailPage() {
                         <div className="flex items-center gap-2">
                           <span className="w-16 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]">Mobilité</span>
                           <div className="flex flex-wrap gap-1">
-                            {(["stable", "grade1", "grade2", "grade3"] as const).map((g) => (
+                            {(["stable", "mobile", "tres_mobile"] as const).map((g) => (
                               <button
                                 key={g}
                                 type="button"
@@ -4106,7 +4106,7 @@ export default function PatientDetailPage() {
                                     : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
                                 ].join(" ")}
                               >
-                                {g === "stable" ? "Stable" : g === "grade1" ? "Grade I" : g === "grade2" ? "Grade II" : "Grade III"}
+                                {g === "stable" ? "Stable" : g === "mobile" ? "Mobile" : "Très mobile"}
                               </button>
                             ))}
                           </div>
