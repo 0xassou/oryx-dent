@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Calendar,
+  ClipboardList,
   CreditCard,
   DownloadCloud,
   MoreVertical,
@@ -609,6 +611,10 @@ type PatientTreatmentRow = {
   prochaine_etape?: string | null;
   controle_prevu?: string | null; // yyyy-mm-dd
   seances_notes?: ClinicalSessionNote[];
+  /** Parodontologie (cockpit) */
+  profondeur_sondage_mm?: number;
+  saignement_sondage?: boolean;
+  recession_gingivale_mm?: number;
 };
 
 type ToothFace = "M" | "D" | "V" | "L" | "O";
@@ -1588,6 +1594,9 @@ export default function PatientDetailPage() {
   const [prochaineEtape, setProchaineEtape] = useState<string>("");
   const [seancesNotes, setSeancesNotes] = useState<ClinicalSessionNote[]>([]);
   const [newSeanceNote, setNewSeanceNote] = useState("");
+  const [profondeurSondageMm, setProfondeurSondageMm] = useState("");
+  const [saignementSondage, setSaignementSondage] = useState(false);
+  const [recessionGingivaleMm, setRecessionGingivaleMm] = useState("");
 
   const [actMaterial, setActMaterial] = useState<string>("");
   const [actFaces, setActFaces] = useState<ToothFace[]>([]);
@@ -2097,6 +2106,8 @@ export default function PatientDetailPage() {
             praticien: actPraticien.trim() || undefined,
           };
 
+          const pd = parseFloat(String(profondeurSondageMm).replace(",", "."));
+          const rg = parseFloat(String(recessionGingivaleMm).replace(",", "."));
           const withState = upsertToothStateRow(prev, toothNum, {
             mobilite,
             sensibilite,
@@ -2106,6 +2117,15 @@ export default function PatientDetailPage() {
               : null,
             controle_prevu: controlePrevu.trim() ? controlePrevu.trim() : null,
             seances_notes: seancesNotes,
+            profondeur_sondage_mm:
+              profondeurSondageMm.trim() === "" || Number.isNaN(pd)
+                ? undefined
+                : pd,
+            saignement_sondage: saignementSondage,
+            recession_gingivale_mm:
+              recessionGingivaleMm.trim() === "" || Number.isNaN(rg)
+                ? undefined
+                : rg,
           });
 
           return [row, ...withState];
@@ -2470,6 +2490,19 @@ export default function PatientDetailPage() {
       setControlePrevu(state?.controle_prevu ?? "");
       setProchaineEtape(state?.prochaine_etape ?? "");
       setSeancesNotes(state?.seances_notes ?? []);
+      setProfondeurSondageMm(
+        state?.profondeur_sondage_mm != null &&
+          !Number.isNaN(state.profondeur_sondage_mm)
+          ? String(state.profondeur_sondage_mm)
+          : "",
+      );
+      setSaignementSondage(Boolean(state?.saignement_sondage));
+      setRecessionGingivaleMm(
+        state?.recession_gingivale_mm != null &&
+          !Number.isNaN(state.recession_gingivale_mm)
+          ? String(state.recession_gingivale_mm)
+          : "",
+      );
 
       if (existingTreatment) {
         setToothNotes(existingTreatment.notes || "");
@@ -4187,7 +4220,7 @@ export default function PatientDetailPage() {
                           id="cockpit-protocol-select"
                           value={drawerProtocolId}
                           onChange={(e) => setDrawerProtocolId(e.target.value)}
-                          className="h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
+                          className="h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 text-xs text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
                         >
                           <option value="">— Sélectionner un protocole —</option>
                           {drawerProtocolsGrouped.map(({ category, protocols }) => (
@@ -4205,14 +4238,14 @@ export default function PatientDetailPage() {
                             id="cockpit-material"
                             value={actMaterial}
                             onChange={(e) => setActMaterial(e.target.value)}
-                            className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
+                            className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 text-xs text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
                           >
                             <option value="">Matériau</option>
                             {(["Composite", "Amalgame", "Zircone", "Céramique", "IRM", "Cavit", "CVI", "Résine", "Or", "Autre"] as const).map((m) => (
                               <option key={m} value={m}>{m}</option>
                             ))}
                           </select>
-                          <div className="flex items-center gap-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2">
+                          <div className="flex items-center gap-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2">
                             <span className="text-[10px] text-[var(--ds-text-muted)]">Faces</span>
                             <ToothFacesPicker value={actFaces} onChange={setActFaces} ariaLabel={`Faces acte dent ${selectedTooth}`} />
                           </div>
@@ -4225,7 +4258,7 @@ export default function PatientDetailPage() {
                             value={actPraticien}
                             onChange={(e) => setActPraticien(e.target.value)}
                             placeholder="Praticien"
-                            className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                            className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
                           />
                           <div className="relative">
                             <input
@@ -4234,7 +4267,7 @@ export default function PatientDetailPage() {
                               value={drawerMontant}
                               onChange={(e) => setDrawerMontant(e.target.value)}
                               placeholder="Montant"
-                              className="h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 pr-8 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                              className="h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 pr-8 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
                             />
                             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--ds-text-muted)]">DA</span>
                           </div>
@@ -4246,12 +4279,12 @@ export default function PatientDetailPage() {
                           onChange={(e) => setToothNotes(e.target.value)}
                           rows={2}
                           placeholder="Note clinique..."
-                          className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                          className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
                         />
 
                         {/* Consommables (details) */}
                         {(selectedDrawerProtocol?.consommables?.length ?? 0) > 0 && (
-                          <details className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[11px]">
+                          <details className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] text-[11px]">
                             <summary className="cursor-pointer select-none px-2.5 py-1.5 font-medium text-[var(--ds-text)]">
                               Consommables ({selectedDrawerProtocol?.consommables?.length ?? 0})
                             </summary>
@@ -4328,6 +4361,106 @@ export default function PatientDetailPage() {
                       })()}
                     </section>
 
+                    {/* ÉTAT PARODONTAL */}
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        État parodontal
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <label className="w-28 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]" htmlFor="cockpit-pd-mm">
+                            Sondage (mm)
+                          </label>
+                          <input
+                            id="cockpit-pd-mm"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step={0.5}
+                            value={profondeurSondageMm}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setProfondeurSondageMm(v);
+                              const n = parseFloat(v.replace(",", "."));
+                              setAllTreatments((prev) =>
+                                upsertToothStateRow(prev, selectedTooth, {
+                                  profondeur_sondage_mm:
+                                    v.trim() === "" || Number.isNaN(n) ? undefined : n,
+                                }),
+                              );
+                            }}
+                            placeholder="—"
+                            className="h-7 min-w-0 flex-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 text-[11px] text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-medium text-[var(--ds-text-subtle)]">Saignement au sondage</span>
+                          <div className="flex rounded-md border border-[var(--ds-primary-border)] p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSaignementSondage(false);
+                                setAllTreatments((prev) =>
+                                  upsertToothStateRow(prev, selectedTooth, { saignement_sondage: false }),
+                                );
+                              }}
+                              className={[
+                                "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+                                !saignementSondage
+                                  ? "bg-[var(--ds-primary)] text-white"
+                                  : "text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+                              ].join(" ")}
+                            >
+                              Non
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSaignementSondage(true);
+                                setAllTreatments((prev) =>
+                                  upsertToothStateRow(prev, selectedTooth, { saignement_sondage: true }),
+                                );
+                              }}
+                              className={[
+                                "rounded px-2 py-0.5 text-[10px] font-medium transition-colors",
+                                saignementSondage
+                                  ? "bg-[var(--ds-primary)] text-white"
+                                  : "text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+                              ].join(" ")}
+                            >
+                              Oui
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="w-28 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]" htmlFor="cockpit-rg-mm">
+                            Récession (mm)
+                          </label>
+                          <input
+                            id="cockpit-rg-mm"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step={0.5}
+                            value={recessionGingivaleMm}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setRecessionGingivaleMm(v);
+                              const n = parseFloat(v.replace(",", "."));
+                              setAllTreatments((prev) =>
+                                upsertToothStateRow(prev, selectedTooth, {
+                                  recession_gingivale_mm:
+                                    v.trim() === "" || Number.isNaN(n) ? undefined : n,
+                                }),
+                              );
+                            }}
+                            placeholder="—"
+                            className="h-7 min-w-0 flex-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 text-[11px] text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
+                          />
+                        </div>
+                      </div>
+                    </section>
+
                     {/* RADIOS */}
                     <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -4396,13 +4529,91 @@ export default function PatientDetailPage() {
                   </div>
                 </div>
 
+                {/* Options dent — visibles entre grille et accordéons */}
+                <div className="mt-2 flex flex-col gap-2">
+                  {confirmAbsent === selectedTooth ? (
+                    <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-2">
+                      <p className="text-center text-[11px] font-medium text-red-700">
+                        Confirmer que la dent {selectedTooth} est absente ?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDentsStatus((prev) => ({ ...prev, [selectedTooth as ToothId]: "absente" }));
+                            setConfirmAbsent(null);
+                            setSelectedTooth(null);
+                          }}
+                          className="flex-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                        >
+                          Confirmer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmAbsent(null)}
+                          className="flex-1 rounded-md border border-[var(--ds-primary-border)] px-2 py-1 text-[11px] font-medium text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {dentsStatus[selectedTooth as ToothId] !== "absente" ? (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmAbsent(selectedTooth)}
+                          className="inline-flex items-center gap-1 rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] px-2.5 py-1 text-[10px] font-medium text-[var(--ds-text-muted)] hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <span className="font-mono text-[11px] leading-none">○</span>
+                          Absente
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDentsStatus((prev) => ({ ...prev, [selectedTooth as ToothId]: "healthy" }));
+                            setSelectedTooth(null);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100"
+                        >
+                          <span className="text-[11px] leading-none">✓</span>
+                          Restaurer
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setWatchedTeeth((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(selectedTooth)) next.delete(selectedTooth);
+                          else next.add(selectedTooth);
+                          if (id) void mergePatientUiStateAction(id, { watched_teeth: [...next] });
+                          return next;
+                        })}
+                        className={[
+                          "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] font-medium",
+                          watchedTeeth.has(selectedTooth)
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : "border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] text-[var(--ds-text-muted)] hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
+                        ].join(" ")}
+                      >
+                        <span className="font-mono text-[11px] leading-none">◎</span>
+                        {watchedTeeth.has(selectedTooth) ? "Surveillée" : "Surveiller"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* SECTIONS ACCORDÉON EN BAS */}
                 <div className="mt-3 space-y-2">
                   
                   {/* 📋 SUIVI & CONTRÔLE */}
                   <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
                     <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
-                      <span className="flex items-center gap-2">📋 Suivi & contrôle</span>
+                      <span className="flex items-center gap-2">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Suivi & contrôle
+                      </span>
                       <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
                     </summary>
                     <div className="space-y-2 border-t border-[var(--ds-primary-border)] px-3 py-2">
@@ -4466,7 +4677,10 @@ export default function PatientDetailPage() {
                   {/* 📝 NOTES PAR SÉANCE */}
                   <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
                     <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
-                      <span className="flex items-center gap-2">📝 Notes par séance</span>
+                      <span className="flex items-center gap-2">
+                        <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Notes par séance
+                      </span>
                       <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
                     </summary>
                     <div className="border-t border-[var(--ds-primary-border)] px-3 py-2">
@@ -4521,7 +4735,10 @@ export default function PatientDetailPage() {
                   {/* 🗓️ PLAN DE TRAITEMENT */}
                   <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
                     <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
-                      <span className="flex items-center gap-2">🗓️ Plan de traitement</span>
+                      <span className="flex items-center gap-2">
+                        <ClipboardList className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Plan de traitement
+                      </span>
                       <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
                     </summary>
                     <div className="border-t border-[var(--ds-primary-border)] px-3 py-2">
@@ -4588,84 +4805,6 @@ export default function PatientDetailPage() {
                           +
                         </button>
                       </div>
-                    </div>
-                  </details>
-
-                  {/* ⚙️ OPTIONS DENT */}
-                  <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
-                    <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
-                      <span className="flex items-center gap-2">⚙️ Options dent</span>
-                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-                    </summary>
-                    <div className="border-t border-[var(--ds-primary-border)] px-3 py-2">
-                      {confirmAbsent === selectedTooth ? (
-                        <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-2">
-                          <p className="text-center text-[11px] font-medium text-red-700">
-                            Confirmer que la dent {selectedTooth} est absente ?
-                          </p>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDentsStatus((prev) => ({ ...prev, [selectedTooth as ToothId]: "absente" }));
-                                setConfirmAbsent(null);
-                                setSelectedTooth(null);
-                              }}
-                              className="flex-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
-                            >
-                              Confirmer
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmAbsent(null)}
-                              className="flex-1 rounded-md border border-[var(--ds-primary-border)] px-2 py-1 text-[11px] font-medium text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]"
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          {dentsStatus[selectedTooth as ToothId] !== "absente" ? (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmAbsent(selectedTooth)}
-                              className="flex-1 rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5 text-[11px] font-medium text-[var(--ds-text-muted)] hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                            >
-                              ○ Marquer absente
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDentsStatus((prev) => ({ ...prev, [selectedTooth as ToothId]: "healthy" }));
-                                setSelectedTooth(null);
-                              }}
-                              className="flex-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
-                            >
-                              ✓ Restaurer
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setWatchedTeeth((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(selectedTooth)) next.delete(selectedTooth);
-                              else next.add(selectedTooth);
-                              if (id) void mergePatientUiStateAction(id, { watched_teeth: [...next] });
-                              return next;
-                            })}
-                            className={[
-                              "flex-1 rounded-md border px-2 py-1.5 text-[11px] font-medium",
-                              watchedTeeth.has(selectedTooth)
-                                ? "border-amber-200 bg-amber-50 text-amber-700"
-                                : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
-                            ].join(" ")}
-                          >
-                            ◎ {watchedTeeth.has(selectedTooth) ? "Surveillée" : "Surveiller"}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </details>
                 </div>
