@@ -3942,7 +3942,7 @@ export default function PatientDetailPage() {
         </div>
       )}
 
-      {/* ── Tiroir Cockpit — protocole + consommables (un seul panneau) ── */}
+      {/* ── TIROIR COCKPIT ── */}
       <>
         <div
           aria-hidden
@@ -3961,7 +3961,7 @@ export default function PatientDetailPage() {
           aria-modal="true"
           aria-labelledby="cockpit-title"
           className={[
-            "fixed right-4 top-[5vh] z-50 flex w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out",
+            "fixed right-4 top-[5vh] z-50 flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] shadow-2xl transition-all duration-300 ease-in-out",
             selectedTooth !== null
               ? "translate-x-0 opacity-100"
               : "pointer-events-none translate-x-[110%] opacity-0",
@@ -3969,36 +3969,31 @@ export default function PatientDetailPage() {
           style={{ maxHeight: "90vh" }}
         >
           {/* HEADER */}
-          <header className="shrink-0 border-b border-[var(--ds-primary-border)] bg-gradient-to-r from-[var(--ds-primary-soft)] to-[var(--ds-surface)] px-5 py-4">
+          <header className="shrink-0 border-b border-[var(--ds-primary-border)] bg-gradient-to-r from-[var(--ds-primary-soft)] to-[var(--ds-surface)] px-5 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--ds-primary)] text-sm font-bold text-white shadow-md shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)]">
                   {selectedTooth ?? "—"}
                 </div>
                 <div className="min-w-0">
-                  <h3
-                    id="cockpit-title"
-                    className="truncate text-[15px] font-bold text-[var(--ds-text)]"
-                  >
+                  <h3 id="cockpit-title" className="truncate text-[15px] font-bold text-[var(--ds-text)]">
                     🦷 Dent {selectedTooth ?? "—"} · {displayFullName}
                   </h3>
                   {selectedTooth !== null && dentsStatus[selectedTooth as ToothId] && (
                     <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--ds-text-muted)]">
                       <span>État actuel :</span>
-                      <span
-                        className={[
-                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
-                          dentsStatus[selectedTooth as ToothId] === "healthy"
-                            ? "bg-[color-mix(in_srgb,#10b981_16%,transparent)] text-[#10b981]"
-                            : dentsStatus[selectedTooth as ToothId] === "carie"
-                              ? "bg-[color-mix(in_srgb,#7c3aed_16%,transparent)] text-[#7c3aed]"
-                              : dentsStatus[selectedTooth as ToothId] === "chirurgie"
-                                ? "bg-[color-mix(in_srgb,#f97316_18%,transparent)] text-[#f97316]"
-                                : dentsStatus[selectedTooth as ToothId] === "absente"
-                                  ? "bg-[color-mix(in_srgb,#94a3b8_22%,transparent)] text-[#64748b]"
-                                  : "bg-[color-mix(in_srgb,#06b6d4_16%,transparent)] text-[#06b6d4]",
-                        ].join(" ")}
-                      >
+                      <span className={[
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                        dentsStatus[selectedTooth as ToothId] === "healthy"
+                          ? "bg-[color-mix(in_srgb,#10b981_16%,transparent)] text-[#10b981]"
+                          : dentsStatus[selectedTooth as ToothId] === "carie"
+                            ? "bg-[color-mix(in_srgb,#7c3aed_16%,transparent)] text-[#7c3aed]"
+                            : dentsStatus[selectedTooth as ToothId] === "chirurgie"
+                              ? "bg-[color-mix(in_srgb,#f97316_18%,transparent)] text-[#f97316]"
+                              : dentsStatus[selectedTooth as ToothId] === "absente"
+                                ? "bg-[color-mix(in_srgb,#94a3b8_22%,transparent)] text-[#64748b]"
+                                : "bg-[color-mix(in_srgb,#06b6d4_16%,transparent)] text-[#06b6d4]",
+                      ].join(" ")}>
                         ●{" "}
                         {dentsStatus[selectedTooth as ToothId] === "healthy" && "Saine"}
                         {dentsStatus[selectedTooth as ToothId] === "carie" && "Soins"}
@@ -4020,14 +4015,14 @@ export default function PatientDetailPage() {
               </button>
             </div>
 
-            {/* Onglets cockpit (catégories) */}
+            {/* Onglets cockpit */}
             {selectedTooth !== null && (
-              <div className="mt-3 grid grid-cols-5 gap-1.5">
+              <div className="mt-2.5 grid grid-cols-5 gap-1.5">
                 {(
                   [
                     ["Saine", "Saine"],
                     ["Soins", "Soins"],
-                    ["Endodontie", "Endodontie"],
+                    ["Endodontie", "Endod"],
                     ["Prothèse", "Prothèse"],
                     ["Chirurgie", "Chirurgie"],
                   ] as const
@@ -4039,7 +4034,6 @@ export default function PatientDetailPage() {
                       type="button"
                       onClick={() => {
                         setCockpitTab(key);
-                        // Le statut dentaire ne change QUE si l'utilisateur clique sur un onglet.
                         if (key === "Saine") {
                           setDentsStatus((prev) => ({
                             ...prev,
@@ -4061,12 +4055,10 @@ export default function PatientDetailPage() {
                             [selectedTooth as ToothId]: "carie",
                           }));
                         }
-
-                        // Reset du protocole sélectionné lors du changement d'onglet
                         setDrawerProtocolId("");
                       }}
                       className={[
-                        "rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+                        "rounded-lg border px-1.5 py-1 text-[11px] font-medium transition-colors",
                         active
                           ? COCKPIT_TAB_ACTIVE_CN[key]
                           : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
@@ -4080,892 +4072,604 @@ export default function PatientDetailPage() {
             )}
           </header>
 
-          {/* CORPS scrollable (overflow uniquement si dépassement) */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/* CORPS SCROLLABLE — 2 COLONNES */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {selectedTooth !== null && (
               <>
-                {/* SECTION 1 — ÉTAT CLINIQUE */}
-                <section className="space-y-2">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                    État clinique
-                  </h4>
-
-                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3 space-y-3">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
-                        Mobilité
-                      </p>
-                      <MobilitePills
-                        value={mobilite}
-                        onChange={(next) => {
-                          setMobilite(next);
-                          setAllTreatments((prev) =>
-                            upsertToothStateRow(prev, selectedTooth, {
-                              mobilite: next,
-                            }),
-                          );
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
-                        Sensibilité
-                      </p>
-                      <SensibilitePills
-                        value={sensibilite}
-                        onChange={(next) => {
-                          setSensibilite(next);
-                          setAllTreatments((prev) =>
-                            upsertToothStateRow(prev, selectedTooth, {
-                              sensibilite: next,
-                            }),
-                          );
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
-                        Vitalité
-                      </p>
-                      <VitalitePills
-                        value={vitalite}
-                        onChange={(next) => {
-                          setVitalite(next);
-                          setAllTreatments((prev) =>
-                            upsertToothStateRow(prev, selectedTooth, {
-                              vitalite: next,
-                            }),
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                <hr className="border-[var(--ds-primary-border)]" />
-
-                {/* Actes enregistrés */}
-                <section>
-                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                    Actes enregistrés
-                  </h4>
-                  {(() => {
-                    const toothHistory = allTreatments
-                      .filter(
-                      (t) => t.tooth === selectedTooth,
-                      )
-                      .filter((t) => t.kind !== "state")
-                      .sort(
-                        (a, b) =>
-                          new Date(b.date).getTime() - new Date(a.date).getTime(),
-                      );
-                    if (toothHistory.length === 0) {
-                      return (
-                        <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
-                          Aucun acte
-                        </p>
-                      );
-                    }
-                    return (
-                      <ul className="space-y-1.5">
-                        {toothHistory.slice(0, 4).map((t, i) => (
-                          <li
-                            key={i}
-                            className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-2"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span
-                                    className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-primary)]"
-                                    aria-hidden
-                                  />
-                                  <div className="min-w-0">
-                                    <div className="truncate text-xs font-semibold text-[var(--ds-text)]">
-                                      {t.acte}
-                                    </div>
-                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--ds-text-muted)]">
-                                      <span className="font-mono">
-                                        {formatClinicalDateFr(t.date)}
-                                      </span>
-                                      {t.material ? (
-                                        <span>{t.material}</span>
-                                      ) : null}
-                                      {t.faces?.length ? (
-                                        <span className="flex items-center gap-1">
-                                          {t.faces.map((f) => (
-                                            <span
-                                              key={f}
-                                              className="rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ds-text)]"
-                                            >
-                                              {f}
-                                            </span>
-                                          ))}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    {t.praticien ? (
-                                      <div className="mt-0.5 text-[11px] text-[var(--ds-text-muted)]">
-                                        {t.praticien}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                              {typeof t.montant === "number" && t.montant > 0 ? (
-                                <div className="shrink-0 text-right">
-                                  <div className="font-mono text-[11px] font-semibold text-[var(--ds-primary)]">
-                                    {Math.round(t.montant).toLocaleString("fr-FR")} DA
-                                  </div>
-                                </div>
-                              ) : null}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  })()}
-                </section>
-
-                <hr className="border-[var(--ds-primary-border)]" />
-
-                {/* Ajouter un acte */}
-                <section className="space-y-2">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                    Ajouter un acte
-                  </h4>
-
-                  <div>
-                    <label
-                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                      htmlFor="cockpit-protocol-select"
-                    >
-                      Protocole
-                    </label>
-                    <select
-                      id="cockpit-protocol-select"
-                      value={drawerProtocolId}
-                      onChange={(e) => setDrawerProtocolId(e.target.value)}
-                      className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                    >
-                      <option value="">— Sélectionner un protocole —</option>
-                      {drawerProtocolsGrouped.map(({ category, protocols }) => (
-                        <optgroup key={category} label={category}>
-                          {protocols.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nom}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
-
-                  {cockpitTab === "Endodontie" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label
-                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                          htmlFor="endo-canaux"
-                        >
-                          Nombre de canaux
-                        </label>
-                        <input
-                          id="endo-canaux"
-                          type="number"
-                          min={1}
-                          max={4}
-                          value={endoCanaux}
-                          onChange={(e) => setEndoCanaux(e.target.value)}
-                          className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                          htmlFor="endo-lt"
-                        >
-                          Longueur de travail
-                        </label>
-                        <div className="relative mt-1">
-                          <input
-                            id="endo-lt"
-                            type="number"
-                            inputMode="decimal"
-                            value={endoLt}
-                            onChange={(e) => setEndoLt(e.target.value)}
-                            placeholder="__"
-                            className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 pr-10 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                          />
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10.5px] text-[var(--ds-text-muted)]">
-                            mm
-                          </span>
+                {/* GRILLE 2 COLONNES */}
+                <div className="grid grid-cols-[1.2fr_1fr] gap-3">
+                  
+                  {/* COLONNE GAUCHE — Diagnostic & Acte */}
+                  <div className="space-y-3">
+                    
+                    {/* ÉTAT CLINIQUE COMPACT */}
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        État clinique
+                      </h4>
+                      <div className="space-y-2">
+                        {/* Mobilité */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]">Mobilité</span>
+                          <div className="flex flex-wrap gap-1">
+                            {(["stable", "grade1", "grade2", "grade3"] as const).map((g) => (
+                              <button
+                                key={g}
+                                type="button"
+                                onClick={() => {
+                                  setMobilite(g);
+                                  setAllTreatments((prev) => upsertToothStateRow(prev, selectedTooth, { mobilite: g }));
+                                }}
+                                className={[
+                                  "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
+                                  mobilite === g
+                                    ? "bg-[var(--ds-primary)] text-white"
+                                    : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+                                ].join(" ")}
+                              >
+                                {g === "stable" ? "Stable" : g === "grade1" ? "Grade I" : g === "grade2" ? "Grade II" : "Grade III"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Sensibilité */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]">Sensibilité</span>
+                          <div className="flex flex-wrap gap-1">
+                            {(["aucune", "froid", "chaud", "sucre", "mastication"] as const).map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => {
+                                  const next = sensibilite.includes(s)
+                                    ? sensibilite.filter((x) => x !== s)
+                                    : [...sensibilite, s];
+                                  setSensibilite(next);
+                                  setAllTreatments((prev) => upsertToothStateRow(prev, selectedTooth, { sensibilite: next }));
+                                }}
+                                className={[
+                                  "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
+                                  sensibilite.includes(s)
+                                    ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                    : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+                                ].join(" ")}
+                              >
+                                {s === "aucune" ? "Aucune" : s === "froid" ? "Froid" : s === "chaud" ? "Chaud" : s === "sucre" ? "Sucre" : "Mastication"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Vitalité */}
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 shrink-0 text-[10px] font-medium text-[var(--ds-text-subtle)]">Vitalité</span>
+                          <div className="flex flex-wrap gap-1">
+                            {(["vivante", "devitalisee", "incertaine"] as const).map((v) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => {
+                                  setVitalite(v);
+                                  setAllTreatments((prev) => upsertToothStateRow(prev, selectedTooth, { vitalite: v }));
+                                }}
+                                className={[
+                                  "rounded-md px-2 py-0.5 text-[10px] font-medium transition-colors",
+                                  vitalite === v
+                                    ? v === "vivante" ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                      : v === "devitalisee" ? "bg-slate-100 text-slate-600 border border-slate-200"
+                                      : "bg-amber-100 text-amber-700 border border-amber-200"
+                                    : "border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]",
+                                ].join(" ")}
+                              >
+                                {v === "vivante" ? "Vivante" : v === "devitalisee" ? "Dévitalisée" : "Incertaine"}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                      <div className="col-span-2">
-                        <label
-                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                          htmlFor="endo-obturation"
-                        >
-                          Obturation
-                        </label>
+                    </section>
+
+                    {/* AJOUTER UN ACTE */}
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Ajouter un acte
+                      </h4>
+                      
+                      <div className="space-y-2">
+                        {/* Protocole */}
                         <select
-                          id="endo-obturation"
-                          value={endoObturation}
-                          onChange={(e) => setEndoObturation(e.target.value)}
-                          className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
+                          id="cockpit-protocol-select"
+                          value={drawerProtocolId}
+                          onChange={(e) => setDrawerProtocolId(e.target.value)}
+                          className="h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
                         >
-                          {(
-                            [
-                              "Gutta-percha",
-                              "MTA",
-                              "Biodentine",
-                              "Autre",
-                            ] as const
-                          ).map((x) => (
-                            <option key={x} value={x}>
-                              {x}
-                            </option>
+                          <option value="">— Sélectionner un protocole —</option>
+                          {drawerProtocolsGrouped.map(({ category, protocols }) => (
+                            <optgroup key={category} label={category}>
+                              {protocols.map((p) => (
+                                <option key={p.id} value={p.id}>{p.nom}</option>
+                              ))}
+                            </optgroup>
                           ))}
                         </select>
+
+                        {/* Matériau + Faces */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            id="cockpit-material"
+                            value={actMaterial}
+                            onChange={(e) => setActMaterial(e.target.value)}
+                            className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)]"
+                          >
+                            <option value="">Matériau</option>
+                            {(["Composite", "Amalgame", "Zircone", "Céramique", "IRM", "Cavit", "CVI", "Résine", "Or", "Autre"] as const).map((m) => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                          <div className="flex items-center gap-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2">
+                            <span className="text-[10px] text-[var(--ds-text-muted)]">Faces</span>
+                            <ToothFacesPicker value={actFaces} onChange={setActFaces} ariaLabel={`Faces acte dent ${selectedTooth}`} />
+                          </div>
+                        </div>
+
+                        {/* Praticien + Montant */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={actPraticien}
+                            onChange={(e) => setActPraticien(e.target.value)}
+                            placeholder="Praticien"
+                            className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={drawerMontant}
+                              onChange={(e) => setDrawerMontant(e.target.value)}
+                              placeholder="Montant"
+                              className="h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 pr-8 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                            />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--ds-text-muted)]">DA</span>
+                          </div>
+                        </div>
+
+                        {/* Note clinique */}
+                        <textarea
+                          value={toothNotes}
+                          onChange={(e) => setToothNotes(e.target.value)}
+                          rows={2}
+                          placeholder="Note clinique..."
+                          className="w-full resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 text-xs text-[var(--ds-text)] outline-none placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)]"
+                        />
+
+                        {/* Consommables (details) */}
+                        {selectedDrawerProtocol?.consommables.length > 0 && (
+                          <details className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[11px]">
+                            <summary className="cursor-pointer select-none px-2.5 py-1.5 font-medium text-[var(--ds-text)]">
+                              Consommables ({selectedDrawerProtocol.consommables.length})
+                            </summary>
+                            <ul className="space-y-1 border-t border-[var(--ds-primary-border)] px-2.5 py-1.5">
+                              {selectedDrawerProtocol.consommables.map((c) => {
+                                const q = qtyByConsumableId[c.id] ?? c.quantite;
+                                return (
+                                  <li key={c.id} className="flex items-center justify-between gap-2">
+                                    <span className="min-w-0 flex-1 truncate text-[var(--ds-text)]">{c.nom}</span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setQtyByConsumableId((prev) => ({ ...prev, [c.id]: Math.max(0, (prev[c.id] ?? c.quantite) - 1) }))}
+                                        className="flex h-5 w-5 items-center justify-center rounded border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[10px]"
+                                      >−</button>
+                                      <span className="w-4 text-center text-[10px] font-semibold">{q}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQtyByConsumableId((prev) => ({ ...prev, [c.id]: (prev[c.id] ?? c.quantite) + 1 }))}
+                                        className="flex h-5 w-5 items-center justify-center rounded border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[10px]"
+                                      >+</button>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </details>
+                        )}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Orthopédie supprimée (doublon Prothèse) */}
-
-                  <div>
-                    <label
-                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                      htmlFor="cockpit-material"
-                    >
-                      Matériau
-                    </label>
-                    <select
-                      id="cockpit-material"
-                      value={actMaterial}
-                      onChange={(e) => setActMaterial(e.target.value)}
-                      className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                    >
-                      <option value="">—</option>
-                      {(
-                        [
-                          "Composite",
-                          "Amalgame",
-                          "Zircone",
-                          "Céramique",
-                          "IRM",
-                          "Cavit",
-                          "CVI",
-                          "Résine",
-                          "Or",
-                          "Autre",
-                        ] as const
-                      ).map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+                    </section>
                   </div>
 
-                  <div>
-                    <p className="block text-[11px] font-medium text-[var(--ds-text-muted)]">
-                      Faces concernées
-                    </p>
-                    <div className="mt-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] px-3 py-3">
-                      <ToothFacesPicker
-                        value={actFaces}
-                        onChange={(next) => setActFaces(next)}
-                        ariaLabel={`Faces acte dent ${selectedTooth}`}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                      htmlFor="cockpit-note"
-                    >
-                      Note clinique
-                    </label>
-                    <textarea
-                      id="cockpit-note"
-                      value={toothNotes}
-                      onChange={(e) => setToothNotes(e.target.value)}
-                      rows={3}
-                      placeholder="Observation clinique détaillée..."
-                      className="mt-1 w-full resize-none rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                      htmlFor="cockpit-praticien"
-                    >
-                      Praticien
-                    </label>
-                    <input
-                      id="cockpit-praticien"
-                      type="text"
-                      value={actPraticien}
-                      onChange={(e) => setActPraticien(e.target.value)}
-                      placeholder="Nom du praticien"
-                      className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                      htmlFor="cockpit-montant"
-                    >
-                      Montant
-                    </label>
-                    <div className="relative mt-1">
-                      <input
-                        id="cockpit-montant"
-                        type="text"
-                        inputMode="decimal"
-                        value={drawerMontant}
-                        onChange={(e) => setDrawerMontant(e.target.value)}
-                        placeholder="Automatique"
-                        className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 pr-12 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10.5px] uppercase tracking-wider text-[var(--ds-text-muted)]">
-                        DA
-                      </span>
-                    </div>
-                  </div>
-
-                  {selectedDrawerProtocol && selectedDrawerProtocol.consommables.length > 0 && (
-                    <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 text-xs">
-                      <summary className="cursor-pointer select-none px-3 py-2 font-medium text-[var(--ds-text)]">
-                        Consommables ({selectedDrawerProtocol.consommables.length})
-                      </summary>
-                      <ul className="space-y-1.5 border-t border-[var(--ds-primary-border)] px-3 py-2">
-                        {selectedDrawerProtocol.consommables.map((c) => {
-                          const q = qtyByConsumableId[c.id] ?? c.quantite;
+                  {/* COLONNE DROITE — Historique & Suivi */}
+                  <div className="space-y-3">
+                    
+                    {/* ACTES ENREGISTRÉS */}
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                        Actes enregistrés
+                      </h4>
+                      {(() => {
+                        const toothHistory = allTreatments
+                          .filter((t) => t.tooth === selectedTooth && t.kind !== "state")
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                        if (toothHistory.length === 0) {
                           return (
-                            <li
-                              key={c.id}
-                              className="flex items-center justify-between gap-2"
-                            >
-                              <span className="min-w-0 flex-1 truncate text-[var(--ds-text)]">
-                                {c.nom}
-                              </span>
-                              <div className="flex shrink-0 items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setQtyByConsumableId((prev) => ({
-                                      ...prev,
-                                      [c.id]: Math.max(
-                                        0,
-                                        (prev[c.id] ?? c.quantite) - 1,
-                                      ),
-                                    }))
-                                  }
-                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-                                  aria-label="Diminuer"
-                                >
-                                  −
-                                </button>
-                                <span className="w-6 text-center font-semibold tabular-nums text-[var(--ds-text)]">
-                                  {q}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setQtyByConsumableId((prev) => ({
-                                      ...prev,
-                                      [c.id]: (prev[c.id] ?? c.quantite) + 1,
-                                    }))
-                                  }
-                                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-                                  aria-label="Augmenter"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </li>
+                            <p className="rounded-lg border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-2 py-2 text-center text-[10px] text-[var(--ds-text-muted)]">
+                              Aucun acte
+                            </p>
                           );
-                        })}
-                      </ul>
-                    </details>
-                  )}
-                </section>
+                        }
+                        return (
+                          <ul className="space-y-1.5">
+                            {toothHistory.slice(0, 5).map((t, i) => (
+                              <li key={i} className="rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-[11px] font-semibold text-[var(--ds-text)]">{t.acte}</div>
+                                    <div className="flex items-center gap-2 text-[10px] text-[var(--ds-text-muted)]">
+                                      <span className="font-mono">{formatClinicalDateFr(t.date)}</span>
+                                      {t.faces?.length ? <span className="text-[9px]">{t.faces.join(",")}</span> : null}
+                                    </div>
+                                  </div>
+                                  {typeof t.montant === "number" && t.montant > 0 ? (
+                                    <span className="shrink-0 font-mono text-[10px] font-semibold text-[var(--ds-primary)]">
+                                      {Math.round(t.montant).toLocaleString("fr-FR")} DA
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      })()}
+                    </section>
 
-                <hr className="border-[var(--ds-primary-border)]" />
-
-                {/* SECTION 4 — SUIVI & CONTRÔLE */}
-                <section className="space-y-2">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                    Suivi &amp; contrôle
-                  </h4>
-
-                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3 space-y-2">
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wider text-[var(--ds-text-subtle)]">
-                        Prochaine étape
-                      </p>
-                      <input
-                        type="text"
-                        value={prochaineEtape}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setProchaineEtape(v);
-                          setAllTreatments((prev) =>
-                            upsertToothStateRow(prev, selectedTooth, {
-                              prochaine_etape: v.trim() ? v : null,
-                            }),
-                          );
-                        }}
-                        placeholder="Ex: Empreinte, Pose couronne, Détartrage..."
-                        className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-                      <div>
-                        <label
-                          className="block text-[11px] font-medium text-[var(--ds-text-muted)]"
-                          htmlFor="cockpit-controle"
+                    {/* RADIOS */}
+                    <section className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] p-2.5">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <h4 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)]">
+                          Radios · Dent {selectedTooth}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => cockpitFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1 rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--ds-primary)] hover:bg-[var(--ds-primary-soft)]"
                         >
-                          Contrôle prévu
-                        </label>
+                          <Plus className="h-3 w-3" />
+                          Ajouter
+                        </button>
                         <input
-                          id="cockpit-controle"
-                          type="date"
-                          value={controlePrevu}
+                          ref={cockpitFileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          className="hidden"
                           onChange={(e) => {
-                            const v = e.target.value;
-                            setControlePrevu(v);
-                            setAllTreatments((prev) =>
-                              upsertToothStateRow(prev, selectedTooth, {
-                                controle_prevu: v.trim() ? v.trim() : null,
-                              }),
-                            );
+                            const file = e.target.files?.[0];
+                            if (file) void handleCockpitRadioUpload(file);
+                            e.target.value = "";
                           }}
-                          className="mt-1 h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none transition-colors focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
                         />
                       </div>
-                      <PrimaryButton
-                        type="button"
-                        disabled={!controlePrevu.trim()}
-                        onClick={() => {
-                          const day = controlePrevu.trim();
-                          if (!day) return;
-                          void (async () => {
-                            const settings = getSettings();
-                            const praticienFromSettings =
-                              (typeof settings.praticien === "string" &&
-                                settings.praticien.trim()) ||
-                              `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
-                              null;
-                            const res = await createAppointmentAction({
-                              patient_id: id,
-                              date: day,
-                              heure: "09:00",
-                              duree: 15,
-                              type_acte: `Contrôle - Dent ${selectedTooth}`,
-                              statut: "confirme",
-                              notes: `Contrôle planifié depuis le cockpit clinique (dent ${selectedTooth}).`,
-                              praticien: praticienFromSettings,
-                              salle: null,
-                            });
-                            if (!res.ok) {
-                              setToast({ type: "error", message: res.error });
-                              return;
-                            }
-                            window.dispatchEvent(new Event(APPOINTMENTS_UPDATED_EVENT));
-                            setToast({
-                              type: "success",
-                              message: "Contrôle planifié dans le planning.",
-                            });
-                          })();
-                        }}
-                        className="h-9 rounded-xl px-4 text-xs font-semibold"
-                      >
-                        Planifier
-                      </PrimaryButton>
-                    </div>
+                      {cockpitRadiosLoading ? (
+                        <p className="text-center text-[10px] text-[var(--ds-text-muted)]">Chargement…</p>
+                      ) : (
+                        (() => {
+                          const filtered = patientRadios.filter((r) => r.tooth === String(selectedTooth));
+                          if (filtered.length === 0) {
+                            return (
+                              <p className="rounded-lg border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-2 py-2 text-center text-[10px] text-[var(--ds-text-muted)]">
+                                Aucune radio
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {filtered.slice(0, 4).map((radio) => {
+                                const isPdf = radio.mimeType === "application/pdf" || radio.url.startsWith("data:application/pdf");
+                                return (
+                                  <button
+                                    key={radio.id}
+                                    type="button"
+                                    onClick={() => setCockpitRadiosLightbox(radio)}
+                                    className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] hover:ring-2 hover:ring-[var(--ds-primary)]/40"
+                                  >
+                                    {isPdf ? (
+                                      <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-[var(--ds-primary-soft)]">
+                                        <FileText className="h-5 w-5 text-[var(--ds-primary)]" />
+                                        <span className="text-[8px] text-[var(--ds-text-muted)]">PDF</span>
+                                      </div>
+                                    ) : (
+                                      <img src={radio.url} alt={radio.fileName} className="h-full w-full object-cover" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()
+                      )}
+                    </section>
                   </div>
-                </section>
+                </div>
 
-                <hr className="border-[var(--ds-primary-border)]" />
+                {/* SECTIONS ACCORDÉON EN BAS */}
+                <div className="mt-3 space-y-2">
+                  
+                  {/* 📋 SUIVI & CONTRÔLE */}
+                  <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
+                    <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
+                      <span className="flex items-center gap-2">📋 Suivi & contrôle</span>
+                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="space-y-2 border-t border-[var(--ds-primary-border)] px-3 py-2">
+                      <div>
+                        <span className="block text-[10px] font-medium text-[var(--ds-text-muted)]">Prochaine étape</span>
+                        <input
+                          type="text"
+                          value={prochaineEtape}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setProchaineEtape(v);
+                            setAllTreatments((prev) => upsertToothStateRow(prev, selectedTooth, { prochaine_etape: v.trim() ? v : null }));
+                          }}
+                          placeholder="Ex: Empreinte, Pose couronne..."
+                          className="mt-1 h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs outline-none focus:border-[var(--ds-primary)]"
+                        />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-medium text-[var(--ds-text-muted)]">Contrôle prévu</label>
+                          <input
+                            type="date"
+                            value={controlePrevu}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setControlePrevu(v);
+                              setAllTreatments((prev) => upsertToothStateRow(prev, selectedTooth, { controle_prevu: v.trim() || null }));
+                            }}
+                            className="mt-1 h-8 w-full rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs outline-none focus:border-[var(--ds-primary)]"
+                          />
+                        </div>
+                        <PrimaryButton
+                          type="button"
+                          disabled={!controlePrevu.trim()}
+                          onClick={() => {
+                            const day = controlePrevu.trim();
+                            if (!day) return;
+                            void (async () => {
+                              const settings = getSettings();
+                              const praticienFromSettings = (typeof settings.praticien === "string" && settings.praticien.trim()) ||
+                                `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() || null;
+                              const res = await createAppointmentAction({
+                                patient_id: id, date: day, heure: "09:00", duree: 15,
+                                type_acte: `Contrôle - Dent ${selectedTooth}`, statut: "confirme",
+                                notes: `Contrôle planifié depuis le cockpit (dent ${selectedTooth}).`,
+                                praticien: praticienFromSettings, salle: null,
+                              });
+                              if (!res.ok) { setToast({ type: "error", message: res.error }); return; }
+                              window.dispatchEvent(new Event(APPOINTMENTS_UPDATED_EVENT));
+                              setToast({ type: "success", message: "Contrôle planifié dans le planning." });
+                            })();
+                          }}
+                          className="h-8 rounded-lg px-3 text-[11px] font-semibold"
+                        >
+                          Planifier
+                        </PrimaryButton>
+                      </div>
+                    </div>
+                  </details>
 
-                {/* SECTION 5 — NOTES CLINIQUES PAR SÉANCE */}
-                <section className="space-y-2">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                    Notes cliniques par séance
-                  </h4>
-
-                  <div className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-3">
-                    {seancesNotes.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
-                        Aucune note
-                      </p>
-                    ) : (
-                      <div className="space-y-3 border-l-2 border-[var(--ds-primary)] pl-3">
-                        {seancesNotes
-                          .slice()
-                          .sort(
-                            (a, b) =>
-                              new Date(b.date).getTime() -
-                              new Date(a.date).getTime(),
-                          )
-                          .map((n, idx) => (
-                            <div key={`${n.date}-${idx}`} className="space-y-1">
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="font-mono text-[10.5px] text-[var(--ds-text-muted)]">
-                                  {formatClinicalDateFr(n.date)}
-                                </span>
-                                {n.praticien ? (
-                                  <span className="text-[11px] text-[var(--ds-text-muted)]">
-                                    {n.praticien}
-                                  </span>
-                                ) : null}
+                  {/* 📝 NOTES PAR SÉANCE */}
+                  <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
+                    <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
+                      <span className="flex items-center gap-2">📝 Notes par séance</span>
+                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="border-t border-[var(--ds-primary-border)] px-3 py-2">
+                      {seancesNotes.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-2 py-2 text-center text-[10px] text-[var(--ds-text-muted)]">
+                          Aucune note
+                        </p>
+                      ) : (
+                        <div className="mb-2 space-y-1.5 border-l-2 border-[var(--ds-primary)] pl-2">
+                          {seancesNotes.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((n, idx) => (
+                            <div key={idx} className="text-[11px]">
+                              <div className="flex items-center gap-2 text-[10px] text-[var(--ds-text-muted)]">
+                                <span className="font-mono">{formatClinicalDateFr(n.date)}</span>
+                                {n.praticien && <span>{n.praticien}</span>}
                               </div>
-                              <div className="text-[12px] text-[var(--ds-text)]">
-                                {n.texte}
-                              </div>
-                              <div className="h-px w-full bg-[var(--ds-primary-border)]" />
+                              <p className="text-[var(--ds-text)]">{n.texte}</p>
                             </div>
                           ))}
-                      </div>
-                    )}
-
-                    <div className="mt-3 space-y-2">
-                      <textarea
-                        value={newSeanceNote}
-                        onChange={(e) => setNewSeanceNote(e.target.value)}
-                        rows={2}
-                        placeholder="Ajouter une note…"
-                        className="w-full resize-none rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 py-2 text-sm text-[var(--ds-text)] outline-none transition-colors placeholder:text-[var(--ds-text-muted)] focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                      />
-                      <button
-                        type="button"
-                        disabled={!newSeanceNote.trim()}
-                        onClick={() => {
-                          const txt = newSeanceNote.trim();
-                          if (!txt) return;
-                          const settings = getSettings();
-                          const praticienFromSettings =
-                            (typeof settings.praticien === "string" &&
-                              settings.praticien.trim()) ||
-                            `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() ||
-                            undefined;
-
-                          const entry: ClinicalSessionNote = {
-                            date: new Date().toISOString(),
-                            praticien: actPraticien.trim() || praticienFromSettings,
-                            texte: txt,
-                          };
-                          const next = [entry, ...seancesNotes];
-                          setSeancesNotes(next);
-                          setNewSeanceNote("");
-                          setAllTreatments((prev) =>
-                            upsertToothStateRow(prev, selectedTooth, {
-                              seances_notes: next,
-                            }),
-                          );
-                        }}
-                        className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)] disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        + Ajouter une note
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Plan de traitement (inline) */}
-                <section className="space-y-2">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                    Plan de traitement
-                  </h4>
-
-                  {treatmentPlan.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-2.5 text-center text-[11.5px] text-[var(--ds-text-muted)]">
-                      Aucune séance planifiée
-                    </p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {treatmentPlan.map((s, i) => (
-                        <li
-                          key={s.id}
-                          className={[
-                            "flex items-center gap-2 rounded-xl border px-3 py-2",
-                            s.done
-                              ? "border-emerald-100 bg-emerald-50"
-                              : "border-[var(--ds-primary-border)] bg-[var(--ds-bg)]",
-                          ].join(" ")}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <textarea
+                          value={newSeanceNote}
+                          onChange={(e) => setNewSeanceNote(e.target.value)}
+                          rows={1}
+                          placeholder="Ajouter une note..."
+                          className="min-h-0 flex-1 resize-none rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--ds-primary)]"
+                        />
+                        <button
+                          type="button"
+                          disabled={!newSeanceNote.trim()}
+                          onClick={() => {
+                            const txt = newSeanceNote.trim();
+                            if (!txt) return;
+                            const settings = getSettings();
+                            const praticienFromSettings = (typeof settings.praticien === "string" && settings.praticien.trim()) ||
+                              `${String(settings.praticienPrenom ?? "").trim()} ${String(settings.praticienNom ?? "").trim()}`.trim() || undefined;
+                            const entry = { date: new Date().toISOString(), praticien: actPraticien.trim() || praticienFromSettings, texte: txt };
+                            const next = [entry, ...seancesNotes];
+                            setSeancesNotes(next);
+                            setNewSeanceNote("");
+                            setAllTreatments((prev) => upsertToothStateRow(prev, selectedTooth, { seances_notes: next }));
+                          }}
+                          className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-[11px] font-medium hover:bg-[var(--ds-primary-soft)] disabled:opacity-40"
                         >
-                          <input
-                            type="checkbox"
-                            checked={s.done}
-                            onChange={() =>
-                              setTreatmentPlan((prev) =>
-                                prev.map((x) =>
-                                  x.id === s.id ? { ...x, done: !x.done } : x,
-                                ),
-                              )
-                            }
-                            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-[var(--ds-primary)]"
-                          />
-                          <span
-                            className={[
-                              "min-w-0 flex-1 truncate text-xs",
-                              s.done
-                                ? "text-[var(--ds-text-muted)] line-through"
-                                : "text-[var(--ds-text)]",
-                            ].join(" ")}
-                          >
-                            Séance {i + 1} — {s.label}
-                          </span>
-                          {s.cout > 0 && (
-                            <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-[var(--ds-primary)]">
-                              {s.cout.toLocaleString("fr-DZ")} DA
-                            </span>
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* 🗓️ PLAN DE TRAITEMENT */}
+                  <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
+                    <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
+                      <span className="flex items-center gap-2">🗓️ Plan de traitement</span>
+                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="border-t border-[var(--ds-primary-border)] px-3 py-2">
+                      {treatmentPlan.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-2 py-2 text-center text-[10px] text-[var(--ds-text-muted)]">
+                          Aucune séance planifiée
+                        </p>
+                      ) : (
+                        <ul className="mb-2 space-y-1">
+                          {treatmentPlan.map((s, i) => (
+                            <li key={s.id} className={[
+                              "flex items-center gap-2 rounded-lg border px-2 py-1.5",
+                              s.done ? "border-emerald-100 bg-emerald-50" : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)]"
+                            ].join(" ")}>
+                              <input
+                                type="checkbox"
+                                checked={s.done}
+                                onChange={() => setTreatmentPlan((prev) => prev.map((x) => x.id === s.id ? { ...x, done: !x.done } : x))}
+                                className="h-3 w-3 accent-[var(--ds-primary)]"
+                              />
+                              <span className={["min-w-0 flex-1 truncate text-[11px]", s.done ? "text-[var(--ds-text-muted)] line-through" : "text-[var(--ds-text)]"].join(" ")}>
+                                Séance {i + 1} — {s.label}
+                              </span>
+                              {s.cout > 0 && (
+                                <span className="font-mono text-[10px] font-semibold text-[var(--ds-primary)]">
+                                  {s.cout.toLocaleString("fr-DZ")} DA
+                                </span>
+                              )}
+                              <button type="button" onClick={() => setTreatmentPlan((prev) => prev.filter((x) => x.id !== s.id))} className="text-[var(--ds-text-muted)] hover:text-red-500">
+                                <X className="h-3 w-3" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newSeanceLabel}
+                          onChange={(e) => setNewSeanceLabel(e.target.value)}
+                          placeholder="Nouvelle séance"
+                          className="h-8 min-w-0 flex-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs outline-none focus:border-[var(--ds-primary)]"
+                        />
+                        <input
+                          type="number"
+                          value={newSeanceCout}
+                          onChange={(e) => setNewSeanceCout(e.target.value)}
+                          placeholder="DA"
+                          className="h-8 w-20 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 text-xs outline-none focus:border-[var(--ds-primary)]"
+                        />
+                        <button
+                          type="button"
+                          disabled={!newSeanceLabel.trim()}
+                          onClick={() => {
+                            if (!newSeanceLabel.trim()) return;
+                            setTreatmentPlan((prev) => [...prev, {
+                              id: Date.now().toString(), label: newSeanceLabel.trim(), acte: newSeanceActe.trim(),
+                              cout: parseInt(newSeanceCout, 10) || 0, done: false
+                            }]);
+                            setNewSeanceLabel(""); setNewSeanceActe(""); setNewSeanceCout("");
+                          }}
+                          className="h-8 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-[11px] font-medium hover:bg-[var(--ds-primary-soft)] disabled:opacity-40"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+
+                  {/* ⚙️ OPTIONS DENT */}
+                  <details className="rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface-2)] overflow-hidden group">
+                    <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--ds-text-muted)] hover:bg-[var(--ds-surface)]">
+                      <span className="flex items-center gap-2">⚙️ Options dent</span>
+                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="border-t border-[var(--ds-primary-border)] px-3 py-2">
+                      {confirmAbsent === selectedTooth ? (
+                        <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 p-2">
+                          <p className="text-center text-[11px] font-medium text-red-700">
+                            Confirmer que la dent {selectedTooth} est absente ?
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDentsStatus((prev) => ({ ...prev, [selectedTooth as ToothId]: "absente" }));
+                                setConfirmAbsent(null);
+                                setSelectedTooth(null);
+                              }}
+                              className="flex-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700"
+                            >
+                              Confirmer
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmAbsent(null)}
+                              className="flex-1 rounded-md border border-[var(--ds-primary-border)] px-2 py-1 text-[11px] font-medium text-[var(--ds-text-muted)] hover:bg-[var(--ds-primary-soft)]"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          {dentsStatus[selectedTooth as ToothId] !== "absente" ? (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmAbsent(selectedTooth)}
+                              className="flex-1 rounded-md border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5 text-[11px] font-medium text-[var(--ds-text-muted)] hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                            >
+                              ○ Marquer absente
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDentsStatus((prev) => ({ ...prev, [selectedTooth as ToothId]: "healthy" }));
+                                setSelectedTooth(null);
+                              }}
+                              className="flex-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                            >
+                              ✓ Restaurer
+                            </button>
                           )}
                           <button
                             type="button"
-                            onClick={() =>
-                              setTreatmentPlan((prev) =>
-                                prev.filter((x) => x.id !== s.id),
-                              )
-                            }
-                            aria-label="Supprimer"
-                            className="shrink-0 text-[var(--ds-text-muted)] transition-colors hover:text-red-500"
+                            onClick={() => setWatchedTeeth((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(selectedTooth)) next.delete(selectedTooth);
+                              else next.add(selectedTooth);
+                              if (id) void mergePatientUiStateAction(id, { watched_teeth: [...next] });
+                              return next;
+                            })}
+                            className={[
+                              "flex-1 rounded-md border px-2 py-1.5 text-[11px] font-medium",
+                              watchedTeeth.has(selectedTooth)
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                            ].join(" ")}
                           >
-                            <X className="h-3.5 w-3.5" aria-hidden />
+                            ◎ {watchedTeeth.has(selectedTooth) ? "Surveillée" : "Surveiller"}
                           </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newSeanceLabel}
-                      onChange={(e) => setNewSeanceLabel(e.target.value)}
-                      placeholder="Nouvelle séance"
-                      className="h-9 min-w-0 flex-1 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                    />
-                    <input
-                      type="number"
-                      value={newSeanceCout}
-                      onChange={(e) => setNewSeanceCout(e.target.value)}
-                      placeholder="DA"
-                      className="h-9 w-24 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-3 text-sm text-[var(--ds-text)] outline-none focus:border-[var(--ds-primary)] focus:ring-2 focus:ring-[var(--ds-primary)]/20"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newSeanceLabel.trim()) return;
-                      setTreatmentPlan((prev) => [
-                        ...prev,
-                        {
-                          id: Date.now().toString(),
-                          label: newSeanceLabel.trim(),
-                          acte: newSeanceActe.trim(),
-                          cout: parseInt(newSeanceCout, 10) || 0,
-                          done: false,
-                        },
-                      ]);
-                      setNewSeanceLabel("");
-                      setNewSeanceActe("");
-                      setNewSeanceCout("");
-                    }}
-                    disabled={!newSeanceLabel.trim()}
-                    className="h-9 w-full rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-bg)] text-xs font-medium text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-primary-soft)] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    + Ajouter cette séance
-                  </button>
-                </section>
-
-                {/* Actions secondaires : Marquer absente + Surveiller */}
-                {confirmAbsent === selectedTooth ? (
-                  <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
-                    <p className="text-center text-xs font-medium text-red-700">
-                      Confirmer que la dent {selectedTooth} est absente ?
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDentsStatus((prev) => ({
-                            ...prev,
-                            [selectedTooth as ToothId]: "absente",
-                          }));
-                          setConfirmAbsent(null);
-                          setSelectedTooth(null);
-                        }}
-                        className="flex-1 rounded-lg bg-red-600 px-2 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-red-700"
-                      >
-                        Confirmer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmAbsent(null)}
-                        className="flex-1 rounded-lg border border-[var(--ds-primary-border)] px-2 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    {dentsStatus[selectedTooth as ToothId] !== "absente" ? (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmAbsent(selectedTooth)}
-                        className="flex-1 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2 py-1.5 text-xs font-medium text-[var(--ds-text-muted)] transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                      >
-                        ○ Marquer absente
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDentsStatus((prev) => ({
-                            ...prev,
-                            [selectedTooth as ToothId]: "healthy",
-                          }));
-                          setSelectedTooth(null);
-                        }}
-                        className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-                      >
-                        ✓ Restaurer
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setWatchedTeeth((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(selectedTooth)) next.delete(selectedTooth);
-                          else next.add(selectedTooth);
-                          if (id) {
-                            void mergePatientUiStateAction(id, {
-                              watched_teeth: [...next],
-                            });
-                          }
-                          return next;
-                        })
-                      }
-                      className={[
-                        "flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
-                        watchedTeeth.has(selectedTooth)
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-[var(--ds-primary-border)] bg-[var(--ds-surface)] text-[var(--ds-text-muted)] hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
-                      ].join(" ")}
-                    >
-                      ◎{" "}
-                      {watchedTeeth.has(selectedTooth) ? "Surveillée" : "Surveiller"}
-                    </button>
-                  </div>
-                )}
-
-                {/* SECTION — RADIOS (filtrées par la dent sélectionnée) */}
-                <hr className="border-[var(--ds-primary-border)]" />
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
-                      Radios · Dent {selectedTooth}
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={() => cockpitFileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ds-primary)] transition-colors hover:bg-[var(--ds-primary-soft)]"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Ajouter une radio
-                    </button>
-                    <input
-                      ref={cockpitFileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) void handleCockpitRadioUpload(file);
-                        e.target.value = "";
-                      }}
-                    />
-                  </div>
-
-                  {cockpitRadiosLoading ? (
-                    <p className="text-center text-[11px] text-[var(--ds-text-muted)]">
-                      Chargement…
-                    </p>
-                  ) : (
-                    (() => {
-                      const filtered = patientRadios.filter(
-                        (r) => r.tooth === String(selectedTooth)
-                      );
-                      if (filtered.length === 0) {
-                        return (
-                          <p className="rounded-xl border border-dashed border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/60 px-3 py-3 text-center text-[11px] text-[var(--ds-text-muted)]">
-                            Aucune radio pour cette dent.
-                          </p>
-                        );
-                      }
-                      return (
-                        <div className="grid grid-cols-3 gap-2">
-                          {filtered.map((radio) => {
-                            const isPdf =
-                              radio.mimeType === "application/pdf" ||
-                              radio.url.startsWith("data:application/pdf");
-                            return (
-                              <button
-                                key={radio.id}
-                                type="button"
-                                onClick={() => setCockpitRadiosLightbox(radio)}
-                                className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] transition-all hover:ring-2 hover:ring-[var(--ds-primary)]/40"
-                              >
-                                {isPdf ? (
-                                  <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--ds-primary-soft)]">
-                                    <FileText className="h-6 w-6 text-[var(--ds-primary)]" />
-                                    <span className="max-w-full truncate px-1 text-[9px] font-medium text-[var(--ds-text-muted)]">
-                                      PDF
-                                    </span>
-                                  </div>
-                                ) : radio.url ? (
-                                  <img
-                                    src={radio.url}
-                                    alt={radio.fileName}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center bg-[var(--ds-primary-soft)]">
-                                    <ImageIcon className="h-6 w-6 text-[var(--ds-primary-border)]" />
-                                  </div>
-                                )}
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-1.5 py-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <span className="block truncate text-[9px] text-white">
-                                    {radio.fileName}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
                         </div>
-                      );
-                    })()
-                  )}
-                </section>
+                      )}
+                    </div>
+                  </details>
+                </div>
               </>
             )}
           </div>
 
-          {/* FOOTER */}
-          <footer className="shrink-0 space-y-1.5 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-5 py-3 backdrop-blur-sm">
+          {/* FOOTER FIXE */}
+          <footer className="shrink-0 space-y-1.5 border-t border-[var(--ds-primary-border)] bg-[var(--ds-bg)]/80 px-4 py-3 backdrop-blur-sm">
             <RoleGate
               role={["admin", "praticien"]}
               fallback={
@@ -4979,7 +4683,7 @@ export default function PatientDetailPage() {
                 disabled={validateSoinLoading}
                 isLoading={validateSoinLoading}
                 onClick={() => void handleValidateClinicalAct()}
-                className="h-11 w-full rounded-xl text-sm font-semibold shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)] disabled:shadow-none"
+                className="h-10 w-full rounded-xl text-sm font-semibold shadow-lg shadow-[color-mix(in_srgb,var(--ds-primary)_25%,transparent)] disabled:shadow-none"
               >
                 ✓ Valider le soin
               </PrimaryButton>
@@ -4987,59 +4691,35 @@ export default function PatientDetailPage() {
             <button
               type="button"
               onClick={() => setSelectedTooth(null)}
-              className="h-8 w-full rounded-xl text-xs text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
+              className="h-7 w-full rounded-xl text-xs text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-primary-soft)]"
             >
               Annuler
             </button>
           </footer>
 
-          {/* Lightbox — visualisation plein écran des radios cockpit */}
+          {/* Lightbox radios cockpit */}
           {cockpitRadiosLightbox && (
-            <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
-              onClick={() => setCockpitRadiosLightbox(null)}
-            >
-              <div
-                className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl bg-black shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={() => setCockpitRadiosLightbox(null)}
-                  className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
-                >
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4" onClick={() => setCockpitRadiosLightbox(null)}>
+              <div className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl bg-black shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <button type="button" onClick={() => setCockpitRadiosLightbox(null)} className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80">
                   <X className="h-4 w-4" />
                 </button>
-                {cockpitRadiosLightbox.mimeType === "application/pdf" ||
-                cockpitRadiosLightbox.url.startsWith("data:application/pdf") ? (
+                {cockpitRadiosLightbox.mimeType === "application/pdf" || cockpitRadiosLightbox.url.startsWith("data:application/pdf") ? (
                   <div className="flex h-[70vh] w-[70vw] flex-col items-center justify-center gap-4 bg-[var(--ds-surface)] p-8">
                     <FileText className="h-16 w-16 text-[var(--ds-primary)]" />
-                    <p className="text-center text-sm text-[var(--ds-text)]">
-                      {cockpitRadiosLightbox.fileName}
-                    </p>
-                    <a
-                      href={cockpitRadiosLightbox.url}
-                      download={cockpitRadiosLightbox.fileName}
-                      className="inline-flex items-center gap-2 rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--ds-primary)]/90"
-                    >
+                    <p className="text-center text-sm text-[var(--ds-text)]">{cockpitRadiosLightbox.fileName}</p>
+                    <a href={cockpitRadiosLightbox.url} download={cockpitRadiosLightbox.fileName} className="inline-flex items-center gap-2 rounded-lg bg-[var(--ds-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--ds-primary)]/90">
                       <Download className="h-4 w-4" />
                       Télécharger PDF
                     </a>
                   </div>
                 ) : (
-                  <img
-                    src={cockpitRadiosLightbox.url}
-                    alt={cockpitRadiosLightbox.fileName}
-                    className="max-h-[85vh] max-w-[85vw] object-contain"
-                  />
+                  <img src={cockpitRadiosLightbox.url} alt={cockpitRadiosLightbox.fileName} className="max-h-[85vh] max-w-[85vw] object-contain" />
                 )}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 py-3">
-                  <p className="truncate text-sm text-white">
-                    {cockpitRadiosLightbox.fileName}
-                  </p>
+                  <p className="truncate text-sm text-white">{cockpitRadiosLightbox.fileName}</p>
                   <p className="text-xs text-white/70">
-                    {cockpitRadiosLightbox.date &&
-                      new Date(cockpitRadiosLightbox.date).toLocaleDateString("fr-FR")}
+                    {cockpitRadiosLightbox.date && new Date(cockpitRadiosLightbox.date).toLocaleDateString("fr-FR")}
                     {cockpitRadiosLightbox.tooth && ` · Dent ${cockpitRadiosLightbox.tooth}`}
                   </p>
                 </div>
