@@ -336,6 +336,25 @@ const ACTES_PRIX_DEVIS: Record<string, number> = {
   "Soin — Saine": 500,
 };
 
+type ActeTarifRow = { categorie: string; acte: string; prix: number };
+
+function parseActesTarifs(raw: unknown): ActeTarifRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): ActeTarifRow | null => {
+      if (!item || typeof item !== "object") return null;
+      const o = item as Record<string, unknown>;
+      const acte = typeof o.acte === "string" ? o.acte.trim() : "";
+      const categorie =
+        typeof o.categorie === "string" ? o.categorie.trim() : "";
+      const prix =
+        typeof o.prix === "number" && Number.isFinite(o.prix) ? o.prix : NaN;
+      if (!acte || !Number.isFinite(prix)) return null;
+      return { categorie, acte, prix };
+    })
+    .filter((x): x is ActeTarifRow => x !== null);
+}
+
 // Mapping catégorie -> statut de la dent dans le schéma
 const CATEGORY_TO_STATUS: Record<string, ToothStatus> = {
   Saine: "healthy",
@@ -1622,6 +1641,7 @@ export default function PatientDetailPage() {
   >([]);
   const [drawerProtocolId, setDrawerProtocolId] = useState<string>("");
   const [drawerMontant, setDrawerMontant] = useState<string>("");
+  const [actesTarifs, setActesTarifs] = useState<ActeTarifRow[]>([]);
   const [qtyByConsumableId, setQtyByConsumableId] = useState<
     Record<string, number>
   >({});
@@ -1935,6 +1955,18 @@ export default function PatientDetailPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cab = await getCabinetSettingsAction();
+      if (cancelled || !cab.ok) return;
+      setActesTarifs(parseActesTarifs(cab.data.actesTarifs));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedTooth !== null) return;
     setDrawerProtocolId("");
     setQtyByConsumableId({});
@@ -1949,6 +1981,7 @@ export default function PatientDetailPage() {
   useEffect(() => {
     if (!drawerProtocolId) {
       setQtyByConsumableId({});
+      setDrawerMontant("");
       return;
     }
     const p = clinicalProtocolsList.find((x) => x.id === drawerProtocolId);
@@ -1958,7 +1991,19 @@ export default function PatientDetailPage() {
       next[c.id] = c.quantite;
     }
     setQtyByConsumableId(next);
-  }, [drawerProtocolId, clinicalProtocolsList]);
+
+    const tarif = actesTarifs.find(
+      (t) => t.acte.toLowerCase() === p.nom.toLowerCase(),
+    );
+    if (tarif) {
+      setDrawerMontant(String(tarif.prix));
+      return;
+    }
+    const devHint = ACTES_PRIX_DEVIS[p.nom];
+    if (typeof devHint === "number" && devHint > 0) {
+      setDrawerMontant(String(devHint));
+    }
+  }, [drawerProtocolId, clinicalProtocolsList, actesTarifs]);
 
   useEffect(() => {
     if (!toast) return;
