@@ -1,34 +1,116 @@
 /**
- * Protocoles dentaires standards algériens - tarifs par défaut
- * Chargés automatiquement si la liste est vide (premier démarrage)
+ * Tarifs par défaut (DA) — alignés sur `data/protocols_seed.json`.
+ * Le champ `acte` doit correspondre EXACTEMENT au champ `nom` de chaque protocole du seed
+ * (même casse, même ponctuation) pour le pré-remplissage du cockpit clinique.
  */
 export const DEFAULT_ACTES_TARIFS = [
-  // Omnipratique
-  { categorie: "Omnipratique", acte: "Consultation/Examen", prix: 500 },
-  { categorie: "Omnipratique", acte: "Détartrage", prix: 1500 },
-  { categorie: "Omnipratique", acte: "Extraction simple", prix: 2000 },
-  { categorie: "Omnipratique", acte: "Extraction chirurgicale", prix: 4000 },
-  { categorie: "Omnipratique", acte: "Traitement canalaire (monoradiculé)", prix: 4000 },
-  { categorie: "Omnipratique", acte: "Traitement canalaire (pluriradiculé)", prix: 6000 },
-  { categorie: "Omnipratique", acte: "Obturation composite (1 face)", prix: 2500 },
-  { categorie: "Omnipratique", acte: "Obturation composite (2 faces)", prix: 3500 },
-  { categorie: "Omnipratique", acte: "Obturation composite (3 faces)", prix: 4500 },
-  { categorie: "Omnipratique", acte: "Scellement de sillon", prix: 1000 },
+  // Prévention & Bilan
+  {
+    categorie: "Prévention & Bilan",
+    acte: "Consultation Initiale / Bilan complet",
+    prix: 500,
+  },
+  {
+    categorie: "Prévention & Bilan",
+    acte: "Détartrage & Polissage",
+    prix: 1500,
+  },
+  {
+    categorie: "Prévention & Bilan",
+    acte: "Scellement de sillons (Sealants)",
+    prix: 800,
+  },
+  {
+    categorie: "Prévention & Bilan",
+    acte: "Application de vernis fluoré",
+    prix: 600,
+  },
+
+  // Soins Conservateurs
+  {
+    categorie: "Soins Conservateurs",
+    acte: "Restauration Composite 1 face",
+    prix: 2500,
+  },
+  {
+    categorie: "Soins Conservateurs",
+    acte: "Restauration Composite 2 faces ou +",
+    prix: 3500,
+  },
+  {
+    categorie: "Soins Conservateurs",
+    acte: "Composite Antérieur / Stratification esthétique",
+    prix: 4500,
+  },
+  {
+    categorie: "Soins Conservateurs",
+    acte: "Reconstitution au Verre Ionomère (CVI)",
+    prix: 1800,
+  },
+  {
+    categorie: "Soins Conservateurs",
+    acte: "Coiffage pulpaire (Biodentine ou Hydroxyde de calcium)",
+    prix: 2000,
+  },
+  {
+    categorie: "Soins Conservateurs",
+    acte: "Traitement d'urgence (pansement provisoire)",
+    prix: 1000,
+  },
+
+  // Endodontie
+  {
+    categorie: "Endodontie",
+    acte: "Biopulpectomie Mono-radiculaire",
+    prix: 4000,
+  },
+  {
+    categorie: "Endodontie",
+    acte: "Biopulpectomie Pluri-radiculaire",
+    prix: 6000,
+  },
+
   // Prothèse
-  { categorie: "Prothèse", acte: "Couronne céramo-métallique", prix: 15000 },
-  { categorie: "Prothèse", acte: "Couronne zircone", prix: 25000 },
-  { categorie: "Prothèse", acte: "Bridge 3 éléments", prix: 35000 },
-  { categorie: "Prothèse", acte: "Prothèse amovible partielle", prix: 20000 },
-  { categorie: "Prothèse", acte: "Prothèse amovible totale", prix: 25000 },
-  // Orthodontie
-  { categorie: "Orthodontie", acte: "Bilan orthodontique", prix: 2000 },
-  { categorie: "Orthodontie", acte: "Appareil fixe (arcade)", prix: 45000 },
-  { categorie: "Orthodontie", acte: "Gouttière transparente", prix: 35000 },
-  { categorie: "Orthodontie", acte: "Contention", prix: 5000 },
-  // Parodontologie
-  { categorie: "Parodontologie", acte: "Détartrage + surfaçage radiculaire", prix: 3000 },
-  { categorie: "Parodontologie", acte: "Chirurgie parodontale", prix: 8000 },
-  // Implantologie
-  { categorie: "Implantologie", acte: "Implant dentaire", prix: 60000 },
-  { categorie: "Implantologie", acte: "Couronne sur implant", prix: 20000 },
+  {
+    categorie: "Prothèse",
+    acte: "Empreinte Primaire",
+    prix: 500,
+  },
+  {
+    categorie: "Prothèse",
+    acte: "Empreinte Secondaire Silicone",
+    prix: 1000,
+  },
+  {
+    categorie: "Prothèse",
+    acte: "Préparation pour Couronne & Couronne Provisoire",
+    prix: 8000,
+  },
+  {
+    categorie: "Prothèse",
+    acte: "Scellement définitif",
+    prix: 2500,
+  },
+
+  // Chirurgie & Implantologie
+  {
+    categorie: "Chirurgie & Implantologie",
+    acte: "Extraction Simple",
+    prix: 2000,
+  },
+  {
+    categorie: "Chirurgie & Implantologie",
+    acte: "Extraction Chirurgicale",
+    prix: 4000,
+  },
+  {
+    categorie: "Chirurgie & Implantologie",
+    acte: "Pose d'implant - 1er temps",
+    prix: 60000,
+  },
+  {
+    categorie: "Chirurgie & Implantologie",
+    acte: "Contrôle post-opératoire / Dépose de fils",
+    prix: 500,
+  },
 ] as const;
