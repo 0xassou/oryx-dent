@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   ensureCatalogSeeded,
@@ -10,6 +10,8 @@ import {
   type DentalCatalogAct,
   type DentalCatalogCategory,
 } from "@/utils/dentalCatalogActs";
+import { DEFAULT_ACTES_TARIFS } from "@/utils/defaultActesTarifs";
+import { replaceCabinetSettingsAction } from "@/app/actions/cabinet-settings";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 
 const CATEGORIES: DentalCatalogCategory[] = ["Chirurgie", "Soins", "Prothèse"];
@@ -74,6 +76,41 @@ export function ActesTarifsSection() {
     });
   }
 
+  async function resetToDefaults() {
+    const confirmed = window.confirm(
+      "Remplacer tous les actes par les 20 protocoles standards ? Cette action efface les actes actuels.",
+    );
+    if (!confirmed) return;
+
+    const resetActs: DentalCatalogAct[] = DEFAULT_ACTES_TARIFS.map((t) => ({
+      id: newCatalogActId(),
+      nom: t.acte,
+      categorie: mapDefaultCategoryToCatalog(t.categorie),
+      prix_par_defaut: t.prix,
+    }));
+
+    setActs(resetActs);
+    writeCatalogToStorage(resetActs);
+
+    const actesTarifsPayload = DEFAULT_ACTES_TARIFS.map((t) => ({
+      categorie: t.categorie,
+      acte: t.acte,
+      prix: t.prix,
+    }));
+
+    await replaceCabinetSettingsAction({ actesTarifs: actesTarifsPayload });
+  }
+
+  function mapDefaultCategoryToCatalog(
+    cat: string,
+  ): DentalCatalogCategory {
+    const lower = cat.toLowerCase();
+    if (lower.includes("chirurgie")) return "Chirurgie";
+    if (lower.includes("prothèse") || lower.includes("prothese"))
+      return "Prothèse";
+    return "Soins";
+  }
+
   function removeAct(id: string) {
     if (!window.confirm("Retirer cet acte du catalogue ?")) return;
     setActs((prev) => {
@@ -108,14 +145,24 @@ export function ActesTarifsSection() {
             les montants de facturation. Stockage local du navigateur.
           </p>
         </div>
-        <PrimaryButton
-          type="button"
-          onClick={addAct}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-sm"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.25} />
-          Ajouter un acte
-        </PrimaryButton>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={resetToDefaults}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] px-4 py-3 text-sm font-medium text-[var(--ds-text)] shadow-sm transition-colors hover:bg-[var(--ds-surface-2)]"
+          >
+            <RefreshCcw className="h-4 w-4" strokeWidth={2.25} />
+            Réinitialiser les tarifs par défaut
+          </button>
+          <PrimaryButton
+            type="button"
+            onClick={addAct}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-sm"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.25} />
+            Ajouter un acte
+          </PrimaryButton>
+        </div>
       </div>
 
       <div className="mt-10 space-y-12">
