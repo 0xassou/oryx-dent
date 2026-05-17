@@ -9,6 +9,7 @@
 import { executeClinicalAct } from "@/lib/server/clinical-act/executeClinicalAct";
 import { getPostgresPool } from "@/lib/server/db/pool";
 import { requireBetterAuthSession } from "@/lib/server/auth/require-session";
+import { createFactureAction } from "@/app/actions/factures";
 import type {
   ClientProtocolBackfill,
   ExecuteClinicalActResult,
@@ -24,7 +25,7 @@ export type SubmitClinicalActInput = {
 };
 
 export type SubmitClinicalActResult =
-  | { ok: true; data: ExecuteClinicalActResult }
+  | { ok: true; data: ExecuteClinicalActResult & { factureId?: string } }
   | { ok: false; error: string };
 
 export async function submitClinicalActAction(
@@ -64,7 +65,35 @@ export async function submitClinicalActAction(
       input.customPriceOverrideCents ?? null,
       input.clientProtocol ?? null,
     );
-    return { ok: true, data };
+
+    let factureId: string | undefined;
+    try {
+      const montant = data.amountCents / 100;
+      const factureRes = await createFactureAction({
+        patient_id: input.patientId,
+        date: new Date().toISOString().slice(0, 10),
+        montant,
+        montant_paye: 0,
+        statut: "en_attente",
+        actes: JSON.stringify([
+          {
+            label: input.clientProtocol?.name ?? "Acte clinique",
+            montant,
+            clinicalHistoryId: data.clinicalHistoryId,
+          },
+        ]),
+        notes: null,
+      });
+      if (factureRes.ok) {
+        factureId = factureRes.data.id;
+      } else {
+        console.error("[submitClinicalActAction] Échec création facture:", factureRes.error);
+      }
+    } catch (factureErr) {
+      console.error("[submitClinicalActAction] Erreur lors de la création de la facture:", factureErr);
+    }
+
+    return { ok: true, data: { ...data, factureId } };
   } catch (e) {
     console.error(e);
     return { ok: false, error: "Une erreur est survenue." };

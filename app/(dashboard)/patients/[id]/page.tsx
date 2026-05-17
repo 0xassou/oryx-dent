@@ -456,63 +456,6 @@ interface PatientProfile {
   alerts: PatientAlertItem[];
 }
 
-const MOCK_PROFILES: Record<string, PatientProfile> = {
-  "1": {
-    id: "1",
-    nom: "Karim Haddad",
-    age: 44,
-    genre: "Homme",
-    profession: "Chirurgien-dentiste",
-    adresse: "12 rue Didouche Mourad, Alger",
-    telephone: "06 12 34 56 78",
-    telephoneSecondaire: "",
-    email: "karim.haddad@email.fr",
-    dateNaissance: "1982-04-14",
-    groupeSanguin: "A+",
-    mutuelle: "CNAS",
-    premiereVisite: "",
-    statut: "actif",
-    alerts: [
-      { label: "Allergie Pénicilline", level: "danger" },
-      { label: "Hypertendu", level: "warning" },
-    ],
-  },
-  "2": {
-    id: "2",
-    nom: "Sarah Benali",
-    age: 31,
-    genre: "Femme",
-    profession: "Assistante médicale",
-    adresse: "45 avenue Emir Abdelkader, Oran",
-    telephone: "06 98 76 54 32",
-    telephoneSecondaire: "",
-    email: "sarah.benali@email.fr",
-    dateNaissance: "1995-08-03",
-    groupeSanguin: "",
-    mutuelle: "",
-    premiereVisite: "",
-    statut: "actif",
-    alerts: [{ label: "Allergie Latex", level: "danger" }],
-  },
-  "3": {
-    id: "3",
-    nom: "Marie Dupont",
-    age: 42,
-    genre: "Femme",
-    profession: "Cadre administratif",
-    adresse: "8 boulevard Zighout Youcef, Constantine",
-    telephone: "07 11 22 33 44",
-    telephoneSecondaire: "",
-    email: "marie.dupont@email.fr",
-    dateNaissance: "1984-01-27",
-    groupeSanguin: "O+",
-    mutuelle: "Privée",
-    premiereVisite: "",
-    statut: "actif",
-    alerts: [{ label: "Diabète de type 2", level: "warning" }],
-  },
-};
-
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] ?? "";
@@ -1036,65 +979,6 @@ function cockpitTabToVirtualProtocol(tab: CockpitTab): ProtocolForSettings {
   };
 }
 
-const MOCK_ALL_TREATMENTS: PatientTreatmentRow[] = [
-  {
-    tooth: 21,
-    kind: "act",
-    category: "Chirurgie",
-    acte: "Extraction simple",
-    date: "2026-03-21T09:00:00Z",
-    notes:
-      "Extraction sous AL (Articaïne 4%). Détorsion/luxation contrôlées. Alvéole nettoyée, saignement maîtrisé. Pansement mis en place + consignes post-opératoires remises.",
-    lt: "",
-    praticien: "Dr. Cabinet",
-    material: "Autre",
-    faces: ["O"],
-    montant: 4500,
-  },
-  {
-    tooth: 16,
-    kind: "act",
-    category: "Soins",
-    acte: "Composite 2 faces",
-    date: "2026-03-17T10:00:00Z",
-    notes:
-      "Mise en place de digue. Préparation et conditionnement de la cavité. Insertion composite, finition/polissage. Contrôle de l'occlusion.",
-    lt: "",
-    praticien: "Dr. Cabinet",
-    material: "Composite",
-    faces: ["O", "M"],
-    montant: 3500,
-  },
-  {
-    tooth: 15,
-    kind: "act",
-    category: "Soins",
-    acte: "Traitement canalaire (Prémolaire)",
-    date: "2026-03-15T10:00:00Z",
-    notes:
-      "Accès canalaire, mise en forme, irrigation et obturation provisoire. Contrôle radiographique de la longueur de travail.",
-    lt: "18.5",
-    praticien: "Dr. Cabinet",
-    material: "IRM",
-    faces: ["O"],
-    montant: 9000,
-  },
-  {
-    tooth: 35,
-    kind: "act",
-    category: "Orthopédie",
-    acte: "Gouttière occlusale",
-    date: "2026-03-10T10:00:00Z",
-    notes:
-      "Empreinte et conception. Ajustement initial sur articulateur. Conseils d'utilisation et rappel pour re-évaluation à J+10.",
-    lt: "",
-    praticien: "Dr. Cabinet",
-    material: "Résine",
-    faces: ["O"],
-    montant: 12000,
-  },
-];
-
 type FinanceStatut = "Payé" | "Partiellement Payé" | "En attente";
 
 function financeStatutFromReste(
@@ -1297,6 +1181,7 @@ export default function PatientDetailPage() {
   const [watchedTeeth, setWatchedTeeth] = useState<Set<number>>(
     () => new Set(),
   );
+  const [patientNotFound, setPatientNotFound] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -1378,17 +1263,6 @@ export default function PatientDetailPage() {
             } catch {
               /* ignore */
             }
-          } else {
-            const mock = MOCK_PROFILES[id];
-            if (mock) {
-              const { prenom, nom } = splitNomComplet(mock.nom);
-              await createPatientAction({
-                id,
-                prenom: prenom || mock.nom.trim(),
-                nom: nom || "",
-                telephone: mock.telephone,
-              });
-            }
           }
         }
       }
@@ -1397,8 +1271,10 @@ export default function PatientDetailPage() {
       if (cancelled) return;
       if (r.ok && r.data) {
         setPatientRecord(patientRowToDentalPatientRecord(r.data));
+        setPatientNotFound(false);
       } else {
         setPatientRecord(null);
+        setPatientNotFound(true);
       }
     })();
     return () => {
@@ -1410,7 +1286,7 @@ export default function PatientDetailPage() {
     if (!id) return;
     let cancelled = false;
 
-    const fallbackProfile: PatientProfile = MOCK_PROFILES[id] ?? {
+    const fallbackProfile: PatientProfile = {
       id,
       nom: `Patient #${id}`,
       age: 0,
@@ -1486,7 +1362,7 @@ export default function PatientDetailPage() {
       if (acts !== undefined) {
         setAllTreatments(acts);
       } else {
-        setAllTreatments(MOCK_ALL_TREATMENTS);
+        setAllTreatments([]);
       }
 
       let watchedArr: number[] | null = null;
@@ -2712,6 +2588,28 @@ export default function PatientDetailPage() {
     },
     onEditAlertes: openEditPatientModal,
   };
+
+  if (patientNotFound) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--ds-bg)] p-6">
+        <div className="rounded-2xl border border-[var(--ds-primary-border)] bg-[var(--ds-surface)] p-8 text-center shadow-sm">
+          <h1 className="text-xl font-semibold text-[var(--ds-text)]">
+            Patient introuvable
+          </h1>
+          <p className="mt-2 text-sm text-[var(--ds-text-muted)]">
+            Aucun patient ne correspond à l&apos;identifiant "{id}".
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/patients")}
+            className="mt-6 inline-flex items-center justify-center rounded-xl bg-[var(--ds-primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--ds-primary)]/90"
+          >
+            Retour à la liste des patients
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--ds-bg)] p-6">
