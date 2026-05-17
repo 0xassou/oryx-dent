@@ -2073,22 +2073,15 @@ export default function PatientDetailPage() {
           notifyStockUpdated();
         }
 
-        const kitDeduction = await tryMarkSterilizationKitSale(
-          protocol.categorie,
-        );
-        let toastType: "success" | "error" | "warning" = kitDeduction.used
-          ? "success"
-          : "error";
-        let toastMessage = kitDeduction.used
-          ? `Acte enregistré avec succès. Kit ${kitDeduction.typeLabel} #${kitDeduction.numero} marqué comme sale.`
-          : `Acte enregistré avec succès. Attention : Aucun kit ${kitDeduction.typeLabel} stérile disponible !`;
         if (stockPgWarnings.length > 0) {
-          toastType = "warning";
-          toastMessage = [toastMessage, ...stockPgWarnings].join(" ");
+          console.error(
+            "[handleValidateClinicalAct] stock warnings:",
+            stockPgWarnings,
+          );
         }
         setToast({
-          type: toastType,
-          message: toastMessage,
+          type: "success",
+          message: "Acte enregistré avec succès.",
         });
         setDentsStatus((prev) => ({
           ...prev,
